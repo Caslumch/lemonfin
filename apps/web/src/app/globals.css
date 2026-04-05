@@ -1,0 +1,250 @@
+@import "tailwindcss";
+
+/* ===== Dark mode variant (class-based) ===== */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===== Literal Colors (static, inlined into utilities) ===== */
+@theme inline {
+  --color-lima: #D4F400;
+  --color-lima-hover: #BDD900;
+  --color-lima-muted: #D4F40020;
+
+  --color-dark: #0D0D0D;
+  --color-dark-soft: #1A1A1A;
+
+  --color-gray-50: #F9F9F9;
+  --color-gray-100: #F2F2F2;
+  --color-gray-200: #E5E5E5;
+  --color-gray-400: #9E9E9E;
+  --color-gray-600: #6B6B6B;
+  --color-gray-900: #2D2D2D;
+
+  --color-success: #22C55E;
+  --color-success-muted: initial;
+  --color-danger: #EF4444;
+  --color-danger-muted: initial;
+  --color-warning: #F59E0B;
+  --color-warning-muted: initial;
+
+  /* Remove defaults Tailwind would generate for these */
+  --color-page: initial;
+  --color-surface: initial;
+  --color-subtle: initial;
+  --color-muted: initial;
+  --color-border: initial;
+  --color-fg: initial;
+  --color-fg-secondary: initial;
+  --color-fg-muted: initial;
+
+  --color-cat-alimentacao: initial;
+  --color-cat-alimentacao-text: initial;
+  --color-cat-transporte: initial;
+  --color-cat-transporte-text: initial;
+  --color-cat-moradia: initial;
+  --color-cat-moradia-text: initial;
+  --color-cat-lazer: initial;
+  --color-cat-lazer-text: initial;
+  --color-cat-saude: initial;
+  --color-cat-saude-text: initial;
+  --color-cat-educacao: initial;
+  --color-cat-educacao-text: initial;
+  --color-cat-compras: initial;
+  --color-cat-compras-text: initial;
+  --color-cat-salario: initial;
+  --color-cat-salario-text: initial;
+  --color-cat-freelance: initial;
+  --color-cat-freelance-text: initial;
+  --color-cat-outros: initial;
+  --color-cat-outros-text: initial;
+
+  /* Fonts */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.10);
+}
+
+/* ===== Semantic Token Variables (light mode defaults) ===== */
+
+:root {
+  /* Surfaces */
+  --color-page: #F9F9F9;
+  --color-surface: #FFFFFF;
+  --color-subtle: #F9F9F9;
+  --color-muted: #F2F2F2;
+  --color-border: #E5E5E5;
+
+  /* Text */
+  --color-fg: #0D0D0D;
+  --color-fg-secondary: #6B6B6B;
+  --color-fg-muted: #9E9E9E;
+
+  /* Semantic status */
+  --color-success-muted: #22C55E15;
+  --color-danger-muted: #EF444415;
+  --color-warning-muted: #F59E0B15;
+
+  /* Category colors */
+  --color-cat-alimentacao: #FFF3E0;
+  --color-cat-alimentacao-text: #E65100;
+  --color-cat-transporte: #E3F2FD;
+  --color-cat-transporte-text: #1565C0;
+  --color-cat-moradia: #F3E5F5;
+  --color-cat-moradia-text: #7B1FA2;
+  --color-cat-lazer: #E8F5E9;
+  --color-cat-lazer-text: #2E7D32;
+  --color-cat-saude: #FBE9E7;
+  --color-cat-saude-text: #BF360C;
+  --color-cat-educacao: #E0F7FA;
+  --color-cat-educacao-text: #00838F;
+  --color-cat-compras: #FFF8E1;
+  --color-cat-compras-text: #F57F17;
+  --color-cat-salario: #E8F5E9;
+  --color-cat-salario-text: #2E7D32;
+  --color-cat-freelance: #EDE7F6;
+  --color-cat-freelance-text: #4527A0;
+  --color-cat-outros: #F5F5F5;
+  --color-cat-outros-text: #6B6B6B;
+}
+
+/* ===== Dark Mode Overrides ===== */
+
+.dark {
+  /* Surfaces */
+  --color-page: #0D0D0D;
+  --color-surface: #1A1A1A;
+  --color-subtle: #1F1F1F;
+  --color-muted: #2D2D2D;
+  --color-border: #2D2D2D;
+
+  /* Text */
+  --color-fg: #F9F9F9;
+  --color-fg-secondary: #9E9E9E;
+  --color-fg-muted: #6B6B6B;
+
+  /* Semantic adjustments */
+  --color-success-muted: #22C55E20;
+  --color-danger-muted: #EF444420;
+  --color-warning-muted: #F59E0B20;
+
+  /* Category colors */
+  --color-cat-alimentacao: #E6510020;
+  --color-cat-alimentacao-text: #FF8A50;
+  --color-cat-transporte: #1565C020;
+  --color-cat-transporte-text: #64B5F6;
+  --color-cat-moradia: #7B1FA220;
+  --color-cat-moradia-text: #CE93D8;
+  --color-cat-lazer: #2E7D3220;
+  --color-cat-lazer-text: #81C784;
+  --color-cat-saude: #BF360C20;
+  --color-cat-saude-text: #FF8A65;
+  --color-cat-educacao: #00838F20;
+  --color-cat-educacao-text: #4DD0E1;
+  --color-cat-compras: #F57F1720;
+  --color-cat-compras-text: #FFD54F;
+  --color-cat-salario: #2E7D3220;
+  --color-cat-salario-text: #81C784;
+  --color-cat-freelance: #4527A020;
+  --color-cat-freelance-text: #B39DDB;
+  --color-cat-outros: #6B6B6B20;
+  --color-cat-outros-text: #9E9E9E;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ===== Semantic Utility Classes (always use var()) ===== */
+
+/* Surfaces */
+@utility bg-page { background-color: var(--color-page); }
+@utility bg-surface { background-color: var(--color-surface); }
+@utility bg-subtle { background-color: var(--color-subtle); }
+@utility bg-muted { background-color: var(--color-muted); }
+
+/* Borders */
+@utility border-border { border-color: var(--color-border); }
+
+/* Text */
+@utility text-fg { color: var(--color-fg); }
+@utility text-fg-secondary { color: var(--color-fg-secondary); }
+@utility text-fg-muted { color: var(--color-fg-muted); }
+
+/* Semantic status backgrounds */
+@utility bg-success-muted { background-color: var(--color-success-muted); }
+@utility bg-danger-muted { background-color: var(--color-danger-muted); }
+@utility bg-warning-muted { background-color: var(--color-warning-muted); }
+
+/* Category badges */
+@utility bg-cat-alimentacao { background-color: var(--color-cat-alimentacao); }
+@utility text-cat-alimentacao-text { color: var(--color-cat-alimentacao-text); }
+@utility bg-cat-transporte { background-color: var(--color-cat-transporte); }
+@utility text-cat-transporte-text { color: var(--color-cat-transporte-text); }
+@utility bg-cat-moradia { background-color: var(--color-cat-moradia); }
+@utility text-cat-moradia-text { color: var(--color-cat-moradia-text); }
+@utility bg-cat-lazer { background-color: var(--color-cat-lazer); }
+@utility text-cat-lazer-text { color: var(--color-cat-lazer-text); }
+@utility bg-cat-saude { background-color: var(--color-cat-saude); }
+@utility text-cat-saude-text { color: var(--color-cat-saude-text); }
+@utility bg-cat-educacao { background-color: var(--color-cat-educacao); }
+@utility text-cat-educacao-text { color: var(--color-cat-educacao-text); }
+@utility bg-cat-compras { background-color: var(--color-cat-compras); }
+@utility text-cat-compras-text { color: var(--color-cat-compras-text); }
+@utility bg-cat-salario { background-color: var(--color-cat-salario); }
+@utility text-cat-salario-text { color: var(--color-cat-salario-text); }
+@utility bg-cat-freelance { background-color: var(--color-cat-freelance); }
+@utility text-cat-freelance-text { color: var(--color-cat-freelance-text); }
+@utility bg-cat-outros { background-color: var(--color-cat-outros); }
+@utility text-cat-outros-text { color: var(--color-cat-outros-text); }
+
+/* Border utility for focus */
+@utility border-fg { border-color: var(--color-fg); }
+@utility border-fg-muted { border-color: var(--color-fg-muted); }
+
+/* ===== Animations ===== */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-fade-in-up {
+  animation: fade-in-up 400ms ease-out both;
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+@utility animate-typing-dot {
+  animation: typing-dot 1.4s ease-in-out infinite;
+}
+
+/* ===== Base Styles ===== */
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-fg);
+  font-family: var(--font-body), system-ui, sans-serif;
+}

@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String        @map("password_hash")
+  phone        String?       @unique
+  avatarUrl    String?       @map("avatar_url")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+  cards        Card[]
+
+  @@map("users")
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  slug         String        @unique
+  icon         String?
+  colorBg      String        @map("color_bg")
+  colorText    String        @map("color_text")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  transactions Transaction[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  amount      Decimal           @db.Decimal(12, 2)
+  type        TransactionType
+  description String?
+  date        DateTime          @default(now())
+  source      TransactionSource @default(MANUAL)
+  userId      String            @map("user_id")
+  categoryId  String            @map("category_id")
+  cardId      String?           @map("card_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+  card     Card?    @relation(fields: [cardId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@index([userId, cardId])
+  @@map("transactions")
+}
+
+model Card {
+  id         String   @id @default(cuid())
+  name       String
+  brand      String?
+  limit      Decimal? @db.Decimal(12, 2)
+  closingDay Int      @map("closing_day")
+  dueDay     Int?     @map("due_day")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@map("cards")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionSource {
+  MANUAL
+  WHATSAPP
+}
