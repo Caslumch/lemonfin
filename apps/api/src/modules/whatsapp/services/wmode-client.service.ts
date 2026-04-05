@@ -14,9 +14,9 @@ export class WmodeClientService {
   private readonly sessionId: string;
 
   constructor(private readonly config: ConfigService) {
-    this.baseUrl = this.config.getOrThrow<string>('WMODE_API_URL');
-    this.apiKey = this.config.getOrThrow<string>('WMODE_API_KEY');
-    this.sessionId = this.config.getOrThrow<string>('WMODE_SESSION_ID');
+    this.baseUrl = this.config.get<string>('WMODE_API_URL', '');
+    this.apiKey = this.config.get<string>('WMODE_API_KEY', '');
+    this.sessionId = this.config.get<string>('WMODE_SESSION_ID', '');
   }
 
   async sendMessage({ to, content }: SendMessageParams) {

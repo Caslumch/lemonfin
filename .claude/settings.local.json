@@ -41,7 +41,12 @@
       "Bash(PGPASSWORD=postgres psql:*)",
       "Bash(sed:*)",
       "Bash(ls /Users/lucasmachado/Documents/projects/lemonfin*/)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(openssl rand:*)",
+      "Bash(echo \"JWT_SECRET=$\\(openssl rand -base64 32\\)\")",
+      "Bash(echo \"NEXTAUTH_SECRET=$\\(openssl rand -base64 32\\)\")",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_jmq7aCGIOJB1@ep-mute-mouse-am1mqc3c.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require\" pnpm prisma migrate deploy)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_jmq7aCGIOJB1@ep-mute-mouse-am1mqc3c.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require\" pnpm db:seed)"
     ]
   }
 }
