@@ -26,24 +26,24 @@ export class CardsRepository {
     });
   }
 
-  async findById(id: string, userId: string) {
+  async findById(id: string, userIds: string[]) {
     return this.prisma.card.findFirst({
-      where: { id, userId },
+      where: { id, userId: { in: userIds } },
     });
   }
 
-  async findByName(name: string, userId: string) {
+  async findByName(name: string, userIds: string[]) {
     return this.prisma.card.findFirst({
       where: {
-        userId,
+        userId: { in: userIds },
         name: { equals: name, mode: 'insensitive' },
       },
     });
   }
 
-  async findMany(userId: string) {
+  async findMany(userIds: string[]) {
     return this.prisma.card.findMany({
-      where: { userId },
+      where: { userId: { in: userIds } },
       orderBy: { name: 'asc' },
     });
   }
@@ -80,13 +80,13 @@ export class CardsRepository {
 
   async getInvoice(
     cardId: string,
-    userId: string,
+    userIds: string[],
     startDate: Date,
     endDate: Date,
   ) {
     const transactions = await this.prisma.transaction.findMany({
       where: {
-        userId,
+        userId: { in: userIds },
         cardId,
         date: { gte: startDate, lte: endDate },
       },

@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionsRepository } from '../repositories/transactions.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 
 @Injectable()
 export class GetSummaryUseCase {
   constructor(
     private readonly transactionsRepository: TransactionsRepository,
+    private readonly familyContext: FamilyContextService,
   ) {}
 
   async execute(
@@ -12,6 +14,7 @@ export class GetSummaryUseCase {
     startDate?: string,
     endDate?: string,
   ) {
-    return this.transactionsRepository.getSummary(userId, startDate, endDate);
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    return this.transactionsRepository.getSummary(userIds, startDate, endDate);
   }
 }

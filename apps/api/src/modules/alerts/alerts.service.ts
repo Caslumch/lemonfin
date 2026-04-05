@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { TransactionsRepository } from '../transactions/repositories/transactions.repository';
 import { UsersRepository } from '../users/repositories/users.repository';
+import { FamilyContextService } from '../families/services/family-context.service';
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class AlertsService {
   constructor(
     private readonly transactionsRepository: TransactionsRepository,
     private readonly usersRepository: UsersRepository,
+    private readonly familyContext: FamilyContextService,
     private readonly wmodeClient: WmodeClientService,
   ) {}
 
@@ -63,6 +65,7 @@ export class AlertsService {
   }
 
   private async sendSpendingAlertsForUser(userId: string, phone: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -75,12 +78,12 @@ export class AlertsService {
 
     const [currentCategories, previousCategories] = await Promise.all([
       this.transactionsRepository.getCategoryBreakdown(
-        userId,
+        userIds,
         currentStart.toISOString(),
         currentEnd.toISOString(),
       ),
       this.transactionsRepository.getCategoryBreakdown(
-        userId,
+        userIds,
         previousStart.toISOString(),
         previousEnd.toISOString(),
       ),
@@ -129,6 +132,7 @@ export class AlertsService {
     name: string | null,
     phone: string,
   ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - 7);
@@ -138,17 +142,17 @@ export class AlertsService {
 
     const [weekSummary, monthSummary, categories] = await Promise.all([
       this.transactionsRepository.getSummary(
-        userId,
+        userIds,
         weekStart.toISOString(),
         now.toISOString(),
       ),
       this.transactionsRepository.getSummary(
-        userId,
+        userIds,
         monthStart.toISOString(),
         now.toISOString(),
       ),
       this.transactionsRepository.getCategoryBreakdown(
-        userId,
+        userIds,
         weekStart.toISOString(),
         now.toISOString(),
       ),
@@ -188,6 +192,7 @@ export class AlertsService {
     name: string | null,
     phone: string,
   ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     // Previous month (the one that just ended)
     const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -199,22 +204,22 @@ export class AlertsService {
     const [prevSummary, twoMonthsSummary, prevCategories, twoMonthsCategories] =
       await Promise.all([
         this.transactionsRepository.getSummary(
-          userId,
+          userIds,
           prevStart.toISOString(),
           prevEnd.toISOString(),
         ),
         this.transactionsRepository.getSummary(
-          userId,
+          userIds,
           twoMonthsStart.toISOString(),
           twoMonthsEnd.toISOString(),
         ),
         this.transactionsRepository.getCategoryBreakdown(
-          userId,
+          userIds,
           prevStart.toISOString(),
           prevEnd.toISOString(),
         ),
         this.transactionsRepository.getCategoryBreakdown(
-          userId,
+          userIds,
           twoMonthsStart.toISOString(),
           twoMonthsEnd.toISOString(),
         ),

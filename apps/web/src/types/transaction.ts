@@ -7,6 +7,11 @@ export interface Category {
   colorText: string;
 }
 
+export interface TransactionUser {
+  id: string;
+  name: string;
+}
+
 export interface Transaction {
   id: string;
   amount: string;
@@ -17,6 +22,7 @@ export interface Transaction {
   categoryId: string;
   category: Category;
   cardId: string | null;
+  user?: TransactionUser;
   createdAt: string;
   updatedAt: string;
 }

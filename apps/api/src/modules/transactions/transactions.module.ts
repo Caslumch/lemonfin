@@ -10,9 +10,10 @@ import { GetMonthlyBreakdownUseCase } from './use-cases/get-monthly-breakdown.us
 import { GetCategoryBreakdownUseCase } from './use-cases/get-category-breakdown.use-case';
 import { GetInsightsUseCase } from './use-cases/get-insights.use-case';
 import { CategoriesModule } from '../categories/categories.module';
+import { FamiliesModule } from '../families/families.module';
 
 @Module({
-  imports: [CategoriesModule],
+  imports: [CategoriesModule, FamiliesModule],
   controllers: [TransactionsController],
   providers: [
     TransactionsRepository,

@@ -42,6 +42,8 @@
 - [x] Criar pagina de login
 - [x] Criar pagina de registro
 - [x] Proteger rotas autenticadas
+- [x] UX do registro: spinner animado no botao, toast de sucesso, toast de boas-vindas no dashboard
+- [x] Campo de telefone opcional no registro (mascara brasileira, validacao 10-11 digitos)
 
 **Layout Base**
 - [x] Implementar Sidebar expandida (220px)
@@ -414,6 +416,54 @@
 
 ---
 
+## CONTA FAMILIAR — Compartilhamento entre membros
+
+### Modelo de dados
+- [x] Modelo `Family` no Prisma (id, name, code unico 8 chars, ownerId)
+- [x] Modelo `FamilyMember` no Prisma (id, role OWNER/ADMIN/MEMBER, userId, familyId)
+- [x] Relacoes no User: ownedFamilies, familyMembers
+- [x] Migration aplicada
+
+### Backend — Modulo Family
+- [x] Repository: create, findByCode, findByUserId, addMember, removeMember, isMember, getMemberRole
+- [x] DTOs + Zod schemas (createFamilySchema, joinFamilySchema)
+- [x] Use case: criar familia (gera codigo, owner vira membro OWNER)
+- [x] Use case: buscar minha familia (com membros)
+- [x] Use case: entrar na familia por codigo
+- [x] Use case: sair da familia (owner nao pode sair)
+- [x] Controller: POST /families, GET /families/me, POST /families/join, DELETE /families/leave
+- [x] Module registrado no app.module
+
+### Frontend — Pagina de Configuracoes
+- [x] Pagina `/configuracoes` com UI de familia
+- [x] Sem familia: form criar (nome) + form entrar com codigo
+- [x] Com familia: nome, codigo com botao copiar, lista de membros com roles, botao sair
+
+### Compartilhamento de dados
+- [x] FamilyContextService: resolve userId → userIds[] (todos os membros)
+- [x] TransactionsRepository: todas as queries de leitura usam userIds[]
+- [x] CardsRepository: todas as queries de leitura usam userIds[]
+- [x] Use-cases adaptados: transactions (list, summary, monthly, category, insights, update, delete)
+- [x] Use-cases adaptados: cards (list, update, delete, invoice)
+- [x] Alerts service adaptado (cron jobs refletem dados da familia)
+- [x] Chat IA adaptado (contexto financeiro da familia)
+- [x] WhatsApp service adaptado (queries, card resolution, installments)
+- [x] Modules atualizados: Transactions, Cards, Alerts, Chat, WhatsApp importam FamiliesModule
+
+### Autoria nas transacoes
+- [x] Backend: include user (id, name) em todas as queries de transacao
+- [x] Frontend: tipo TransactionUser no tipo Transaction
+- [x] UI: nome de quem registrou aparece na lista de transacoes
+- [x] UI: nome de quem registrou aparece nas transacoes recentes do dashboard
+
+### Pendente (futuro)
+- [ ] Permissoes por role (OWNER/ADMIN/MEMBER) — restringir quem pode editar/deletar
+- [ ] Transferencia de ownership da familia
+- [ ] Remover membro da familia (pelo owner/admin)
+- [ ] Tela de perfil do usuario (editar nome, telefone, avatar)
+
+---
+
 ## Metricas Pos-Lancamento (acompanhar por 3 meses)
 
 - [ ] Transacoes via WhatsApp / total > 60%
@@ -430,7 +480,7 @@
 - [ ] Multi-contas e multi-cartoes avancado
 - [ ] Gamificacao (streaks, conquistas)
 - [ ] Planejamento de orcamento mensal
-- [ ] Compartilhamento (casais/familias)
+- [x] Compartilhamento familiar (casais/familias) — ver secao dedicada abaixo
 - [ ] App mobile nativo (React Native)
 - [ ] Canal Telegram como alternativa
 - [ ] Categorias customizaveis

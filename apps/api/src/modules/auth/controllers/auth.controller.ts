@@ -8,6 +8,10 @@ const signUpSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
+  phone: z
+    .string()
+    .regex(/^\d{10,11}$/)
+    .optional(),
 });
 
 const signInSchema = z.object({
@@ -24,7 +28,15 @@ export class AuthController {
 
   @Post('sign-up')
   @UsePipes(new ZodValidationPipe(signUpSchema))
-  signUp(@Body() body: { name: string; email: string; password: string }) {
+  signUp(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      password: string;
+      phone?: string;
+    },
+  ) {
     return this.signUpUseCase.execute(body);
   }
 

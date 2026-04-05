@@ -118,6 +118,7 @@ export function TransactionList({
               </p>
               <p className="text-xs text-fg-muted mt-0.5">
                 {formatDate(tx.date)}
+                {tx.user?.name && ` · ${tx.user.name.split(" ")[0]}`}
                 {tx.source === "WHATSAPP" && " · via WhatsApp"}
               </p>
             </div>

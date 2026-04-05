@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 interface FindManyOptions {
-  userId: string;
+  userIds: string[];
   type?: 'INCOME' | 'EXPENSE';
   categoryId?: string;
   startDate?: string;
@@ -13,6 +13,11 @@ interface FindManyOptions {
   skip: number;
   take: number;
 }
+
+const txInclude = {
+  category: true,
+  user: { select: { id: true, name: true } },
+} as const;
 
 @Injectable()
 export class TransactionsRepository {
@@ -39,14 +44,14 @@ export class TransactionsRepository {
         categoryId: data.categoryId,
         cardId: data.cardId,
       },
-      include: { category: true },
+      include: txInclude,
     });
   }
 
-  async findById(id: string, userId: string) {
+  async findById(id: string, userIds: string[]) {
     return this.prisma.transaction.findFirst({
-      where: { id, userId },
-      include: { category: true },
+      where: { id, userId: { in: userIds } },
+      include: txInclude,
     });
   }
 
@@ -54,13 +59,13 @@ export class TransactionsRepository {
     return this.prisma.transaction.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: { category: true },
+      include: txInclude,
     });
   }
 
   async findMany(options: FindManyOptions) {
     const where: Prisma.TransactionWhereInput = {
-      userId: options.userId,
+      userId: { in: options.userIds },
     };
 
     if (options.type) where.type = options.type;
@@ -76,7 +81,7 @@ export class TransactionsRepository {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({
         where,
-        include: { category: true },
+        include: txInclude,
         orderBy,
         skip: options.skip,
         take: options.take,
@@ -115,7 +120,7 @@ export class TransactionsRepository {
     return this.prisma.transaction.update({
       where: { id },
       data: updateData,
-      include: { category: true },
+      include: txInclude,
     });
   }
 
@@ -125,14 +130,14 @@ export class TransactionsRepository {
     });
   }
 
-  async getMonthlyBreakdown(userId: string, months: number = 6) {
+  async getMonthlyBreakdown(userIds: string[], months: number = 6) {
     const since = new Date();
     since.setMonth(since.getMonth() - months + 1);
     since.setDate(1);
     since.setHours(0, 0, 0, 0);
 
     const transactions = await this.prisma.transaction.findMany({
-      where: { userId, date: { gte: since } },
+      where: { userId: { in: userIds }, date: { gte: since } },
       select: { amount: true, type: true, date: true, cardId: true },
     });
 
@@ -172,8 +177,8 @@ export class TransactionsRepository {
       }));
   }
 
-  async getCategoryBreakdown(userId: string, startDate?: string, endDate?: string) {
-    const where: Prisma.TransactionWhereInput = { userId, type: 'EXPENSE' };
+  async getCategoryBreakdown(userIds: string[], startDate?: string, endDate?: string) {
+    const where: Prisma.TransactionWhereInput = { userId: { in: userIds }, type: 'EXPENSE' };
     if (startDate || endDate) {
       where.date = {};
       if (startDate) where.date.gte = new Date(startDate);
@@ -202,8 +207,8 @@ export class TransactionsRepository {
     }));
   }
 
-  async getSummary(userId: string, startDate?: string, endDate?: string) {
-    const where: Prisma.TransactionWhereInput = { userId };
+  async getSummary(userIds: string[], startDate?: string, endDate?: string) {
+    const where: Prisma.TransactionWhereInput = { userId: { in: userIds } };
     if (startDate || endDate) {
       where.date = {};
       if (startDate) where.date.gte = new Date(startDate);

@@ -8,9 +8,10 @@ import { UsersModule } from '../users/users.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { CardsModule } from '../cards/cards.module';
+import { FamiliesModule } from '../families/families.module';
 
 @Module({
-  imports: [UsersModule, CategoriesModule, TransactionsModule, CardsModule],
+  imports: [UsersModule, CategoriesModule, TransactionsModule, CardsModule, FamiliesModule],
   controllers: [WebhookController],
   providers: [
     WmodeClientService,

@@ -3,6 +3,7 @@ import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 import { MessageParserService, ParseResult } from './message-parser.service';
 import { WmodeClientService } from './wmode-client.service';
 
@@ -21,6 +22,7 @@ export class WhatsappService {
     private readonly categoriesRepository: CategoriesRepository,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly cardsRepository: CardsRepository,
+    private readonly familyContext: FamilyContextService,
     private readonly messageParser: MessageParserService,
     private readonly wmodeClient: WmodeClientService,
   ) {}
@@ -100,12 +102,13 @@ export class WhatsappService {
     }
 
     // Resolve card if mentioned
+    const userIds = await this.familyContext.resolveUserIds(userId);
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName) {
       if (data.cardName === 'cartao') {
         // Generic "cartão" mention — try to auto-resolve
-        const userCards = await this.cardsRepository.findMany(userId);
+        const userCards = await this.cardsRepository.findMany(userIds);
         if (userCards.length === 1) {
           cardId = userCards[0].id;
           cardLabel = userCards[0].name;
@@ -143,7 +146,7 @@ export class WhatsappService {
         }
       } else {
         // Specific card name mentioned
-        const card = await this.cardsRepository.findByName(data.cardName, userId);
+        const card = await this.cardsRepository.findByName(data.cardName, userIds);
         if (card) {
           cardId = card.id;
           cardLabel = card.name;
@@ -190,6 +193,7 @@ export class WhatsappService {
     userId: string,
     result: Extract<ParseResult, { intent: 'query' }>,
   ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startDate = new Date(
       now.getFullYear(),
@@ -199,7 +203,7 @@ export class WhatsappService {
     const endDate = now.toISOString();
 
     const summary = await this.transactionsRepository.getSummary(
-      userId,
+      userIds,
       startDate,
       endDate,
     );
@@ -363,18 +367,19 @@ export class WhatsappService {
     const now = new Date();
 
     // Try to link to card if cardName was mentioned
+    const userIds = await this.familyContext.resolveUserIds(userId);
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName) {
       if (data.cardName === 'cartao') {
-        const userCards = await this.cardsRepository.findMany(userId);
+        const userCards = await this.cardsRepository.findMany(userIds);
         if (userCards.length === 1) {
           cardId = userCards[0].id;
           cardLabel = userCards[0].name;
         }
         // If multiple cards, just skip — will register without card
       } else {
-        const card = await this.cardsRepository.findByName(data.cardName, userId);
+        const card = await this.cardsRepository.findByName(data.cardName, userIds);
         if (card) {
           cardId = card.id;
           cardLabel = card.name;

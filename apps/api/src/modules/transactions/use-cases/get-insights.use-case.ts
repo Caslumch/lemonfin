@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionsRepository } from '../repositories/transactions.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 
 export interface CategoryComparison {
   categoryId: string;
@@ -47,9 +48,11 @@ export interface InsightsResponse {
 export class GetInsightsUseCase {
   constructor(
     private readonly transactionsRepository: TransactionsRepository,
+    private readonly familyContext: FamilyContextService,
   ) {}
 
   async execute(userId: string): Promise<InsightsResponse> {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -63,22 +66,22 @@ export class GetInsightsUseCase {
     const [currentSummary, previousSummary, currentCategories, previousCategories] =
       await Promise.all([
         this.transactionsRepository.getSummary(
-          userId,
+          userIds,
           currentStart.toISOString(),
           currentEnd.toISOString(),
         ),
         this.transactionsRepository.getSummary(
-          userId,
+          userIds,
           previousStart.toISOString(),
           previousEnd.toISOString(),
         ),
         this.transactionsRepository.getCategoryBreakdown(
-          userId,
+          userIds,
           currentStart.toISOString(),
           currentEnd.toISOString(),
         ),
         this.transactionsRepository.getCategoryBreakdown(
-          userId,
+          userIds,
           previousStart.toISOString(),
           previousEnd.toISOString(),
         ),

@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowRight, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ContentHeader } from "@/components/layout/content-header";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
@@ -35,6 +38,21 @@ function formatDate(date: string) {
 
 export default function DashboardPage() {
   const { fetchApi } = useApi();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const welcomeShown = useRef(false);
+
+  useEffect(() => {
+    if (searchParams.get("welcome") === "1" && !welcomeShown.current) {
+      welcomeShown.current = true;
+      const firstName = session?.user?.name?.split(" ")[0] ?? "";
+      toast(`Bem-vindo(a)${firstName ? `, ${firstName}` : ""}!`, {
+        description: "Sua conta esta pronta. Bora organizar suas financas!",
+      });
+      router.replace("/");
+    }
+  }, [searchParams, session, router]);
 
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyBreakdown[]>([]);
@@ -366,6 +384,7 @@ export default function DashboardPage() {
                     </p>
                     <p className="text-xs text-fg-muted">
                       {formatDate(tx.date)}
+                      {tx.user?.name && ` · ${tx.user.name.split(" ")[0]}`}
                     </p>
                   </div>
                   <p

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
 
 const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e amigavel. Voce ajuda o usuario a entender seus gastos, identificar padroes e tomar melhores decisoes financeiras.
@@ -30,6 +31,7 @@ export class ChatCompletionUseCase {
   constructor(
     private readonly config: ConfigService,
     private readonly transactionsRepository: TransactionsRepository,
+    private readonly familyContext: FamilyContextService,
   ) {
     const genAI = new GoogleGenerativeAI(
       this.config.getOrThrow<string>('GEMINI_API_KEY'),
@@ -72,6 +74,7 @@ export class ChatCompletionUseCase {
   }
 
   private async buildFinancialContext(userId: string): Promise<string> {
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       .toISOString()
@@ -83,18 +86,18 @@ export class ChatCompletionUseCase {
     const [summary, monthly, categoryBreakdown, recentTransactions] =
       await Promise.all([
         this.transactionsRepository.getSummary(
-          userId,
+          userIds,
           startOfMonth,
           endOfMonth,
         ),
-        this.transactionsRepository.getMonthlyBreakdown(userId, 3),
+        this.transactionsRepository.getMonthlyBreakdown(userIds, 3),
         this.transactionsRepository.getCategoryBreakdown(
-          userId,
+          userIds,
           startOfMonth,
           endOfMonth,
         ),
         this.transactionsRepository.findMany({
-          userId,
+          userIds,
           skip: 0,
           take: 10,
           order: 'desc',

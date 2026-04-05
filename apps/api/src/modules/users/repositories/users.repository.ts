@@ -24,7 +24,7 @@ export class UsersRepository {
     });
   }
 
-  async create(data: { name: string; email: string; passwordHash: string }) {
+  async create(data: { name: string; email: string; passwordHash: string; phone?: string }) {
     return this.prisma.user.create({ data });
   }
 }

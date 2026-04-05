@@ -4,6 +4,8 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -12,9 +14,17 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function formatPhone(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +47,12 @@ export default function RegisterPage() {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          ...(phone && { phone: phone.replace(/\D/g, "") }),
+        }),
       }
     );
 
@@ -61,7 +76,8 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/");
+    toast.success("Conta criada com sucesso!");
+    router.push("/?welcome=1");
     router.refresh();
   }
 
@@ -106,6 +122,15 @@ export default function RegisterPage() {
           />
 
           <Input
+            id="phone"
+            label="Telefone"
+            type="tel"
+            placeholder="(11) 99999-9999"
+            value={phone}
+            onChange={(e) => setPhone(formatPhone(e.target.value))}
+          />
+
+          <Input
             id="password"
             label="Senha"
             type="password"
@@ -134,7 +159,14 @@ export default function RegisterPage() {
             className="w-full"
             disabled={loading}
           >
-            {loading ? "Criando conta..." : "Criar conta"}
+            {loading ? (
+              <>
+                <Loader2 size={16} className="animate-spin mr-2" />
+                Criando conta...
+              </>
+            ) : (
+              "Criar conta"
+            )}
           </Button>
         </form>
 

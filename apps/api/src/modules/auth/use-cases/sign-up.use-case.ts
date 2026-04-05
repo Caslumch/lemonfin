@@ -22,6 +22,7 @@ export class SignUpUseCase {
       name: input.name,
       email: input.email,
       passwordHash,
+      ...(input.phone && { phone: input.phone }),
     });
 
     const token = this.jwtService.sign({ sub: user.id, email: user.email });

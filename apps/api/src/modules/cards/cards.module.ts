@@ -6,8 +6,10 @@ import { ListCardsUseCase } from './use-cases/list-cards.use-case';
 import { UpdateCardUseCase } from './use-cases/update-card.use-case';
 import { DeleteCardUseCase } from './use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from './use-cases/get-card-invoice.use-case';
+import { FamiliesModule } from '../families/families.module';
 
 @Module({
+  imports: [FamiliesModule],
   controllers: [CardsController],
   providers: [
     CardsRepository,

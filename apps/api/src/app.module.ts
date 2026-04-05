@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { CardsModule } from './modules/cards/cards.module';
+import { FamiliesModule } from './modules/families/families.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
@@ -24,6 +25,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
     CategoriesModule,
     TransactionsModule,
     CardsModule,
+    FamiliesModule,
     WhatsappModule,
     ChatModule,
     AlertsModule,

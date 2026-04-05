@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CardsRepository } from '../repositories/cards.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 
 @Injectable()
 export class GetCardInvoiceUseCase {
-  constructor(private readonly cardsRepository: CardsRepository) {}
+  constructor(
+    private readonly cardsRepository: CardsRepository,
+    private readonly familyContext: FamilyContextService,
+  ) {}
 
   async execute(cardId: string, userId: string, month?: string) {
-    const card = await this.cardsRepository.findById(cardId, userId);
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const card = await this.cardsRepository.findById(cardId, userIds);
     if (!card) {
       throw new NotFoundException('Cartao nao encontrado');
     }
@@ -28,7 +33,7 @@ export class GetCardInvoiceUseCase {
 
     const { transactions, total } = await this.cardsRepository.getInvoice(
       cardId,
-      userId,
+      userIds,
       startDate,
       endDate,
     );

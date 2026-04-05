@@ -16,8 +16,10 @@ model User {
   avatarUrl    String?       @map("avatar_url")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
-  transactions Transaction[]
-  cards        Card[]
+  transactions   Transaction[]
+  cards          Card[]
+  ownedFamilies  Family[]       @relation("FamilyOwner")
+  familyMembers  FamilyMember[]
 
   @@map("users")
 }
@@ -84,4 +86,38 @@ enum TransactionType {
 enum TransactionSource {
   MANUAL
   WHATSAPP
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  ownerId   String   @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner   User           @relation("FamilyOwner", fields: [ownerId], references: [id])
+  members FamilyMember[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id       String           @id @default(cuid())
+  role     FamilyMemberRole @default(MEMBER)
+  joinedAt DateTime         @default(now()) @map("joined_at")
+  userId   String           @map("user_id")
+  familyId String           @map("family_id")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyId])
+  @@map("family_members")
+}
+
+enum FamilyMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
 }
