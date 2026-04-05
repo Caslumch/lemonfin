@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { ArrowRight, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -36,8 +36,7 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-export default function DashboardPage() {
-  const { fetchApi } = useApi();
+function WelcomeToast() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
@@ -53,6 +52,12 @@ export default function DashboardPage() {
       router.replace("/");
     }
   }, [searchParams, session, router]);
+
+  return null;
+}
+
+export default function DashboardPage() {
+  const { fetchApi } = useApi();
 
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyBreakdown[]>([]);
@@ -175,6 +180,9 @@ export default function DashboardPage() {
 
   return (
     <>
+      <Suspense>
+        <WelcomeToast />
+      </Suspense>
       <ContentHeader title="Dashboard" />
 
       <div className="p-5 md:p-7 space-y-6">
