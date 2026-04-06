@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "react-international-phone";
+import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +31,29 @@ interface Family {
   members: FamilyMember[];
 }
 
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
+function phoneToInternational(phone: string | null): string {
+  if (!phone) return "";
+  return `+${phone}`;
+}
+
 export default function ConfiguracoesPage() {
   const { fetchApi } = useApi();
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const currentUserId = session?.user?.id;
+
+  // Profile state
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +69,19 @@ export default function ConfiguracoesPage() {
   // Leave
   const [leaving, setLeaving] = useState(false);
 
+  const fetchProfile = useCallback(async () => {
+    try {
+      const data = await fetchApi<UserProfile>("/users/me");
+      setProfile(data);
+      setProfileName(data.name);
+      setProfilePhone(phoneToInternational(data.phone));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, [fetchApi]);
+
   const fetchFamily = useCallback(async () => {
     try {
       const data = await fetchApi<Family | null>("/families/me");
@@ -60,8 +94,32 @@ export default function ConfiguracoesPage() {
   }, [fetchApi]);
 
   useEffect(() => {
+    fetchProfile();
     fetchFamily();
-  }, [fetchFamily]);
+  }, [fetchProfile, fetchFamily]);
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const phoneDigits = profilePhone.replace(/\D/g, "");
+      const phone = phoneDigits.length >= 10 ? phoneDigits : null;
+      const updated = await fetchApi<UserProfile>("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ name: profileName, phone }),
+      });
+      setProfile(updated);
+      toast.success("Perfil atualizado!");
+      // Update session name if changed
+      if (updated.name !== session?.user?.name) {
+        updateSession({ name: updated.name });
+      }
+    } catch {
+      toast.error("Erro ao atualizar perfil");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -131,6 +189,80 @@ export default function ConfiguracoesPage() {
       <ContentHeader title="Configuracoes" />
 
       <div className="p-5 md:p-7 space-y-6 max-w-2xl">
+        {/* Profile section */}
+        <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <User size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Meu perfil
+            </h2>
+          </div>
+
+          {loadingProfile ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : (
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <Input
+                id="profileName"
+                label="Nome"
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                required
+              />
+
+              <div>
+                <label
+                  htmlFor="profileEmail"
+                  className="block text-sm font-medium text-fg mb-1.5"
+                >
+                  E-mail
+                </label>
+                <p className="text-sm text-fg-muted">{profile?.email}</p>
+              </div>
+
+              <div className="w-full">
+                <label
+                  htmlFor="profilePhone"
+                  className="block text-sm font-medium text-fg mb-1.5"
+                >
+                  Telefone
+                </label>
+                <PhoneInput
+                  defaultCountry="br"
+                  value={profilePhone}
+                  onChange={setProfilePhone}
+                  inputClassName="!w-full !rounded-md !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
+                  countrySelectorStyleProps={{
+                    buttonClassName:
+                      "!rounded-l-md !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
+                  }}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                size="sm"
+                disabled={savingProfile}
+              >
+                {savingProfile ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin mr-2" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} className="mr-2" />
+                    Salvar alteracoes
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
+        </div>
+
         {/* Family section */}
         <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">

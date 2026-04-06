@@ -10,7 +10,7 @@ const signUpSchema = z.object({
   password: z.string().min(8),
   phone: z
     .string()
-    .regex(/^\d{10,11}$/)
+    .regex(/^\d{10,15}$/)
     .optional(),
 });
 

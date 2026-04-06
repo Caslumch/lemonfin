@@ -21,8 +21,11 @@ export class SignUpUseCase {
       throw new ConflictException('E-mail ja cadastrado');
     }
 
-    if (input.phone) {
-      const phoneExists = await this.usersRepository.findByPhone(input.phone);
+    // O telefone já vem com código do país (ex: 5511999999999)
+    const normalizedPhone = input.phone || undefined;
+
+    if (normalizedPhone) {
+      const phoneExists = await this.usersRepository.findByPhone(normalizedPhone);
       if (phoneExists) {
         throw new ConflictException('Telefone ja vinculado a outra conta');
       }
@@ -33,13 +36,13 @@ export class SignUpUseCase {
       name: input.name,
       email: input.email,
       passwordHash,
-      ...(input.phone && { phone: input.phone }),
+      ...(normalizedPhone && { phone: normalizedPhone }),
     });
 
     const token = this.jwtService.sign({ sub: user.id, email: user.email });
 
-    if (input.phone) {
-      this.sendWelcomeWhatsApp(input.phone, input.name).catch((err) =>
+    if (normalizedPhone) {
+      this.sendWelcomeWhatsApp(normalizedPhone, input.name).catch((err) =>
         this.logger.error(`Failed to send welcome WhatsApp: ${err}`),
       );
     }
@@ -51,8 +54,7 @@ export class SignUpUseCase {
   }
 
   private async sendWelcomeWhatsApp(phone: string, name: string) {
-    const digits = phone.replace(/\D/g, '');
-    const to = digits.startsWith('55') ? digits : `55${digits}`;
+    const to = phone;
     const firstName = name.split(' ')[0];
 
     const result = await this.wmodeClient.sendMessage({

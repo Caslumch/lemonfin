@@ -4,10 +4,12 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "react-international-phone";
+import "react-international-phone/style.css";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,13 +20,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  function formatPhone(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 11);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  }
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +39,8 @@ export default function RegisterPage() {
 
     setLoading(true);
 
+    const phoneDigits = phone.replace(/\D/g, "");
+
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/auth/sign-up`,
       {
@@ -51,7 +50,7 @@ export default function RegisterPage() {
           name,
           email,
           password,
-          ...(phone && { phone: phone.replace(/\D/g, "") }),
+          ...(phoneDigits.length >= 10 && { phone: phoneDigits }),
         }),
       }
     );
@@ -121,34 +120,64 @@ export default function RegisterPage() {
             required
           />
 
-          <Input
-            id="phone"
-            label="Telefone"
-            type="tel"
-            placeholder="(11) 99999-9999"
-            value={phone}
-            onChange={(e) => setPhone(formatPhone(e.target.value))}
-          />
+          <div className="w-full">
+            <label
+              htmlFor="phone"
+              className="block text-sm font-medium text-fg mb-1.5"
+            >
+              Telefone
+            </label>
+            <PhoneInput
+              defaultCountry="br"
+              value={phone}
+              onChange={setPhone}
+              inputClassName="!w-full !rounded-md !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
+              countrySelectorStyleProps={{
+                buttonClassName:
+                  "!rounded-l-md !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
+              }}
+            />
+          </div>
 
-          <Input
-            id="password"
-            label="Senha"
-            type="password"
-            placeholder="Minimo 8 caracteres"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              label="Senha"
+              type={showPassword ? "text" : "password"}
+              placeholder="Minimo 8 caracteres"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-[38px] text-fg-muted hover:text-fg transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
 
-          <Input
-            id="confirmPassword"
-            label="Confirmar senha"
-            type="password"
-            placeholder="Repita a senha"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              label="Confirmar senha"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Repita a senha"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-[38px] text-fg-muted hover:text-fg transition-colors"
+              tabIndex={-1}
+            >
+              {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
 
           {error && (
             <p className="text-sm text-danger text-center">{error}</p>
