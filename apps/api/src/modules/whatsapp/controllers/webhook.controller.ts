@@ -26,6 +26,7 @@ export class WebhookController {
   @UseGuards(WebhookSignatureGuard)
   async handleWebhook(@Body() body: WebhookPayload) {
     this.logger.log(`Webhook received: ${body.event}`);
+    this.logger.debug(`Webhook payload: ${JSON.stringify(body.payload)}`);
 
     if (body.event !== 'message.received') {
       return { received: true, processed: false };

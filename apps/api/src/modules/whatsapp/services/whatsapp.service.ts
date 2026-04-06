@@ -31,7 +31,12 @@ export class WhatsappService {
     this.logger.log(`Message from ${from}: ${content}`);
 
     const phone = this.normalizePhone(from);
-    const user = await this.usersRepository.findByPhone(phone);
+    const phoneWithout55 = phone.startsWith('55') ? phone.slice(2) : phone;
+    const phoneWith55 = phone.startsWith('55') ? phone : `55${phone}`;
+    const user =
+      (await this.usersRepository.findByPhone(phone)) ??
+      (await this.usersRepository.findByPhone(phoneWithout55)) ??
+      (await this.usersRepository.findByPhone(phoneWith55));
 
     if (!user) {
       // await this.wmodeClient.sendMessage({
@@ -141,12 +146,17 @@ export class WhatsappService {
               `Para vincular ao cartao, diga o nome. Ex: _"comprei X no ${userCards[0].name}"_`,
           });
 
-          this.logger.log(`Transaction ${transaction.id} created without card — multiple cards`);
+          this.logger.log(
+            `Transaction ${transaction.id} created without card — multiple cards`,
+          );
           return;
         }
       } else {
         // Specific card name mentioned
-        const card = await this.cardsRepository.findByName(data.cardName, userIds);
+        const card = await this.cardsRepository.findByName(
+          data.cardName,
+          userIds,
+        );
         if (card) {
           cardId = card.id;
           cardLabel = card.name;
@@ -379,7 +389,10 @@ export class WhatsappService {
         }
         // If multiple cards, just skip — will register without card
       } else {
-        const card = await this.cardsRepository.findByName(data.cardName, userIds);
+        const card = await this.cardsRepository.findByName(
+          data.cardName,
+          userIds,
+        );
         if (card) {
           cardId = card.id;
           cardLabel = card.name;
