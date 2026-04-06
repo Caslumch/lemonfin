@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,6 +15,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { HealthController } from './health.controller';
 import { KeepAliveService } from './keep-alive.service';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 @Module({
   imports: [
@@ -35,6 +37,9 @@ import { KeepAliveService } from './keep-alive.service';
     GoalsModule,
   ],
   controllers: [HealthController],
-  providers: [KeepAliveService],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    KeepAliveService,
+  ],
 })
 export class AppModule {}
