@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { ArrowRight, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle } from "lucide-react";
+import { ArrowRight, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle, Target } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -21,6 +21,7 @@ import type {
   InsightsData,
   SpendingAlert,
 } from "@/types/transaction";
+import type { Goal } from "@/types/goal";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -64,11 +65,12 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<CategoryBreakdownType[]>([]);
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [alerts, setAlerts] = useState<SpendingAlert[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes] =
+      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes] =
         await Promise.all([
           fetchApi<TransactionSummary>("/transactions/summary"),
           fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -77,6 +79,7 @@ export default function DashboardPage() {
             "/transactions?perPage=5&page=1",
           ),
           fetchApi<InsightsData>("/transactions/insights").catch(() => null),
+          fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
         ]);
 
       setSummary(summaryRes);
@@ -84,6 +87,7 @@ export default function DashboardPage() {
       setCategories(categoryRes);
       setRecent(recentRes.data);
       if (insightsRes) setAlerts(insightsRes.alerts);
+      setGoals(goalsRes);
     } catch {
       // Silent fail
     } finally {
@@ -99,7 +103,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes] =
+        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes] =
           await Promise.all([
             fetchApi<TransactionSummary>("/transactions/summary"),
             fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -108,12 +112,14 @@ export default function DashboardPage() {
               "/transactions?perPage=5&page=1",
             ),
             fetchApi<InsightsData>("/transactions/insights").catch(() => null),
+            fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
           ]);
         setSummary(summaryRes);
         setMonthly(monthlyRes);
         setCategories(categoryRes);
         setRecent(recentRes.data);
         if (insightsRes) setAlerts(insightsRes.alerts);
+        setGoals(goalsRes);
       } catch {
         // Silent fail
       }
@@ -332,6 +338,66 @@ export default function DashboardPage() {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Goals progress */}
+        {!loading && goals.length > 0 && (
+          <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target size={16} className="text-lima" />
+                <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
+                  Metas do mes
+                </h3>
+              </div>
+              <Link
+                href="/metas"
+                className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
+              >
+                Ver todas <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {goals.slice(0, 6).map((goal) => {
+                const pct = goal.progress.percentage;
+                const barColor = goal.progress.exceeded
+                  ? "bg-danger"
+                  : pct >= 80
+                    ? "bg-warning"
+                    : "bg-lima";
+                return (
+                  <div key={goal.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-fg truncate">
+                        {goal.category?.icon} {goal.category?.name}
+                      </span>
+                      <span
+                        className={cn(
+                          "font-medium",
+                          goal.progress.exceeded
+                            ? "text-danger"
+                            : pct >= 80
+                              ? "text-warning"
+                              : "text-fg-muted",
+                        )}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-subtle rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-fg-muted">
+                      {formatCurrency(goal.progress.spent)} / {formatCurrency(goal.progress.limit)}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

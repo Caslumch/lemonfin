@@ -245,9 +245,9 @@
 - [x] "Onde posso economizar?" → sugestoes baseadas em padroes
 - [x] "Consigo guardar 500 esse mes?" → projecao com base nos gastos atuais
 - [x] Tratar respostas que fogem do escopo financeiro
-- [ ] Detectar filtros temporais na mensagem ("hoje", "ontem", "semana passada")
-- [ ] Injetar transacoes do periodo especifico no contexto da AI
-- [ ] Function calling: permitir que o Gemini consulte transacoes por data sob demanda
+- [x] Detectar filtros temporais na mensagem ("hoje", "ontem", "semana passada")
+- [x] Injetar transacoes do periodo especifico no contexto da AI
+- [x] Function calling: permitir que o Gemini consulte transacoes por data sob demanda
 
 ---
 
@@ -294,10 +294,10 @@
 - [ ] Salvar transacoes importadas em lote
 
 **Metas Financeiras**
-- [ ] CRUD de metas ("Maximo 800 com alimentacao")
-- [ ] Acompanhamento de progresso (progress bar)
-- [ ] Alerta ao se aproximar do limite
-- [ ] Exibicao no dashboard
+- [x] CRUD de metas ("Maximo 800 com alimentacao")
+- [x] Acompanhamento de progresso (progress bar)
+- [x] Alerta ao se aproximar do limite
+- [x] Exibicao no dashboard
 
 **Score de Disciplina**
 - [ ] Algoritmo: consistencia de registro + gastos vs metas + tendencias

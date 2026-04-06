@@ -4,6 +4,7 @@ import { TransactionsRepository } from '../transactions/repositories/transaction
 import { UsersRepository } from '../users/repositories/users.repository';
 import { FamilyContextService } from '../families/services/family-context.service';
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
+import { GoalsRepository } from '../goals/repositories/goals.repository';
 
 @Injectable()
 export class AlertsService {
@@ -14,6 +15,7 @@ export class AlertsService {
     private readonly usersRepository: UsersRepository,
     private readonly familyContext: FamilyContextService,
     private readonly wmodeClient: WmodeClientService,
+    private readonly goalsRepository: GoalsRepository,
   ) {}
 
   // Run daily at 20:00 — check spending alerts
@@ -76,7 +78,7 @@ export class AlertsService {
       (currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    const [currentCategories, previousCategories] = await Promise.all([
+    const [currentCategories, previousCategories, goals] = await Promise.all([
       this.transactionsRepository.getCategoryBreakdown(
         userIds,
         currentStart.toISOString(),
@@ -87,23 +89,45 @@ export class AlertsService {
         previousStart.toISOString(),
         previousEnd.toISOString(),
       ),
+      this.goalsRepository.findMany(userIds, true),
     ]);
 
     const previousMap = new Map(
       previousCategories.map((c) => [c.categoryId, c]),
     );
+    const goalsMap = new Map(
+      goals.map((g) => [g.categoryId, g]),
+    );
 
     const alerts: string[] = [];
 
     for (const current of currentCategories) {
+      const icon = current.category?.icon ?? '';
+      const name = current.category?.name ?? 'categoria';
+      const formatted = formatBRL(current.total);
+
+      // Check against goal first, then fallback to previous month comparison
+      const goal = goalsMap.get(current.categoryId);
+      if (goal) {
+        const goalLimit = goal.amount.toNumber();
+        const percent = (current.total / goalLimit) * 100;
+        if (percent >= 80) {
+          const limitFormatted = formatBRL(goalLimit);
+          const exceeded = current.total > goalLimit;
+          const label = exceeded ? '🚨 Estourou' : '⚠️';
+          alerts.push(
+            `${label} ${icon} *${name}*: ${formatted} de ${limitFormatted} (${Math.round(percent)}%) — meta ${exceeded ? 'ultrapassada!' : `faltam ${daysRemaining} dias`}`,
+          );
+        }
+        continue;
+      }
+
+      // Fallback: compare with previous month
       const previous = previousMap.get(current.categoryId);
       if (!previous || previous.total === 0) continue;
 
       const percent = (current.total / previous.total) * 100;
       if (percent >= 80) {
-        const icon = current.category?.icon ?? '';
-        const name = current.category?.name ?? 'categoria';
-        const formatted = formatBRL(current.total);
         const prevFormatted = formatBRL(previous.total);
         alerts.push(
           `${icon} *${name}*: ${formatted} de ${prevFormatted} (${Math.round(percent)}%) — faltam ${daysRemaining} dias`,
@@ -112,10 +136,13 @@ export class AlertsService {
     }
 
     if (alerts.length > 0) {
+      const hasGoalAlerts = goals.length > 0;
       const message = [
         '⚠️ *Alerta de gastos*',
         '',
-        'Voce ja gastou uma boa parte do que gastou no mes passado nestas categorias:',
+        hasGoalAlerts
+          ? 'Atencao com suas metas e gastos nestas categorias:'
+          : 'Voce ja gastou uma boa parte do que gastou no mes passado nestas categorias:',
         '',
         ...alerts,
         '',

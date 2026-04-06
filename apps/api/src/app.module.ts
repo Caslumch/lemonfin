@@ -11,6 +11,9 @@ import { FamiliesModule } from './modules/families/families.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
+import { GoalsModule } from './modules/goals/goals.module';
+import { HealthController } from './health.controller';
+import { KeepAliveService } from './keep-alive.service';
 
 @Module({
   imports: [
@@ -29,6 +32,9 @@ import { AlertsModule } from './modules/alerts/alerts.module';
     WhatsappModule,
     ChatModule,
     AlertsModule,
+    GoalsModule,
   ],
+  controllers: [HealthController],
+  providers: [KeepAliveService],
 })
 export class AppModule {}

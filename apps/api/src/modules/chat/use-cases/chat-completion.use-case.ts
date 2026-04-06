@@ -1,6 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type FunctionDeclaration,
+  type FunctionCall,
+  type ChatSession,
+} from '@google/generative-ai';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
@@ -19,9 +25,79 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Seja conciso e direto (max 3-4 paragrafos)
 - Use formatacao simples (sem markdown complexo)
 - Quando mencionar valores, use o formato R$ X.XXX,XX
-- Nao invente dados — use apenas o contexto financeiro fornecido
+- Nao invente dados — use apenas o contexto financeiro fornecido e os dados retornados pelas funcoes
 - Se nao tiver dados suficientes, diga isso claramente
-- Nao fale sobre assuntos que nao sejam financas pessoais do usuario`;
+- Nao fale sobre assuntos que nao sejam financas pessoais do usuario
+
+## Funcoes disponiveis:
+- Voce tem acesso a funcoes para consultar transacoes, resumos e gastos por categoria em qualquer periodo
+- Quando o usuario mencionar periodos como "hoje", "ontem", "semana passada", "mes passado", "janeiro", etc., use as funcoes para buscar os dados do periodo especifico
+- Use a data de hoje como referencia: ela sera informada no contexto
+- Sempre chame as funcoes quando o usuario perguntar sobre periodos especificos que nao estao no contexto ja fornecido`;
+
+const toolDeclarations: FunctionDeclaration[] = [
+  {
+    name: 'queryTransactions',
+    description:
+      'Busca transacoes do usuario em um periodo especifico. Use quando o usuario perguntar sobre transacoes de um periodo como "hoje", "ontem", "semana passada", "mes passado", etc.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        startDate: {
+          type: SchemaType.STRING,
+          description: 'Data inicial no formato YYYY-MM-DD',
+        },
+        endDate: {
+          type: SchemaType.STRING,
+          description: 'Data final no formato YYYY-MM-DD',
+        },
+        type: {
+          type: SchemaType.STRING,
+          description: 'Filtro por tipo: INCOME ou EXPENSE. Omita para buscar ambos.',
+        },
+      },
+      required: ['startDate', 'endDate'],
+    },
+  },
+  {
+    name: 'getSummaryByPeriod',
+    description:
+      'Retorna o resumo financeiro (receitas, despesas, saldo) de um periodo especifico. Use quando o usuario perguntar "quanto gastei ontem", "quanto entrou semana passada", etc.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        startDate: {
+          type: SchemaType.STRING,
+          description: 'Data inicial no formato YYYY-MM-DD',
+        },
+        endDate: {
+          type: SchemaType.STRING,
+          description: 'Data final no formato YYYY-MM-DD',
+        },
+      },
+      required: ['startDate', 'endDate'],
+    },
+  },
+  {
+    name: 'getCategoryBreakdownByPeriod',
+    description:
+      'Retorna gastos agrupados por categoria em um periodo especifico. Use quando o usuario perguntar "no que mais gastei semana passada", "categorias de gasto de janeiro", etc.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        startDate: {
+          type: SchemaType.STRING,
+          description: 'Data inicial no formato YYYY-MM-DD',
+        },
+        endDate: {
+          type: SchemaType.STRING,
+          description: 'Data final no formato YYYY-MM-DD',
+        },
+      },
+      required: ['startDate', 'endDate'],
+    },
+  },
+];
 
 @Injectable()
 export class ChatCompletionUseCase {
@@ -38,15 +114,18 @@ export class ChatCompletionUseCase {
     );
     this.model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
+      tools: [{ functionDeclarations: toolDeclarations }],
     });
   }
 
   async *execute(userId: string, input: ChatMessageInput) {
     this.logger.log(`Chat request from user ${userId}: "${input.message}"`);
 
-    const context = await this.buildFinancialContext(userId);
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const context = await this.buildFinancialContext(userIds);
 
-    const systemInstruction = `${SYSTEM_PROMPT}\n\n## Contexto financeiro atual do usuario:\n${context}`;
+    const today = new Date().toISOString().split('T')[0];
+    const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}\n\n## Contexto financeiro atual do usuario:\n${context}`;
 
     const history = input.history.map((msg) => ({
       role: msg.role === 'user' ? ('user' as const) : ('model' as const),
@@ -64,17 +143,131 @@ export class ChatCompletionUseCase {
 
     for await (const chunk of result.stream) {
       const text = chunk.text();
-      this.logger.debug(`Chunk received: "${text?.slice(0, 50)}..."`);
       if (text) {
+        this.logger.debug(`Chunk received: "${text.slice(0, 50)}..."`);
         yield text;
       }
+    }
+
+    // Check if the model wants to call functions
+    const response = await result.response;
+    const functionCalls = response.functionCalls();
+
+    if (functionCalls && functionCalls.length > 0) {
+      this.logger.log(`Function calls requested: ${functionCalls.map((fc) => fc.name).join(', ')}`);
+      yield* this.handleFunctionCalls(chat, functionCalls, userIds);
     }
 
     this.logger.log('Stream completed');
   }
 
-  private async buildFinancialContext(userId: string): Promise<string> {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+  private async *handleFunctionCalls(
+    chat: ChatSession,
+    functionCalls: FunctionCall[],
+    userIds: string[],
+  ): AsyncGenerator<string> {
+    const functionResponses = await Promise.all(
+      functionCalls.map(async (fc) => {
+        const result = await this.executeFunctionCall(fc, userIds);
+        return {
+          functionResponse: {
+            name: fc.name,
+            response: result,
+          },
+        };
+      }),
+    );
+
+    const result = await chat.sendMessageStream(functionResponses);
+
+    for await (const chunk of result.stream) {
+      const text = chunk.text();
+      if (text) {
+        this.logger.debug(`Function response chunk: "${text.slice(0, 50)}..."`);
+        yield text;
+      }
+    }
+
+    // Check for additional function calls (chained)
+    const response = await result.response;
+    const moreCalls = response.functionCalls();
+    if (moreCalls && moreCalls.length > 0) {
+      this.logger.log(`Chained function calls: ${moreCalls.map((fc) => fc.name).join(', ')}`);
+      yield* this.handleFunctionCalls(chat, moreCalls, userIds);
+    }
+  }
+
+  private async executeFunctionCall(
+    fc: FunctionCall,
+    userIds: string[],
+  ): Promise<Record<string, unknown>> {
+    const args = fc.args as Record<string, string>;
+    this.logger.log(`Executing function ${fc.name} with args: ${JSON.stringify(args)}`);
+
+    switch (fc.name) {
+      case 'queryTransactions': {
+        const { data, total } = await this.transactionsRepository.findMany({
+          userIds,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          type: args.type as 'INCOME' | 'EXPENSE' | undefined,
+          skip: 0,
+          take: 20,
+          order: 'desc',
+          orderBy: 'date',
+        });
+
+        return {
+          total,
+          transactions: data.map((tx) => ({
+            date: new Date(tx.date).toLocaleDateString('pt-BR'),
+            amount: Number(tx.amount).toFixed(2),
+            type: tx.type,
+            description: tx.description || (tx as any).category?.name || '',
+            category: (tx as any).category?.name || '',
+          })),
+        };
+      }
+
+      case 'getSummaryByPeriod': {
+        const summary = await this.transactionsRepository.getSummary(
+          userIds,
+          args.startDate,
+          args.endDate,
+        );
+        return {
+          period: `${args.startDate} a ${args.endDate}`,
+          income: summary.income.toFixed(2),
+          expense: summary.expense.toFixed(2),
+          balance: summary.balance.toFixed(2),
+          incomeCount: summary.incomeCount,
+          expenseCount: summary.expenseCount,
+        };
+      }
+
+      case 'getCategoryBreakdownByPeriod': {
+        const breakdown = await this.transactionsRepository.getCategoryBreakdown(
+          userIds,
+          args.startDate,
+          args.endDate,
+        );
+        return {
+          period: `${args.startDate} a ${args.endDate}`,
+          categories: breakdown.map((cat) => ({
+            name: cat.category?.name ?? 'Outros',
+            total: cat.total.toFixed(2),
+            count: cat.count,
+          })),
+        };
+      }
+
+      default:
+        this.logger.warn(`Unknown function: ${fc.name}`);
+        return { error: 'Funcao desconhecida' };
+    }
+  }
+
+  private async buildFinancialContext(userIds: string[]): Promise<string> {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       .toISOString()

@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Layers,
   CreditCard,
+  Target,
   Lightbulb,
   Settings,
   PanelLeftClose,
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/transacoes", label: "Transacoes", icon: ArrowUpDown },
   { href: "/categorias", label: "Categorias", icon: Layers },
   { href: "/cartoes", label: "Cartoes", icon: CreditCard },
+  { href: "/metas", label: "Metas", icon: Target },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/configuracoes", label: "Configuracoes", icon: Settings },
 ];
