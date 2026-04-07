@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
-import { inter, interBody, jetbrainsMono } from "@/lib/fonts";
+import { outfit, dmSans, jetbrainsMono } from "@/lib/fonts";
 import { AuthProvider } from "@/providers/auth-provider";
 import { JotaiProvider } from "@/providers/jotai-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} ${interBody.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${outfit.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

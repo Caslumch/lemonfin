@@ -37,20 +37,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-page px-4 relative overflow-hidden">
+      {/* Background glow effects */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-lima/5 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-lima/3 blur-[100px] pointer-events-none" />
+
+      {/* Glass card */}
+      <div className="w-full max-w-sm backdrop-blur-xl bg-surface/60 dark:bg-surface/40 border border-border dark:border-white/[0.06] rounded-2xl p-8 shadow-xl relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-lima rounded-md flex items-center justify-center">
-              <span className="font-[family-name:var(--font-display)] font-bold text-dark text-lg">
-                $
-              </span>
-            </div>
-            <span className="font-[family-name:var(--font-display)] text-xl font-extrabold text-fg">
+          <div className="inline-flex items-center gap-2.5 mb-3">
+            <img src="/logo.svg" alt="LemonFin" className="w-8 h-8" />
+            <span className="font-[family-name:var(--font-display)] text-xl font-bold text-fg tracking-tight">
               LemonFin
             </span>
           </div>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-sm text-fg-muted">
             Entre na sua conta para continuar
           </p>
         </div>
@@ -89,11 +90,11 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-fg-secondary">
+        <p className="mt-6 text-center text-sm text-fg-muted">
           Nao tem conta?{" "}
           <Link
             href="/register"
-            className="font-medium text-fg hover:underline"
+            className="font-medium text-lima hover:underline"
           >
             Criar conta
           </Link>

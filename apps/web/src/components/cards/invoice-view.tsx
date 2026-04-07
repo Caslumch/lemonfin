@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
 import type { CardInvoice } from "@/types/card";
@@ -118,9 +119,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
               className="flex items-center justify-between px-4 py-3"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="text-lg shrink-0">
-                  {tx.category.icon}
-                </span>
+                <CategoryIconWithBg
+                  slug={tx.category.slug}
+                  colorBg={tx.category.colorBg}
+                  colorText={tx.category.colorText}
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg truncate">
                     {tx.description || tx.category.name}

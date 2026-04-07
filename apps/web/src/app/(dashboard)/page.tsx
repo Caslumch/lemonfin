@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { ArrowRight, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, PiggyBank, AlertTriangle, Target } from "lucide-react";
+import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -322,7 +323,7 @@ export default function DashboardPage() {
                   key={alert.categoryId}
                   className="flex items-center gap-2 text-sm"
                 >
-                  <span>{alert.category?.icon || "📦"}</span>
+                  <CategoryIcon slug={alert.category?.slug} size={14} />
                   <span className="text-fg flex-1 truncate">
                     {alert.category?.name ?? "Outros"}
                   </span>
@@ -371,7 +372,8 @@ export default function DashboardPage() {
                   <div key={goal.id} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-fg truncate">
-                        {goal.category?.icon} {goal.category?.name}
+                        <CategoryIcon slug={goal.category?.slug} size={12} className="inline mr-1" />
+                        {goal.category?.name}
                       </span>
                       <span
                         className={cn(
@@ -449,9 +451,11 @@ export default function DashboardPage() {
                   className="flex items-center gap-3 py-2 border-b border-border last:border-0 animate-fade-in-up"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center text-sm bg-muted">
-                    {tx.category.icon || "📦"}
-                  </div>
+                  <CategoryIconWithBg
+                    slug={tx.category.slug}
+                    colorBg={tx.category.colorBg}
+                    colorText={tx.category.colorText}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-fg truncate">
                       {tx.description || tx.category.name}

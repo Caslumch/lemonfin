@@ -91,14 +91,14 @@ export function EvolutionChart({ data, loading }: EvolutionChartProps) {
             <Line
               type="monotone"
               dataKey="income"
-              stroke="#22C55E"
+              stroke="var(--color-success)"
               strokeWidth={2}
               dot={{ r: 3 }}
             />
             <Line
               type="monotone"
               dataKey="expense"
-              stroke="#EF4444"
+              stroke="var(--color-danger)"
               strokeWidth={2}
               dot={{ r: 3 }}
             />

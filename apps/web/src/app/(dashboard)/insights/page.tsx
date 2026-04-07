@@ -12,6 +12,7 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { useApi } from "@/hooks/use-api";
 import type {
@@ -208,9 +209,11 @@ function AlertsSection({ alerts }: { alerts: SpendingAlert[] }) {
             className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0 animate-fade-in-up"
             style={{ animationDelay: `${index * 60}ms` }}
           >
-            <div className="w-8 h-8 rounded-md flex items-center justify-center text-sm bg-surface">
-              {alert.category?.icon || "📦"}
-            </div>
+            <CategoryIconWithBg
+              slug={alert.category?.slug}
+              colorBg={alert.category?.colorBg}
+              colorText={alert.category?.colorText}
+            />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-fg font-medium">
                 {alert.category?.name ?? "Outros"}
@@ -293,9 +296,11 @@ function TrendSection({
               className="flex items-center gap-3 py-2 border-b border-border last:border-0 animate-fade-in-up"
               style={{ animationDelay: `${index * 60}ms` }}
             >
-              <div className="w-8 h-8 rounded-md flex items-center justify-center text-sm bg-muted">
-                {item.category?.icon || "📦"}
-              </div>
+              <CategoryIconWithBg
+                slug={item.category?.slug}
+                colorBg={item.category?.colorBg}
+                colorText={item.category?.colorText}
+              />
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-fg">
                   {item.category?.name ?? "Outros"}
@@ -373,9 +378,7 @@ function ComparisonTable({
             style={{ animationDelay: `${index * 40}ms` }}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-sm shrink-0">
-                {item.category?.icon || "📦"}
-              </span>
+              <CategoryIcon slug={item.category?.slug} size={14} />
               <span className="text-sm text-fg truncate">
                 {item.category?.name ?? "Outros"}
               </span>

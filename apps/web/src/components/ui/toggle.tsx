@@ -17,7 +17,7 @@ export function Toggle({ checked, onCheckedChange, className }: ToggleProps) {
       onClick={() => onCheckedChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out",
-        checked ? "bg-lima" : "bg-gray-200",
+        checked ? "bg-lima" : "bg-muted",
         className
       )}
     >

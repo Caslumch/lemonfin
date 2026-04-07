@@ -1,5 +1,6 @@
 "use client";
 
+import { CategoryIcon } from "@/components/ui/category-icon";
 import type { CategoryBreakdown as CategoryBreakdownType } from "@/types/transaction";
 
 function formatCurrency(value: number) {
@@ -52,7 +53,8 @@ export function CategoryBreakdown({ data, loading }: CategoryBreakdownProps) {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm text-fg">
-                    {item.category?.icon} {item.category?.name ?? "Outros"}
+                    <CategoryIcon slug={item.category?.slug} size={14} className="inline mr-1.5" />
+                    {item.category?.name ?? "Outros"}
                   </span>
                   <span className="font-[family-name:var(--font-mono)] text-sm text-fg-secondary">
                     {formatCurrency(item.total)}

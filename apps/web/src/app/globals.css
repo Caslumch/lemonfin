@@ -5,30 +5,32 @@
 
 /* ===== Literal Colors (static, inlined into utilities) ===== */
 @theme inline {
-  --color-lima: #D4F400;
-  --color-lima-hover: #BDD900;
-  --color-lima-muted: #D4F40020;
+  --color-lima: #C5E835;
+  --color-lima-hover: #B0D02E;
+  --color-lima-muted: #C5E83518;
+  --color-lima-text: #0A0A0A;
 
-  --color-dark: #07070F;
-  --color-dark-soft: #111118;
+  --color-dark: #09090B;
+  --color-dark-soft: #111113;
 
-  --color-gray-50: #F9F9F9;
-  --color-gray-100: #F2F2F2;
-  --color-gray-200: #E5E5E5;
-  --color-gray-400: #9E9E9E;
-  --color-gray-600: #6B6B6B;
-  --color-gray-900: #2D2D2D;
+  --color-gray-50: #FAFAFA;
+  --color-gray-100: #F4F4F5;
+  --color-gray-200: #E4E4E7;
+  --color-gray-400: #A1A1AA;
+  --color-gray-600: #52525B;
+  --color-gray-900: #18181B;
 
-  --color-success: #22C55E;
+  --color-success: #34D399;
   --color-success-muted: initial;
-  --color-danger: #EF4444;
+  --color-danger: #F87171;
   --color-danger-muted: initial;
-  --color-warning: #F59E0B;
+  --color-warning: #FBBF24;
   --color-warning-muted: initial;
 
   /* Remove defaults Tailwind would generate for these */
   --color-page: initial;
   --color-surface: initial;
+  --color-surface-raised: initial;
   --color-subtle: initial;
   --color-muted: initial;
   --color-border: initial;
@@ -63,10 +65,10 @@
   --font-mono: var(--font-mono);
 
   /* Border Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
 
   /* Shadows */
@@ -80,21 +82,22 @@
 
 :root {
   /* Surfaces */
-  --color-page: #F9F9F9;
-  --color-surface: #FFFFFF;
-  --color-subtle: #F9F9F9;
-  --color-muted: #F2F2F2;
-  --color-border: #E5E5E5;
+  --color-page: #F0F0F2;
+  --color-surface: #F7F7F8;
+  --color-surface-raised: #EBEBED;
+  --color-subtle: #EBEBED;
+  --color-muted: #DDDDE0;
+  --color-border: #D8D8DC;
 
   /* Text */
-  --color-fg: #0D0D0D;
-  --color-fg-secondary: #6B6B6B;
-  --color-fg-muted: #9E9E9E;
+  --color-fg: #09090B;
+  --color-fg-secondary: #52525B;
+  --color-fg-muted: #A1A1AA;
 
   /* Semantic status */
-  --color-success-muted: #22C55E15;
-  --color-danger-muted: #EF444415;
-  --color-warning-muted: #F59E0B15;
+  --color-success-muted: #34D39915;
+  --color-danger-muted: #F8717115;
+  --color-warning-muted: #FBBF2415;
 
   /* Category colors */
   --color-cat-alimentacao: #FFF3E0;
@@ -116,28 +119,29 @@
   --color-cat-freelance: #EDE7F6;
   --color-cat-freelance-text: #4527A0;
   --color-cat-outros: #F5F5F5;
-  --color-cat-outros-text: #6B6B6B;
+  --color-cat-outros-text: #52525B;
 }
 
 /* ===== Dark Mode Overrides ===== */
 
 .dark {
   /* Surfaces */
-  --color-page: #07070F;
-  --color-surface: #111118;
-  --color-subtle: #1A1A22;
-  --color-muted: #25252D;
-  --color-border: #25252D;
+  --color-page: #09090B;
+  --color-surface: #111113;
+  --color-surface-raised: #18181B;
+  --color-subtle: #18181B;
+  --color-muted: #27272A;
+  --color-border: rgba(255, 255, 255, 0.04);
 
   /* Text */
-  --color-fg: #F9F9F9;
-  --color-fg-secondary: #9E9E9E;
-  --color-fg-muted: #6B6B6B;
+  --color-fg: #FAFAFA;
+  --color-fg-secondary: #A1A1AA;
+  --color-fg-muted: #52525B;
 
   /* Semantic adjustments */
-  --color-success-muted: #22C55E20;
-  --color-danger-muted: #EF444420;
-  --color-warning-muted: #F59E0B20;
+  --color-success-muted: #34D39915;
+  --color-danger-muted: #F8717115;
+  --color-warning-muted: #FBBF2415;
 
   /* Category colors */
   --color-cat-alimentacao: #E6510020;
@@ -158,8 +162,8 @@
   --color-cat-salario-text: #81C784;
   --color-cat-freelance: #4527A020;
   --color-cat-freelance-text: #B39DDB;
-  --color-cat-outros: #6B6B6B20;
-  --color-cat-outros-text: #9E9E9E;
+  --color-cat-outros: #52525B20;
+  --color-cat-outros-text: #A1A1AA;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -173,6 +177,7 @@
 /* Surfaces */
 @utility bg-page { background-color: var(--color-page); }
 @utility bg-surface { background-color: var(--color-surface); }
+@utility bg-surface-raised { background-color: var(--color-surface-raised); }
 @utility bg-subtle { background-color: var(--color-subtle); }
 @utility bg-muted { background-color: var(--color-muted); }
 
@@ -215,12 +220,18 @@
 @utility border-fg { border-color: var(--color-fg); }
 @utility border-fg-muted { border-color: var(--color-fg-muted); }
 
+/* ===== Scrollbar ===== */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 2px; }
+
 /* ===== Animations ===== */
 
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -229,7 +240,7 @@
 }
 
 @utility animate-fade-in-up {
-  animation: fade-in-up 400ms ease-out both;
+  animation: fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes typing-dot {

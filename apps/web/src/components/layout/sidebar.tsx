@@ -56,14 +56,10 @@ export function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 py-5">
-        <div className="w-7 h-7 bg-lima rounded-md flex items-center justify-center shrink-0">
-          <span className="font-[family-name:var(--font-display)] font-bold text-dark text-sm">
-            $
-          </span>
-        </div>
+      <div className="flex items-center gap-2.5 px-4 py-8">
+        <img src="/logo.svg" alt="LemonFin" className="w-7 h-7 shrink-0" />
         {!collapsed && (
-          <span className="font-[family-name:var(--font-display)] text-lg font-extrabold text-fg">
+          <span className="font-[family-name:var(--font-display)] text-xl font-bold text-fg tracking-tight">
             LemonFin
           </span>
         )}
@@ -80,10 +76,10 @@ export function Sidebar() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                "flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] tracking-wide transition-all duration-150",
                 active
-                  ? "bg-lima font-semibold text-dark"
-                  : "text-fg-secondary hover:bg-subtle hover:text-fg",
+                  ? "bg-surface-raised font-semibold text-fg"
+                  : "text-fg-muted hover:text-fg hover:bg-subtle",
                 collapsed && "justify-center px-0"
               )}
             >
@@ -135,24 +131,28 @@ export function Sidebar() {
       {/* Footer */}
       <div
         className={cn(
-          "border-t border-border px-4 py-4",
+          "px-4 py-4",
           collapsed && "px-2"
         )}
       >
         {session?.user && (
           <div
             className={cn(
-              "flex items-center gap-3",
+              "flex items-center gap-2.5",
               collapsed && "justify-center"
             )}
           >
-            <Avatar name={session.user.name || "U"} size="default" />
+            <div className="w-[30px] h-[30px] rounded-full bg-surface-raised flex items-center justify-center shrink-0">
+              <span className="text-xs font-semibold text-lima">
+                {(session.user.name || "U").charAt(0).toUpperCase()}
+              </span>
+            </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-fg truncate">
+                <p className="text-xs font-medium text-fg truncate">
                   {session.user.name}
                 </p>
-                <p className="text-xs text-fg-muted truncate">
+                <p className="text-[11px] text-fg-muted truncate">
                   {session.user.email}
                 </p>
               </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Target, Pencil, Trash2 } from "lucide-react";
+import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { GoalModal } from "@/components/goals/goal-modal";
@@ -161,9 +162,11 @@ export default function MetasPage() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">
-                      {goal.category?.icon ?? "🎯"}
-                    </span>
+                    <CategoryIconWithBg
+                      slug={goal.category?.slug}
+                      colorBg={goal.category?.colorBg}
+                      colorText={goal.category?.colorText}
+                    />
                     <div>
                       <h3 className="font-semibold text-fg text-sm">
                         {goal.name}
