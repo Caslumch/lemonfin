@@ -57,7 +57,16 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 py-8">
-        <img src="/logo.svg" alt="LemonFin" className="w-7 h-7 shrink-0" />
+        <svg width="28" height="28" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+          <defs>
+            <radialGradient id="sidebar-logo" cx="38%" cy="35%" r="65%">
+              <stop offset="0%" stopColor="#CCEB3A"/>
+              <stop offset="50%" stopColor="#B8D900"/>
+              <stop offset="100%" stopColor="#A3C200"/>
+            </radialGradient>
+          </defs>
+          <circle cx="256" cy="256" r="256" fill="url(#sidebar-logo)"/>
+        </svg>
         {!collapsed && (
           <span className="font-[family-name:var(--font-display)] text-xl font-bold text-fg tracking-tight">
             LemonFin

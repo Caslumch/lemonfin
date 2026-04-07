@@ -46,7 +46,16 @@ export default function LoginPage() {
       <div className="w-full max-w-sm backdrop-blur-xl bg-surface/60 dark:bg-surface/40 border border-border dark:border-white/[0.06] rounded-2xl p-8 shadow-xl relative z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-3">
-            <img src="/logo.svg" alt="LemonFin" className="w-8 h-8" />
+            <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+              <defs>
+                <radialGradient id="logo-g" cx="38%" cy="35%" r="65%">
+                  <stop offset="0%" stopColor="#CCEB3A"/>
+                  <stop offset="50%" stopColor="#B8D900"/>
+                  <stop offset="100%" stopColor="#A3C200"/>
+                </radialGradient>
+              </defs>
+              <circle cx="256" cy="256" r="256" fill="url(#logo-g)"/>
+            </svg>
             <span className="font-[family-name:var(--font-display)] text-xl font-bold text-fg tracking-tight">
               LemonFin
             </span>
