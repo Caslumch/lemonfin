@@ -46,7 +46,17 @@
       "Bash(echo \"JWT_SECRET=$\\(openssl rand -base64 32\\)\")",
       "Bash(echo \"NEXTAUTH_SECRET=$\\(openssl rand -base64 32\\)\")",
       "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_jmq7aCGIOJB1@ep-mute-mouse-am1mqc3c.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require\" pnpm prisma migrate deploy)",
-      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_jmq7aCGIOJB1@ep-mute-mouse-am1mqc3c.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require\" pnpm db:seed)"
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_jmq7aCGIOJB1@ep-mute-mouse-am1mqc3c.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require\" pnpm db:seed)",
+      "Bash(npx turbo:*)",
+      "Bash(grep -l \"Logger\" \"/Users/lucasmachado/Documents/projects/lemonfin - project/apps/api/src/modules/\"*\"/\"*\".ts\")",
+      "Bash(npx --prefix \"/Users/lucasmachado/Documents/projects/wmode-project/wmode-api\" tsc --noEmit --project \"/Users/lucasmachado/Documents/projects/wmode-project/wmode-api/tsconfig.json\")",
+      "Bash(npx vercel:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(pnpm install:*)",
+      "Bash(CI=true pnpm install)",
+      "Bash(grep -c \"color-page\" .next/static/css/*.css)",
+      "Bash(find .next -name \"*.css\" -exec grep -l \"color-page\" {} \\\\;)",
+      "Bash(pnpm --filter web build)"
     ]
   }
 }

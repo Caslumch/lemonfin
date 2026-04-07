@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { TransactionsRepository } from '../transactions/repositories/transactions.repository';
 import { UsersRepository } from '../users/repositories/users.repository';
 import { FamilyContextService } from '../families/services/family-context.service';
@@ -45,7 +45,9 @@ export class AlertsService {
       try {
         await this.sendWeeklySummaryForUser(user.id, user.name, user.phone!);
       } catch (error) {
-        this.logger.error(`Weekly summary failed for user ${user.id}: ${error}`);
+        this.logger.error(
+          `Weekly summary failed for user ${user.id}: ${error}`,
+        );
       }
     }
   }
@@ -59,9 +61,15 @@ export class AlertsService {
 
     for (const user of users) {
       try {
-        await this.sendMonthlyComparisonForUser(user.id, user.name, user.phone!);
+        await this.sendMonthlyComparisonForUser(
+          user.id,
+          user.name,
+          user.phone!,
+        );
       } catch (error) {
-        this.logger.error(`Monthly comparison failed for user ${user.id}: ${error}`);
+        this.logger.error(
+          `Monthly comparison failed for user ${user.id}: ${error}`,
+        );
       }
     }
   }
@@ -70,9 +78,23 @@ export class AlertsService {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const currentEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
     const previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const previousEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+    );
 
     const daysRemaining = Math.ceil(
       (currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
@@ -95,9 +117,7 @@ export class AlertsService {
     const previousMap = new Map(
       previousCategories.map((c) => [c.categoryId, c]),
     );
-    const goalsMap = new Map(
-      goals.map((g) => [g.categoryId, g]),
-    );
+    const goalsMap = new Map(goals.map((g) => [g.categoryId, g]));
 
     const alerts: string[] = [];
 
@@ -109,7 +129,7 @@ export class AlertsService {
       // Check against goal first, then fallback to previous month comparison
       const goal = goalsMap.get(current.categoryId);
       if (goal) {
-        const goalLimit = goal.amount.toNumber();
+        const goalLimit = goal?.amount?.toNumber();
         const percent = (current.total / goalLimit) * 100;
         if (percent >= 80) {
           const limitFormatted = formatBRL(goalLimit);
@@ -226,7 +246,14 @@ export class AlertsService {
     const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
     // Two months ago
     const twoMonthsStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const twoMonthsEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59);
+    const twoMonthsEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      0,
+      23,
+      59,
+      59,
+    );
 
     const [prevSummary, twoMonthsSummary, prevCategories, twoMonthsCategories] =
       await Promise.all([
@@ -286,7 +313,9 @@ export class AlertsService {
           100
         : 0;
 
-    const prevMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(prevStart);
+    const prevMonth = new Intl.DateTimeFormat('pt-BR', {
+      month: 'long',
+    }).format(prevStart);
     const greeting = name ? `Oi, ${name.split(' ')[0]}!` : 'Oi!';
 
     const lines = [

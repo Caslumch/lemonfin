@@ -38,6 +38,10 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 | 1.5 | Setup Backend — NestJS + Prisma + PostgreSQL | NestJS, Prisma ORM, PostgreSQL | API rodando com banco conectado |
 | 1.6 | Modelagem do banco de dados | Users, Transactions, Categories (pre-definidas) | Schema Prisma + migrations |
 | 1.7 | Autenticacao — NextAuth (email/senha) | NextAuth, JWT | Login/registro funcionando |
+| 1.7a | Telefone internacional no registro | react-international-phone (seletor de pais) | Campo com bandeira e codigo |
+| 1.7b | Toggle de visibilidade da senha | Icone olho (Eye/EyeOff) nos campos de senha | UX de senha melhorada |
+| 1.7c | Validacao de telefone duplicado | Mensagem amigavel ao tentar cadastrar telefone ja usado | Conflito tratado |
+| 1.7d | Mensagem de boas-vindas via WhatsApp | Envio automatico ao registrar com telefone (via WMode API) | Onboarding no WhatsApp |
 | 1.8 | Componentes base do Design System | Button (5 variantes), Input, Badge, Toggle, Tabs | Componentes reutilizaveis prontos |
 | 1.9 | Layout base — Sidebar + Header | Sidebar colapsavel (220px/64px), header com titulo e acoes | Layout navegavel |
 
@@ -133,6 +137,7 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 | 5.5 | Visualizacao de fatura por cartao | Lista de transacoes filtradas por cartao | Pagina de faturas |
 | 5.6 | Associacao de transacoes a cartoes | Via WhatsApp: "300 em 3x no Nubank" | Transacao vinculada ao cartao |
 | 5.7 | Modelagem de banco (cards, invoices) | Entidades Card e Invoice no Prisma | Migrations atualizadas |
+| 5.8 | Edicao de perfil do usuario | GET/PATCH /users/me, secao em Configuracoes (nome, telefone) | Perfil editavel |
 
 **Definicao de pronto:** WhatsApp suporta consultas, correcoes e parcelamentos. Cartoes cadastrados com faturas visiveis.
 
@@ -254,8 +259,8 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 - Multi-contas e multi-cartoes avancado
 - Gamificacao (streaks de registro, conquistas)
 - Planejamento de orcamento mensal
-- Compartilhamento de controle (casais/familias)
-- App mobile nativo (React Native)
+- ~~Compartilhamento de controle (casais/familias)~~ ✅ Implementado
+- App mobile (React Native) — Apple Store + Play Store com mesmo codigo
 - Telegram como canal alternativo
 
 ---

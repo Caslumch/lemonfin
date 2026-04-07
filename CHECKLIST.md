@@ -47,6 +47,10 @@
 - [x] Proteger rotas autenticadas
 - [x] UX do registro: spinner animado no botao, toast de sucesso, toast de boas-vindas no dashboard
 - [x] Campo de telefone opcional no registro (mascara brasileira, validacao 10-11 digitos)
+- [x] Telefone internacional no registro (react-international-phone com seletor de pais)
+- [x] Toggle de visibilidade da senha no registro (icone olho)
+- [x] Validacao de telefone duplicado no registro (mensagem amigavel)
+- [x] Mensagem de boas-vindas via WhatsApp ao registrar com telefone
 
 **Layout Base**
 
@@ -514,7 +518,8 @@
 - [ ] Permissoes por role (OWNER/ADMIN/MEMBER) — restringir quem pode editar/deletar
 - [ ] Transferencia de ownership da familia
 - [ ] Remover membro da familia (pelo owner/admin)
-- [ ] Tela de perfil do usuario (editar nome, telefone, avatar)
+- [x] Tela de perfil do usuario (editar nome, telefone) — em Configuracoes
+- [ ] Editar avatar do usuario
 
 ---
 
