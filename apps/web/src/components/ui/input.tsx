@@ -31,7 +31,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             id={id}
             ref={ref}
             className={cn(
-              "w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm font-[family-name:var(--font-body)] text-fg placeholder:text-fg-muted transition-colors duration-150",
+              "w-full rounded-lg border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm font-[family-name:var(--font-body)] text-fg placeholder:text-fg-muted transition-colors duration-150",
               "focus:border-fg focus:outline-none",
               error && "border-danger focus:border-danger",
               prefix && "pl-10",

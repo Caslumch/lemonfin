@@ -9,8 +9,8 @@
   --color-lima-hover: #BDD900;
   --color-lima-muted: #D4F40020;
 
-  --color-dark: #0D0D0D;
-  --color-dark-soft: #1A1A1A;
+  --color-dark: #07070F;
+  --color-dark-soft: #111118;
 
   --color-gray-50: #F9F9F9;
   --color-gray-100: #F2F2F2;
@@ -71,8 +71,8 @@
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
   --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.10);
 }
 
@@ -123,11 +123,11 @@
 
 .dark {
   /* Surfaces */
-  --color-page: #0D0D0D;
-  --color-surface: #1A1A1A;
-  --color-subtle: #1F1F1F;
-  --color-muted: #2D2D2D;
-  --color-border: #2D2D2D;
+  --color-page: #07070F;
+  --color-surface: #111118;
+  --color-subtle: #1A1A22;
+  --color-muted: #25252D;
+  --color-border: #25252D;
 
   /* Text */
   --color-fg: #F9F9F9;

@@ -85,7 +85,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-lima rounded-sm flex items-center justify-center">
+            <div className="w-8 h-8 bg-lima rounded-md flex items-center justify-center">
               <span className="font-[family-name:var(--font-display)] font-bold text-dark text-lg">
                 $
               </span>
@@ -131,10 +131,10 @@ export default function RegisterPage() {
               defaultCountry="br"
               value={phone}
               onChange={setPhone}
-              inputClassName="!w-full !rounded-md !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
+              inputClassName="!w-full !rounded-lg !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
               countrySelectorStyleProps={{
                 buttonClassName:
-                  "!rounded-l-md !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
+                  "!rounded-l-lg !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
               }}
             />
           </div>

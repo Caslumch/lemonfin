@@ -41,7 +41,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-lima rounded-sm flex items-center justify-center">
+            <div className="w-8 h-8 bg-lima rounded-md flex items-center justify-center">
               <span className="font-[family-name:var(--font-display)] font-bold text-dark text-lg">
                 $
               </span>

@@ -21,9 +21,9 @@ const buttonVariants = cva(
           "bg-danger text-white hover:brightness-92 active:brightness-88",
       },
       size: {
-        sm: "px-4 py-2 text-xs rounded-sm",
-        default: "px-6 py-2.5 text-sm rounded-md",
-        lg: "px-7 py-3 text-[15px] rounded-md",
+        sm: "px-4 py-2 text-xs rounded-full",
+        default: "px-6 py-2.5 text-sm rounded-full",
+        lg: "px-7 py-3 text-[15px] rounded-full",
         icon: "w-10 h-10 rounded-full",
       },
     },

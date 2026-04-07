@@ -57,7 +57,7 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-4 py-5">
-        <div className="w-7 h-7 bg-lima rounded-sm flex items-center justify-center shrink-0">
+        <div className="w-7 h-7 bg-lima rounded-md flex items-center justify-center shrink-0">
           <span className="font-[family-name:var(--font-display)] font-bold text-dark text-sm">
             $
           </span>

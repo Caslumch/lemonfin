@@ -1,12 +1,12 @@
-import { Outfit, DM_Sans, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 
-export const outfit = Outfit({
+export const inter = Inter({
   subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
 })
 
-export const dmSans = DM_Sans({
+export const interBody = Inter({
   subsets: ['latin'],
   variable: '--font-body',
   display: 'swap',
