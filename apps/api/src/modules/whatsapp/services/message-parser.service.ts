@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 export interface ParsedTransaction {
   amount: number;
@@ -94,32 +94,31 @@ Quando a mensagem nao se encaixa em nenhuma das intencoes acima.
 Responda: {"intent": "unknown", "message": string}
 Explique brevemente o que voce pode fazer e de exemplos.`;
 
+const MODEL = 'gpt-4o-mini';
+
 @Injectable()
 export class MessageParserService {
   private readonly logger = new Logger(MessageParserService.name);
-  private readonly model;
+  private readonly openai: OpenAI;
 
   constructor(private readonly config: ConfigService) {
-    const genAI = new GoogleGenerativeAI(
-      this.config.getOrThrow<string>('GEMINI_API_KEY'),
-    );
-    this.model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_PROMPT,
+    this.openai = new OpenAI({
+      apiKey: this.config.getOrThrow<string>('OPENAI_API_KEY'),
     });
   }
 
   async parse(message: string): Promise<ParseResult> {
     try {
-      const result = await this.model.generateContent(message);
-      let text = result.response.text().trim();
+      const completion = await this.openai.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: message },
+        ],
+        response_format: { type: 'json_object' },
+      });
 
-      // Strip markdown code blocks if present
-      const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (codeBlockMatch) {
-        text = codeBlockMatch[1].trim();
-      }
-
+      const text = completion.choices[0]?.message?.content?.trim() ?? '';
       const json = JSON.parse(text);
 
       switch (json.intent) {
