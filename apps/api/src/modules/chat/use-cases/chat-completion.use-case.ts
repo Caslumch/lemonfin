@@ -1,12 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  GoogleGenerativeAI,
-  SchemaType,
-  type FunctionDeclaration,
-  type FunctionCall,
-  type ChatSession,
-} from '@google/generative-ai';
+import OpenAI from 'openai';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+} from 'openai/resources/chat/completions';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
@@ -35,66 +33,77 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Use a data de hoje como referencia: ela sera informada no contexto
 - Sempre chame as funcoes quando o usuario perguntar sobre periodos especificos que nao estao no contexto ja fornecido`;
 
-const toolDeclarations: FunctionDeclaration[] = [
+const MODEL = 'gpt-4o-mini';
+
+const tools: ChatCompletionTool[] = [
   {
-    name: 'queryTransactions',
-    description:
-      'Busca transacoes do usuario em um periodo especifico. Use quando o usuario perguntar sobre transacoes de um periodo como "hoje", "ontem", "semana passada", "mes passado", etc.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        startDate: {
-          type: SchemaType.STRING,
-          description: 'Data inicial no formato YYYY-MM-DD',
+    type: 'function',
+    function: {
+      name: 'queryTransactions',
+      description:
+        'Busca transacoes do usuario em um periodo especifico. Use quando o usuario perguntar sobre transacoes de um periodo como "hoje", "ontem", "semana passada", "mes passado", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            description: 'Data inicial no formato YYYY-MM-DD',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Data final no formato YYYY-MM-DD',
+          },
+          type: {
+            type: 'string',
+            description: 'Filtro por tipo: INCOME ou EXPENSE. Omita para buscar ambos.',
+          },
         },
-        endDate: {
-          type: SchemaType.STRING,
-          description: 'Data final no formato YYYY-MM-DD',
-        },
-        type: {
-          type: SchemaType.STRING,
-          description: 'Filtro por tipo: INCOME ou EXPENSE. Omita para buscar ambos.',
-        },
+        required: ['startDate', 'endDate'],
       },
-      required: ['startDate', 'endDate'],
     },
   },
   {
-    name: 'getSummaryByPeriod',
-    description:
-      'Retorna o resumo financeiro (receitas, despesas, saldo) de um periodo especifico. Use quando o usuario perguntar "quanto gastei ontem", "quanto entrou semana passada", etc.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        startDate: {
-          type: SchemaType.STRING,
-          description: 'Data inicial no formato YYYY-MM-DD',
+    type: 'function',
+    function: {
+      name: 'getSummaryByPeriod',
+      description:
+        'Retorna o resumo financeiro (receitas, despesas, saldo) de um periodo especifico. Use quando o usuario perguntar "quanto gastei ontem", "quanto entrou semana passada", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            description: 'Data inicial no formato YYYY-MM-DD',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Data final no formato YYYY-MM-DD',
+          },
         },
-        endDate: {
-          type: SchemaType.STRING,
-          description: 'Data final no formato YYYY-MM-DD',
-        },
+        required: ['startDate', 'endDate'],
       },
-      required: ['startDate', 'endDate'],
     },
   },
   {
-    name: 'getCategoryBreakdownByPeriod',
-    description:
-      'Retorna gastos agrupados por categoria em um periodo especifico. Use quando o usuario perguntar "no que mais gastei semana passada", "categorias de gasto de janeiro", etc.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {
-        startDate: {
-          type: SchemaType.STRING,
-          description: 'Data inicial no formato YYYY-MM-DD',
+    type: 'function',
+    function: {
+      name: 'getCategoryBreakdownByPeriod',
+      description:
+        'Retorna gastos agrupados por categoria em um periodo especifico. Use quando o usuario perguntar "no que mais gastei semana passada", "categorias de gasto de janeiro", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            description: 'Data inicial no formato YYYY-MM-DD',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Data final no formato YYYY-MM-DD',
+          },
         },
-        endDate: {
-          type: SchemaType.STRING,
-          description: 'Data final no formato YYYY-MM-DD',
-        },
+        required: ['startDate', 'endDate'],
       },
-      required: ['startDate', 'endDate'],
     },
   },
 ];
@@ -102,19 +111,15 @@ const toolDeclarations: FunctionDeclaration[] = [
 @Injectable()
 export class ChatCompletionUseCase {
   private readonly logger = new Logger(ChatCompletionUseCase.name);
-  private readonly model;
+  private readonly openai: OpenAI;
 
   constructor(
     private readonly config: ConfigService,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly familyContext: FamilyContextService,
   ) {
-    const genAI = new GoogleGenerativeAI(
-      this.config.getOrThrow<string>('GEMINI_API_KEY'),
-    );
-    this.model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      tools: [{ functionDeclarations: toolDeclarations }],
+    this.openai = new OpenAI({
+      apiKey: this.config.getOrThrow<string>('OPENAI_API_KEY'),
     });
   }
 
@@ -127,84 +132,115 @@ export class ChatCompletionUseCase {
     const today = new Date().toISOString().split('T')[0];
     const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}\n\n## Contexto financeiro atual do usuario:\n${context}`;
 
-    const history = input.history.map((msg) => ({
-      role: msg.role === 'user' ? ('user' as const) : ('model' as const),
-      parts: [{ text: msg.content }],
-    }));
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemInstruction },
+      ...input.history.map((msg) => ({
+        role: msg.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: msg.content,
+      })),
+      { role: 'user', content: input.message },
+    ];
 
-    this.logger.log('Starting Gemini stream...');
+    this.logger.log('Starting OpenAI stream...');
 
-    const chat = this.model.startChat({
-      systemInstruction: { role: 'user', parts: [{ text: systemInstruction }] },
-      history,
-    });
+    // Loop to support chained tool calls. Each turn streams text to the user;
+    // if the model requests tool calls, we execute them, append the results,
+    // and loop again until the model produces a final answer with no tool calls.
+    const MAX_TURNS = 5;
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      const stream = await this.openai.chat.completions.create({
+        model: MODEL,
+        messages,
+        tools,
+        stream: true,
+      });
 
-    const result = await chat.sendMessageStream(input.message);
+      let content = '';
+      const toolCalls: {
+        id: string;
+        name: string;
+        arguments: string;
+      }[] = [];
 
-    for await (const chunk of result.stream) {
-      const text = chunk.text();
-      if (text) {
-        this.logger.debug(`Chunk received: "${text.slice(0, 50)}..."`);
-        yield text;
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+        if (!delta) continue;
+
+        if (delta.content) {
+          content += delta.content;
+          this.logger.debug(`Chunk received: "${delta.content.slice(0, 50)}..."`);
+          yield delta.content;
+        }
+
+        // Tool-call deltas arrive incrementally and must be assembled by index.
+        for (const tc of delta.tool_calls ?? []) {
+          const slot = (toolCalls[tc.index] ??= {
+            id: '',
+            name: '',
+            arguments: '',
+          });
+          if (tc.id) slot.id = tc.id;
+          if (tc.function?.name) slot.name += tc.function.name;
+          if (tc.function?.arguments) slot.arguments += tc.function.arguments;
+        }
       }
-    }
 
-    // Check if the model wants to call functions
-    const response = await result.response;
-    const functionCalls = response.functionCalls();
+      if (toolCalls.length === 0) {
+        // No tool calls — the model gave its final answer.
+        break;
+      }
 
-    if (functionCalls && functionCalls.length > 0) {
-      this.logger.log(`Function calls requested: ${functionCalls.map((fc) => fc.name).join(', ')}`);
-      yield* this.handleFunctionCalls(chat, functionCalls, userIds);
+      this.logger.log(
+        `Function calls requested: ${toolCalls.map((tc) => tc.name).join(', ')}`,
+      );
+
+      // Append the assistant's tool-call request to the conversation.
+      messages.push({
+        role: 'assistant',
+        content: content || null,
+        tool_calls: toolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      });
+
+      // Execute each tool call and append its result.
+      const results = await Promise.all(
+        toolCalls.map(async (tc) => {
+          const result = await this.executeFunctionCall(
+            tc.name,
+            tc.arguments,
+            userIds,
+          );
+          return {
+            role: 'tool' as const,
+            tool_call_id: tc.id,
+            content: JSON.stringify(result),
+          };
+        }),
+      );
+      messages.push(...results);
     }
 
     this.logger.log('Stream completed');
   }
 
-  private async *handleFunctionCalls(
-    chat: ChatSession,
-    functionCalls: FunctionCall[],
-    userIds: string[],
-  ): AsyncGenerator<string> {
-    const functionResponses = await Promise.all(
-      functionCalls.map(async (fc) => {
-        const result = await this.executeFunctionCall(fc, userIds);
-        return {
-          functionResponse: {
-            name: fc.name,
-            response: result,
-          },
-        };
-      }),
-    );
-
-    const result = await chat.sendMessageStream(functionResponses);
-
-    for await (const chunk of result.stream) {
-      const text = chunk.text();
-      if (text) {
-        this.logger.debug(`Function response chunk: "${text.slice(0, 50)}..."`);
-        yield text;
-      }
-    }
-
-    // Check for additional function calls (chained)
-    const response = await result.response;
-    const moreCalls = response.functionCalls();
-    if (moreCalls && moreCalls.length > 0) {
-      this.logger.log(`Chained function calls: ${moreCalls.map((fc) => fc.name).join(', ')}`);
-      yield* this.handleFunctionCalls(chat, moreCalls, userIds);
-    }
-  }
-
   private async executeFunctionCall(
-    fc: FunctionCall,
+    name: string,
+    rawArgs: string,
     userIds: string[],
   ): Promise<Record<string, unknown>> {
-    const args = fc.args as Record<string, string>;
-    this.logger.log(`Executing function ${fc.name} with args: ${JSON.stringify(args)}`);
+    let args: Record<string, string>;
+    try {
+      args = rawArgs ? JSON.parse(rawArgs) : {};
+    } catch {
+      this.logger.warn(`Failed to parse args for ${name}: ${rawArgs}`);
+      return { error: 'Argumentos invalidos' };
+    }
+    this.logger.log(`Executing function ${name} with args: ${JSON.stringify(args)}`);
 
-    switch (fc.name) {
+    switch (name) {
       case 'queryTransactions': {
         const { data, total } = await this.transactionsRepository.findMany({
           userIds,
@@ -262,7 +298,7 @@ export class ChatCompletionUseCase {
       }
 
       default:
-        this.logger.warn(`Unknown function: ${fc.name}`);
+        this.logger.warn(`Unknown function: ${name}`);
         return { error: 'Funcao desconhecida' };
     }
   }
