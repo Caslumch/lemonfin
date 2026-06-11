@@ -12,6 +12,7 @@ import { ContentHeader } from "@/components/layout/content-header";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
 import { EvolutionChart } from "@/components/dashboard/evolution-chart";
+import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { useApi } from "@/hooks/use-api";
 import type {
   Transaction,
@@ -23,6 +24,7 @@ import type {
   SpendingAlert,
 } from "@/types/transaction";
 import type { Goal } from "@/types/goal";
+import type { Forecast } from "@/types/forecast";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -67,11 +69,12 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<Transaction[]>([]);
   const [alerts, setAlerts] = useState<SpendingAlert[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [forecast, setForecast] = useState<Forecast | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes] =
+      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes] =
         await Promise.all([
           fetchApi<TransactionSummary>("/transactions/summary"),
           fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -81,6 +84,7 @@ export default function DashboardPage() {
           ),
           fetchApi<InsightsData>("/transactions/insights").catch(() => null),
           fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
+          fetchApi<Forecast>("/transactions/forecast").catch(() => null),
         ]);
 
       setSummary(summaryRes);
@@ -89,6 +93,7 @@ export default function DashboardPage() {
       setRecent(recentRes.data);
       if (insightsRes) setAlerts(insightsRes.alerts);
       setGoals(goalsRes);
+      setForecast(forecastRes);
     } catch {
       // Silent fail
     } finally {
@@ -104,7 +109,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes] =
+        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes] =
           await Promise.all([
             fetchApi<TransactionSummary>("/transactions/summary"),
             fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -114,6 +119,7 @@ export default function DashboardPage() {
             ),
             fetchApi<InsightsData>("/transactions/insights").catch(() => null),
             fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
+            fetchApi<Forecast>("/transactions/forecast").catch(() => null),
           ]);
         setSummary(summaryRes);
         setMonthly(monthlyRes);
@@ -121,6 +127,7 @@ export default function DashboardPage() {
         setRecent(recentRes.data);
         if (insightsRes) setAlerts(insightsRes.alerts);
         setGoals(goalsRes);
+        setForecast(forecastRes);
       } catch {
         // Silent fail
       }
@@ -230,6 +237,9 @@ export default function DashboardPage() {
             </>
           )}
         </div>
+
+        {/* Forecast card */}
+        <ForecastCard forecast={forecast} loading={loading} />
 
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
