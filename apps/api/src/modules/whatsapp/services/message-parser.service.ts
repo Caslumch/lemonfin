@@ -29,7 +29,7 @@ export interface ParsedRecurring {
 
 export type ParseResult =
   | { intent: 'transaction'; data: ParsedTransaction }
-  | { intent: 'query'; queryType: 'summary' | 'expenses' | 'income' | 'balance' | 'forecast' }
+  | { intent: 'query'; queryType: 'summary' | 'expenses' | 'income' | 'balance' | 'forecast' | 'budget' }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
   | { intent: 'installment'; data: ParsedInstallment }
@@ -64,13 +64,15 @@ Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENS
 Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financeiro.
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
 Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
+Para orçamento: "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast"}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget"}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
 - balance: foco no saldo
 - forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
+- budget: situação do ORÇAMENTO do mês (teto definido, quanto gastou, quanto pode ainda gastar)
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.

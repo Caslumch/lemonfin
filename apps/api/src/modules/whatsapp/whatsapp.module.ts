@@ -10,6 +10,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { CardsModule } from '../cards/cards.module';
 import { FamiliesModule } from '../families/families.module';
 import { RecurringModule } from '../recurring/recurring.module';
+import { BudgetsModule } from '../budgets/budgets.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RecurringModule } from '../recurring/recurring.module';
     CardsModule,
     FamiliesModule,
     RecurringModule,
+    BudgetsModule,
   ],
   controllers: [WebhookController],
   providers: [

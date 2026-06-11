@@ -8,6 +8,7 @@ import { MessageParserService, ParseResult } from './message-parser.service';
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
+import { GetBudgetUseCase } from '../../budgets/use-cases/get-budget.use-case';
 
 interface IncomingMessage {
   from: string;
@@ -29,6 +30,7 @@ export class WhatsappService {
     private readonly wmodeClient: WmodeClientService,
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
+    private readonly getBudget: GetBudgetUseCase,
   ) {}
 
   async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
@@ -235,6 +237,11 @@ export class WhatsappService {
       return;
     }
 
+    if (result.queryType === 'budget') {
+      await this.handleBudget(from, userId);
+      return;
+    }
+
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startDate = new Date(
@@ -352,6 +359,53 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content: lines.join('\n'),
+    });
+  }
+
+  private async handleBudget(from: string, userId: string) {
+    const budget = await this.getBudget.execute(userId);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (budget.amount === null) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          '📊 *Orçamento do mês*\n\n' +
+          'Você ainda não definiu um orçamento para este mês.\n\n' +
+          '_Defina em Orçamento no app para acompanhar quanto pode gastar._',
+      });
+      return;
+    }
+
+    const emoji = budget.exceeded ? '🔴' : budget.percentage >= 80 ? '⚠️' : '✅';
+    const paceLabel =
+      budget.pace === 'over'
+        ? '📈 acima do previsto — no ritmo atual você estoura o limite'
+        : budget.pace === 'under'
+          ? '📉 abaixo do previsto — bom controle!'
+          : '✅ dentro do previsto';
+
+    const remainingLine = budget.exceeded
+      ? `*Estourou:* ${fmt(Math.abs(budget.remaining))} acima`
+      : `*Pode gastar ainda:* ${fmt(budget.remaining)}`;
+
+    const daysLabel =
+      budget.daysRemaining > 0
+        ? `faltam ${budget.daysRemaining} ${budget.daysRemaining === 1 ? 'dia' : 'dias'}`
+        : 'último dia do mês';
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `${emoji} *Orçamento do mês*\n\n` +
+        `*Limite:* ${fmt(budget.amount)}\n` +
+        `*Gasto:* ${fmt(budget.spent)} (${budget.percentage}%)\n` +
+        `${remainingLine}\n` +
+        `_${daysLabel}_\n\n` +
+        `*Ritmo:* ${paceLabel}\n` +
+        `_Projeção do mês: ${fmt(budget.projectedSpend)}_`,
     });
   }
 

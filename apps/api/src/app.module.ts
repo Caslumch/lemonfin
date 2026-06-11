@@ -14,6 +14,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
+import { BudgetsModule } from './modules/budgets/budgets.module';
 import { HealthController } from './health.controller';
 import { KeepAliveService } from './keep-alive.service';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -37,6 +38,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     AlertsModule,
     GoalsModule,
     RecurringModule,
+    BudgetsModule,
   ],
   controllers: [HealthController],
   providers: [
