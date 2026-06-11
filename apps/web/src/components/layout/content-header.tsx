@@ -13,7 +13,7 @@ export function ContentHeader({ title, actions }: ContentHeaderProps) {
   const [, setMobileOpen] = useAtom(sidebarMobileOpenAtom);
 
   return (
-    <header className="flex items-center justify-between border-b border-border px-5 py-5 md:px-7">
+    <header className="flex items-center justify-between px-5 pt-7 pb-2 md:px-8 md:pt-8">
       <div className="flex items-center gap-3">
         <button
           onClick={() => setMobileOpen(true)}
@@ -21,7 +21,7 @@ export function ContentHeader({ title, actions }: ContentHeaderProps) {
         >
           <Menu size={22} />
         </button>
-        <h1 className="font-[family-name:var(--font-display)] text-[22px] font-bold text-fg">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl md:text-[32px] font-bold tracking-tight text-fg">
           {title}
         </h1>
       </div>

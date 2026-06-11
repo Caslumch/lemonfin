@@ -44,7 +44,7 @@ export function FiltersBar({
       <select
         value={categoryId}
         onChange={(e) => onCategoryChange(e.target.value)}
-        className="rounded-md border-[1.5px] border-border bg-surface px-3 py-2 text-sm text-fg transition-colors focus:border-fg focus:outline-none"
+        className="rounded-[12px] border-[1.5px] border-border bg-surface px-3.5 py-2 text-sm text-fg transition-colors focus:border-fg focus:outline-none cursor-pointer"
       >
         <option value="">Todas categorias</option>
         {categories.map((cat) => (
@@ -63,7 +63,7 @@ export function FiltersBar({
           onChange={(e) => onStartDateChange(e.target.value)}
           className="!py-2 !text-xs"
         />
-        <span className="text-fg-muted text-xs">ate</span>
+        <span className="text-fg-muted text-xs">até</span>
         <Input
           id="endDate"
           type="date"

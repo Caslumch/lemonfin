@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { SummaryCards } from "@/components/transactions/summary-cards";
@@ -210,13 +211,14 @@ export default function TransacoesPage() {
       <ContentHeader
         title="Transações"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova transação
+          <Button onClick={() => setModalOpen(true)} className="gap-1.5">
+            <Plus size={18} />
+            Nova transação
           </Button>
         }
       />
 
-      <div className="p-5 md:p-7 space-y-5">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-5">
         {/* Summary cards */}
         <SummaryCards summary={summary} loading={summaryLoading} />
 
