@@ -12,6 +12,7 @@ import {
 } from "@/components/recurring/recurring-modal";
 import { DeleteRecurringModal } from "@/components/recurring/delete-recurring-modal";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type { Recurring } from "@/types/recurring";
 import type { Category } from "@/types/transaction";
 import type { Card } from "@/types/card";
@@ -40,7 +41,8 @@ export default function RecorrentesPage() {
     try {
       const data = await fetchApi<Recurring[]>("/recurring");
       setItems(data);
-    } catch {
+    } catch (error) {
+      logApiError("load:recurring", error);
       setItems([]);
     } finally {
       setLoading(false);
@@ -49,8 +51,8 @@ export default function RecorrentesPage() {
 
   useEffect(() => {
     fetchItems();
-    fetchApi<Category[]>("/categories").then(setCategories).catch(() => {});
-    fetchApi<Card[]>("/cards").then(setCards).catch(() => {});
+    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
+    fetchApi<Card[]>("/cards").then(setCards).catch((error) => logApiError("load:cards", error));
   }, [fetchItems, fetchApi]);
 
   async function handleCreate(data: RecurringFormData) {

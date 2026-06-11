@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type { CardInvoice } from "@/types/card";
 
 interface InvoiceViewProps {
@@ -29,7 +30,8 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         `/cards/${cardId}/invoice?month=${month}`,
       );
       setInvoice(data);
-    } catch {
+    } catch (error) {
+      logApiError("load:invoice", error);
       setInvoice(null);
     } finally {
       setLoading(false);

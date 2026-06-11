@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { GoalModal } from "@/components/goals/goal-modal";
 import { DeleteGoalModal } from "@/components/goals/delete-goal-modal";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type { Goal } from "@/types/goal";
 import type { Category } from "@/types/transaction";
 
@@ -59,7 +60,8 @@ export default function MetasPage() {
     try {
       const data = await fetchApi<Goal[]>("/goals");
       setGoals(data);
-    } catch {
+    } catch (error) {
+      logApiError("load:goals", error);
       setGoals([]);
     } finally {
       setLoading(false);
@@ -68,7 +70,7 @@ export default function MetasPage() {
 
   useEffect(() => {
     fetchGoals();
-    fetchApi<Category[]>("/categories").then(setCategories).catch(() => {});
+    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
   }, [fetchGoals, fetchApi]);
 
   async function handleCreate(data: {
