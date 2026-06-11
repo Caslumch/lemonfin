@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   UseGuards,
   ConflictException,
@@ -12,8 +13,22 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { UsersRepository } from '../repositories/users.repository';
 import { CompleteOnboardingUseCase } from '../use-cases/complete-onboarding.use-case';
+import { ChangePasswordUseCase } from '../use-cases/change-password.use-case';
+import { SetupTwoFactorUseCase } from '../use-cases/setup-2fa.use-case';
+import { EnableTwoFactorUseCase } from '../use-cases/enable-2fa.use-case';
+import { DisableTwoFactorUseCase } from '../use-cases/disable-2fa.use-case';
 import { onboardingSchema } from '../dtos/onboarding.dto';
 import type { OnboardingInput } from '../dtos/onboarding.dto';
+import { changePasswordSchema } from '../dtos/change-password.dto';
+import type { ChangePasswordInput } from '../dtos/change-password.dto';
+import {
+  enableTwoFactorSchema,
+  disableTwoFactorSchema,
+} from '../dtos/two-factor.dto';
+import type {
+  EnableTwoFactorInput,
+  DisableTwoFactorInput,
+} from '../dtos/two-factor.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -21,6 +36,10 @@ export class UsersController {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly completeOnboarding: CompleteOnboardingUseCase,
+    private readonly changePassword: ChangePasswordUseCase,
+    private readonly setupTwoFactor: SetupTwoFactorUseCase,
+    private readonly enableTwoFactor: EnableTwoFactorUseCase,
+    private readonly disableTwoFactor: DisableTwoFactorUseCase,
   ) {}
 
   @Get('me')
@@ -33,6 +52,7 @@ export class UsersController {
       email: found.email,
       phone: found.phone,
       onboardedAt: found.onboardedAt,
+      twoFactorEnabled: found.twoFactorEnabled,
     };
   }
 
@@ -61,5 +81,37 @@ export class UsersController {
       ...(body.name !== undefined && { name: body.name }),
       ...(body.phone !== undefined && { phone: body.phone || null }),
     });
+  }
+
+  @Post('me/change-password')
+  async changePasswordHandler(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(changePasswordSchema))
+    body: ChangePasswordInput,
+  ) {
+    return this.changePassword.execute(user.id, body);
+  }
+
+  @Post('me/2fa/setup')
+  async setup2fa(@CurrentUser() user: { id: string }) {
+    return this.setupTwoFactor.execute(user.id);
+  }
+
+  @Post('me/2fa/enable')
+  async enable2fa(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(enableTwoFactorSchema))
+    body: EnableTwoFactorInput,
+  ) {
+    return this.enableTwoFactor.execute(user.id, body);
+  }
+
+  @Delete('me/2fa')
+  async disable2fa(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(disableTwoFactorSchema))
+    body: DisableTwoFactorInput,
+  ) {
+    return this.disableTwoFactor.execute(user.id, body);
   }
 }

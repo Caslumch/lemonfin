@@ -3,10 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs } from "@/components/ui/tabs";
+import { PasswordInput } from "@/components/ui/password-input";
+import { TwoFactorSetupModal } from "@/components/settings/two-factor-setup-modal";
+import { Disable2FAModal } from "@/components/settings/disable-2fa-modal";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
@@ -37,6 +41,7 @@ interface UserProfile {
   name: string;
   email: string;
   phone: string | null;
+  twoFactorEnabled: boolean;
 }
 
 function phoneToInternational(phone: string | null): string {
@@ -49,6 +54,9 @@ export default function ConfiguracoesPage() {
   const { data: session, update: updateSession } = useSession();
   const currentUserId = session?.user?.id;
 
+  // Active tab
+  const [activeTab, setActiveTab] = useState("perfil");
+
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -56,6 +64,21 @@ export default function ConfiguracoesPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState(false);
+
+  // Security — change password
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Security — 2FA
+  const [setup2fa, setSetup2fa] = useState<{
+    secret: string;
+    qrCodeDataUrl: string;
+  } | null>(null);
+  const [starting2fa, setStarting2fa] = useState(false);
+  const [disable2faOpen, setDisable2faOpen] = useState(false);
 
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +150,61 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+
+    if (newPassword.length < 8) {
+      setPasswordError("A nova senha deve ter pelo menos 8 caracteres");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("As senhas não coincidem");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await fetchApi("/users/me/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      toast.success("Senha alterada com sucesso");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao alterar senha");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function handleStart2fa() {
+    setStarting2fa(true);
+    try {
+      const data = await fetchApi<{ secret: string; qrCodeDataUrl: string }>(
+        "/users/me/2fa/setup",
+        { method: "POST" },
+      );
+      setSetup2fa(data);
+    } catch {
+      toast.error("Erro ao iniciar a configuração do 2FA");
+    } finally {
+      setStarting2fa(false);
+    }
+  }
+
+  function handle2faEnabled() {
+    setSetup2fa(null);
+    fetchProfile();
+  }
+
+  function handle2faDisabled() {
+    setDisable2faOpen(false);
+    fetchProfile();
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!familyName.trim()) return;
@@ -194,7 +272,21 @@ export default function ConfiguracoesPage() {
     <>
       <ContentHeader title="Configurações" />
 
-      <div className="px-5 pb-8 pt-2 md:px-8 space-y-6 max-w-2xl">
+      <div className="px-5 pb-8 pt-2 md:px-8 max-w-2xl">
+        <div className="mb-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            items={[
+              { value: "perfil", label: "Perfil" },
+              { value: "seguranca", label: "Segurança" },
+              { value: "familia", label: "Família" },
+            ]}
+          />
+        </div>
+
+        {activeTab === "perfil" && (
+        <div className="space-y-6">
         {/* Profile section */}
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
@@ -278,6 +370,133 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
+        </div>
+        )}
+
+        {activeTab === "seguranca" && (
+        <div className="space-y-6">
+        {/* Security section */}
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Lock size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Segurança
+            </h2>
+          </div>
+
+          {/* Block A — Change password */}
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <h3 className="text-sm font-semibold text-fg">Trocar senha</h3>
+
+            <PasswordInput
+              id="currentPassword"
+              label="Senha atual"
+              placeholder="Sua senha atual"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+            <PasswordInput
+              id="newPassword"
+              label="Nova senha"
+              placeholder="Mínimo 8 caracteres"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
+            <PasswordInput
+              id="confirmNewPassword"
+              label="Confirmar nova senha"
+              placeholder="Repita a nova senha"
+              autoComplete="new-password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              required
+            />
+
+            {passwordError && (
+              <p className="text-sm text-danger">{passwordError}</p>
+            )}
+
+            <Button type="submit" size="sm" disabled={changingPassword}>
+              {changingPassword ? (
+                <>
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                  Alterando...
+                </>
+              ) : (
+                <>
+                  <KeyRound size={14} className="mr-2" />
+                  Alterar senha
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* Divider */}
+          <div className="h-px bg-border my-6" />
+
+          {/* Block B — Two-factor authentication */}
+          <div>
+            <h3 className="text-sm font-semibold text-fg mb-2">
+              Autenticação de dois fatores (2FA)
+            </h3>
+
+            {profile?.twoFactorEnabled ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-lima/15 text-lima">
+                    <ShieldCheck size={14} />
+                    2FA ativo
+                  </span>
+                </div>
+                <p className="text-sm text-fg-secondary">
+                  Sua conta está protegida com autenticação de dois fatores.
+                </p>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setDisable2faOpen(true)}
+                >
+                  <ShieldOff size={14} className="mr-2" />
+                  Desativar 2FA
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-fg-secondary">
+                  Adicione uma camada extra de segurança com o Google
+                  Authenticator.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={handleStart2fa}
+                  disabled={starting2fa}
+                >
+                  {starting2fa ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-2" />
+                      Carregando...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck size={14} className="mr-2" />
+                      Ativar 2FA
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        </div>
+        )}
+
+        {activeTab === "familia" && (
+        <div className="space-y-6">
         {/* Family section */}
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
@@ -450,7 +669,25 @@ export default function ConfiguracoesPage() {
             </div>
           )}
         </div>
+        </div>
+        )}
       </div>
+
+      {setup2fa && (
+        <TwoFactorSetupModal
+          open
+          secret={setup2fa.secret}
+          qrCodeDataUrl={setup2fa.qrCodeDataUrl}
+          onClose={() => setSetup2fa(null)}
+          onEnabled={handle2faEnabled}
+        />
+      )}
+
+      <Disable2FAModal
+        open={disable2faOpen}
+        onClose={() => setDisable2faOpen(false)}
+        onDisabled={handle2faDisabled}
+      />
     </>
   );
 }

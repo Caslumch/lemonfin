@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './controllers/auth.controller';
 import { SignUpUseCase } from './use-cases/sign-up.use-case';
 import { SignInUseCase } from './use-cases/sign-in.use-case';
+import { VerifyTwoFactorUseCase } from './use-cases/verify-2fa.use-case';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
@@ -24,6 +25,11 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [SignUpUseCase, SignInUseCase, JwtStrategy],
+  providers: [
+    SignUpUseCase,
+    SignInUseCase,
+    VerifyTwoFactorUseCase,
+    JwtStrategy,
+  ],
 })
 export class AuthModule {}

@@ -4,9 +4,32 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { LemonLogo } from "@/components/ui/lemon-logo";
+
+interface SignInUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface SignInSuccess {
+  status: "SUCCESS";
+  user: SignInUser;
+  token: string;
+}
+
+interface TotpRequired {
+  status: "TOTP_REQUIRED";
+  tempToken: string;
+}
+
+type SignInResponse = SignInSuccess | TotpRequired;
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,26 +38,105 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 2FA step state
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [useBackup, setUseBackup] = useState(false);
+
+  /**
+   * Establish the NextAuth session from an already-obtained access token,
+   * bypassing the API re-auth (and thus the 2FA prompt) via directToken mode.
+   */
+  async function establishSession(user: SignInUser, token: string) {
+    const result = await signIn("credentials", {
+      directToken: token,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      setError("Erro ao iniciar a sessão. Tente novamente.");
+      return false;
+    }
+
+    router.push("/");
+    router.refresh();
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const res = await fetch(`${API_URL}/auth/sign-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    setLoading(false);
+      if (!res.ok) {
+        setError("E-mail ou senha incorretos");
+        return;
+      }
 
-    if (result?.error) {
-      setError("E-mail ou senha incorretos");
-      return;
+      const data: SignInResponse = await res.json();
+
+      if (data.status === "TOTP_REQUIRED") {
+        setTempToken(data.tempToken);
+        setCode("");
+        setUseBackup(false);
+        return;
+      }
+
+      await establishSession(data.user, data.token);
+    } catch {
+      setError("Não foi possível entrar. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    router.push("/");
-    router.refresh();
+  async function handleVerify2fa(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tempToken) return;
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/auth/verify-2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tempToken, code }),
+      });
+
+      if (!res.ok) {
+        setError("Código inválido");
+        return;
+      }
+
+      const data: SignInSuccess = await res.json();
+      if (data.status !== "SUCCESS" || !data.token) {
+        setError("Código inválido");
+        return;
+      }
+
+      await establishSession(data.user, data.token);
+    } catch {
+      setError("Não foi possível verificar o código. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function backToLogin() {
+    setTempToken(null);
+    setCode("");
+    setError("");
+    setUseBackup(false);
   }
 
   return (
@@ -53,53 +155,117 @@ export default function LoginPage() {
             </span>
           </div>
           <p className="text-sm text-fg-muted">
-            Entre na sua conta para continuar
+            {tempToken
+              ? "Confirme o código de verificação"
+              : "Entre na sua conta para continuar"}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            id="email"
-            label="E-mail"
-            type="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+        {tempToken ? (
+          <form onSubmit={handleVerify2fa} className="space-y-4">
+            <div className="flex justify-center">
+              <div className="w-11 h-11 rounded-full bg-lima/15 flex items-center justify-center">
+                <ShieldCheck size={20} className="text-lima" />
+              </div>
+            </div>
 
-          <Input
-            id="password"
-            label="Senha"
-            type="password"
-            placeholder="Sua senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+            <Input
+              id="totp"
+              label={useBackup ? "Código de backup" : "Código do autenticador"}
+              inputMode={useBackup ? "text" : "numeric"}
+              autoComplete="one-time-code"
+              placeholder={useBackup ? "XXXX-XXXX" : "000000"}
+              className="tracking-[0.3em] text-center font-[family-name:var(--font-mono)]"
+              value={code}
+              onChange={(e) =>
+                setCode(
+                  useBackup
+                    ? e.target.value.toUpperCase().slice(0, 9)
+                    : e.target.value.replace(/\D/g, "").slice(0, 6)
+                )
+              }
+              autoFocus
+              required
+            />
 
-          {error && (
-            <p className="text-sm text-danger text-center">{error}</p>
-          )}
+            {error && (
+              <p className="text-sm text-danger text-center">{error}</p>
+            )}
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                "Verificar"
+              )}
+            </Button>
 
-        <p className="mt-6 text-center text-sm text-fg-muted">
-          Não tem conta?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-lima hover:underline"
-          >
-            Criar conta
-          </Link>
-        </p>
+            <div className="flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setUseBackup((v) => !v);
+                  setCode("");
+                  setError("");
+                }}
+                className="text-fg-muted hover:text-fg transition-colors"
+              >
+                {useBackup
+                  ? "Usar código do app"
+                  : "Usar código de backup"}
+              </button>
+              <button
+                type="button"
+                onClick={backToLogin}
+                className="text-fg-muted hover:text-fg transition-colors"
+              >
+                Voltar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              id="email"
+              label="E-mail"
+              type="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+
+            <PasswordInput
+              id="password"
+              label="Senha"
+              placeholder="Sua senha"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+
+            {error && (
+              <p className="text-sm text-danger text-center">{error}</p>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+        )}
+
+        {!tempToken && (
+          <p className="mt-6 text-center text-sm text-fg-muted">
+            Não tem conta?{" "}
+            <Link
+              href="/register"
+              className="font-medium text-lima hover:underline"
+            >
+              Criar conta
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
