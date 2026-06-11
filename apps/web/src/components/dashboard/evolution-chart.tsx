@@ -41,7 +41,7 @@ interface EvolutionChartProps {
 export function EvolutionChart({ data, loading }: EvolutionChartProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+      <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-40 bg-muted rounded" />
           <div className="h-48 bg-muted rounded" />
@@ -56,9 +56,9 @@ export function EvolutionChart({ data, loading }: EvolutionChartProps) {
   }));
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
       <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg mb-4">
-        Evolucao mensal
+        Evolução mensal
       </h3>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
@@ -79,12 +79,12 @@ export function EvolutionChart({ data, loading }: EvolutionChartProps) {
             <Tooltip
               formatter={(value, name) => [
                 formatCurrency(Number(value)),
-                name === "income" ? "Entradas" : name === "expense" ? "Saidas" : "Saldo",
+                name === "income" ? "Entradas" : name === "expense" ? "Saídas" : "Saldo",
               ]}
               contentStyle={{
                 backgroundColor: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
-                borderRadius: "8px",
+                borderRadius: "12px",
                 fontSize: "13px",
               }}
             />
@@ -120,7 +120,7 @@ export function EvolutionChart({ data, loading }: EvolutionChartProps) {
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-danger rounded" />
-          <span className="text-xs text-fg-muted">Saidas</span>
+          <span className="text-xs text-fg-muted">Saídas</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-lima rounded" style={{ borderStyle: "dashed" }} />

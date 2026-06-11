@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Neutrals" subtitle="Greys + dark shell tones" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;background:var(--bg-content);font-family:var(--font-body);padding:20px}
+  .row{display:flex;gap:8px}
+  .sw{flex:1;border-radius:var(--radius-sm);height:84px;display:flex;flex-direction:column;justify-content:flex-end;padding:9px;box-sizing:border-box;border:1px solid var(--border)}
+  .name{font-size:10.5px;font-weight:600}
+  .hex{font-family:var(--font-mono);font-size:9.5px;opacity:.7}
+  .dark{color:#fff;border-color:transparent}
+</style></head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:var(--white)"><span class="name">white</span><span class="hex">#FFFFFF</span></div>
+    <div class="sw" style="background:var(--gray-100)"><span class="name">100</span><span class="hex">#F2F2F2</span></div>
+    <div class="sw" style="background:var(--gray-200)"><span class="name">200</span><span class="hex">#E5E5E5</span></div>
+    <div class="sw" style="background:var(--gray-400)"><span class="name">400</span><span class="hex">#9E9E9E</span></div>
+    <div class="sw dark" style="background:var(--gray-600)"><span class="name">600</span><span class="hex">#6B6B6B</span></div>
+    <div class="sw dark" style="background:var(--gray-900)"><span class="name">900</span><span class="hex">#2D2D2D</span></div>
+    <div class="sw dark" style="background:var(--shell-bg)"><span class="name">shell</span><span class="hex">#1C1C1E</span></div>
+    <div class="sw dark" style="background:var(--dark)"><span class="name">dark</span><span class="hex">#0D0D0D</span></div>
+  </div>
+</body></html>

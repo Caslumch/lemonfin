@@ -19,7 +19,7 @@ interface ChatPanelProps {
 const SUGGESTIONS = [
   "Estou gastando muito?",
   "Onde posso economizar?",
-  "Resumo do mes",
+  "Resumo do mês",
 ];
 
 export function ChatPanel({ isOpen }: ChatPanelProps) {
@@ -188,7 +188,7 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
           <button
             onClick={() => setMessages([])}
             disabled={isLoading}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:text-danger hover:bg-danger-muted disabled:opacity-30 cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-[12px] text-fg-muted transition-colors hover:text-danger hover:bg-danger-muted disabled:opacity-30 cursor-pointer"
             aria-label="Limpar conversa"
             title="Limpar conversa"
           >
@@ -209,7 +209,7 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
             </div>
             <div>
               <p className="text-sm font-medium text-fg">
-                Ola! Sou seu assistente financeiro.
+                Olá! Sou seu assistente financeiro.
               </p>
               <p className="mt-1 text-xs text-fg-muted">
                 Pergunte sobre seus gastos, receitas ou dicas.
@@ -259,12 +259,12 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Pergunte algo..."
           disabled={isLoading}
-          className="flex-1 rounded-lg border border-border bg-page px-3 py-2 text-sm text-fg placeholder:text-fg-muted outline-none focus:border-lima transition-colors disabled:opacity-50"
+          className="flex-1 rounded-full border border-border bg-page px-4 py-2 text-sm text-fg placeholder:text-fg-muted outline-none focus:border-lima transition-colors disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={!input.trim() || isLoading}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-dark text-white transition-all hover:brightness-120 disabled:opacity-30 cursor-pointer"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-uva text-white transition-all hover:brightness-110 disabled:opacity-30 cursor-pointer"
           aria-label="Enviar mensagem"
         >
           <Send size={16} />

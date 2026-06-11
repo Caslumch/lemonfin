@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { SummaryCards } from "@/components/transactions/summary-cards";
@@ -157,11 +158,11 @@ export default function TransacoesPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Transacao criada com sucesso");
+      toast.success("Transação criada com sucesso");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao criar transacao");
+      toast.error("Erro ao criar transação");
       throw new Error("create failed");
     }
   }
@@ -181,11 +182,11 @@ export default function TransacoesPage() {
         body: JSON.stringify(data),
       });
       setEditingTx(null);
-      toast.success("Transacao atualizada");
+      toast.success("Transação atualizada");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao atualizar transacao");
+      toast.error("Erro ao atualizar transação");
       throw new Error("update failed");
     }
   }
@@ -197,26 +198,27 @@ export default function TransacoesPage() {
         method: "DELETE",
       });
       setDeletingTx(null);
-      toast.success("Transacao excluida");
+      toast.success("Transação excluída");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao excluir transacao");
+      toast.error("Erro ao excluir transação");
     }
   }
 
   return (
     <>
       <ContentHeader
-        title="Transacoes"
+        title="Transações"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova transacao
+          <Button onClick={() => setModalOpen(true)} className="gap-1.5">
+            <Plus size={18} />
+            Nova transação
           </Button>
         }
       />
 
-      <div className="p-5 md:p-7 space-y-5">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-5">
         {/* Summary cards */}
         <SummaryCards summary={summary} loading={summaryLoading} />
 
@@ -248,7 +250,7 @@ export default function TransacoesPage() {
         {meta.totalPages > 1 && (
           <div className="flex items-center justify-between pt-2">
             <p className="text-xs text-fg-muted">
-              {meta.total} {meta.total === 1 ? "transacao" : "transacoes"}
+              {meta.total} {meta.total === 1 ? "transação" : "transações"}
             </p>
             <div className="flex gap-2">
               <Button
@@ -268,7 +270,7 @@ export default function TransacoesPage() {
                 disabled={page >= meta.totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Proximo
+                Próximo
               </Button>
             </div>
           </div>

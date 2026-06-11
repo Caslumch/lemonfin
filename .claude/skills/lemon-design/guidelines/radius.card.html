@@ -1,0 +1,23 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Radius scale" subtitle="Rounder than before — cards 20–24, panel 36" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;background:var(--bg-content);font-family:var(--font-body);padding:22px}
+  .row{display:flex;gap:14px;align-items:flex-end}
+  .item{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .box{width:74px;height:74px;background:var(--lemon-400);border:1px solid var(--lemon-600)}
+  .t{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)}
+</style></head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:var(--radius-xs)"></div><span class="t">xs 8</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><span class="t">sm 12</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><span class="t">md 16</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><span class="t">lg 20</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-xl)"></div><span class="t">xl 24</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-2xl)"></div><span class="t">2xl 28</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-3xl)"></div><span class="t">3xl 36</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-full)"></div><span class="t">full</span></div>
+  </div>
+</body></html>

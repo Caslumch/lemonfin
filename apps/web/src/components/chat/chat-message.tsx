@@ -29,7 +29,7 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
       </div>
       <div
         className={cn(
-          "max-w-[80%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed",
+          "max-w-[80%] rounded-[16px] px-3.5 py-2.5 text-sm leading-relaxed",
           isUser
             ? "bg-dark text-white rounded-br-sm"
             : "bg-surface border border-border text-fg rounded-bl-sm",

@@ -28,7 +28,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("As senhas nao coincidem");
+      setError("As senhas não coincidem");
       return;
     }
 
@@ -95,7 +95,7 @@ export default function RegisterPage() {
             </span>
           </div>
           <p className="text-sm text-fg-secondary">
-            Crie sua conta para comecar
+            Crie sua conta para começar
           </p>
         </div>
 
@@ -131,10 +131,10 @@ export default function RegisterPage() {
               defaultCountry="br"
               value={phone}
               onChange={setPhone}
-              inputClassName="!w-full !rounded-lg !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
+              inputClassName="!w-full !rounded-[12px] !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
               countrySelectorStyleProps={{
                 buttonClassName:
-                  "!rounded-l-lg !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
+                  "!rounded-l-[12px] !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
               }}
             />
           </div>
@@ -144,7 +144,7 @@ export default function RegisterPage() {
               id="password"
               label="Senha"
               type={showPassword ? "text" : "password"}
-              placeholder="Minimo 8 caracteres"
+              placeholder="Mínimo 8 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -200,7 +200,7 @@ export default function RegisterPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-fg-secondary">
-          Ja tem conta?{" "}
+          Já tem conta?{" "}
           <Link
             href="/login"
             className="font-medium text-fg hover:underline"

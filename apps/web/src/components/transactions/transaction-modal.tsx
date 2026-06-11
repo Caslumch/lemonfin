@@ -118,11 +118,11 @@ export function TransactionModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-md bg-surface rounded-[24px] shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              {isEditing ? "Editar transacao" : "Nova transacao"}
+              {isEditing ? "Editar transação" : "Nova transação"}
             </h2>
             <button
               onClick={onClose}
@@ -162,9 +162,9 @@ export function TransactionModal({
             {/* Description */}
             <Input
               id="description"
-              label="Descricao"
+              label="Descrição"
               type="text"
-              placeholder="Ex: Almoco no restaurante"
+              placeholder="Ex: Almoço no restaurante"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -209,7 +209,7 @@ export function TransactionModal({
                   htmlFor="cardId"
                   className="block text-sm font-medium text-fg mb-1.5"
                 >
-                  Cartao (opcional)
+                  Cartão (opcional)
                 </label>
                 <select
                   id="cardId"
@@ -217,7 +217,7 @@ export function TransactionModal({
                   onChange={(e) => setCardId(e.target.value)}
                   className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
                 >
-                  <option value="">Sem cartao</option>
+                  <option value="">Sem cartão</option>
                   {cards.map((card) => (
                     <option key={card.id} value={card.id}>
                       {card.name}

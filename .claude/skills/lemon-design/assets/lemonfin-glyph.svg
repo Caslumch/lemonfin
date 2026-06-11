@@ -1,0 +1,6 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LemonFin mark">
+  <rect width="64" height="64" rx="18" fill="#0D0D0D"></rect>
+  <path d="M32 16v32" stroke="#D4F400" stroke-width="6" stroke-linecap="round"></path>
+  <path d="M22 26 42 38" stroke="#6C5CE7" stroke-width="6" stroke-linecap="round"></path>
+  <path d="M42 26 22 38" stroke="#D4F400" stroke-width="6" stroke-linecap="round"></path>
+</svg>

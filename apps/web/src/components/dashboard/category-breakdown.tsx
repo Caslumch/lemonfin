@@ -18,7 +18,7 @@ interface CategoryBreakdownProps {
 export function CategoryBreakdown({ data, loading }: CategoryBreakdownProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+      <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-48 bg-muted rounded" />
           {Array.from({ length: 4 }).map((_, i) => (
@@ -35,7 +35,7 @@ export function CategoryBreakdown({ data, loading }: CategoryBreakdownProps) {
   const maxTotal = data[0]?.total ?? 1;
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
       <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg mb-4">
         Gastos por categoria
       </h3>

@@ -9,10 +9,10 @@ import type { Category } from "@/types/transaction";
 import type { Goal } from "@/types/goal";
 
 const goalSchema = z.object({
-  name: z.string().min(1, "Nome e obrigatorio"),
+  name: z.string().min(1, "Nome é obrigatório"),
   amount: z.number().positive("Valor deve ser positivo"),
   period: z.enum(["MONTHLY", "WEEKLY"]),
-  categoryId: z.string().min(1, "Categoria e obrigatoria"),
+  categoryId: z.string().min(1, "Categoria é obrigatória"),
 });
 
 interface GoalModalProps {
@@ -99,7 +99,7 @@ export function GoalModal({
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-md bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
               {isEditing ? "Editar meta" : "Nova meta"}
@@ -117,7 +117,7 @@ export function GoalModal({
               id="name"
               label="Nome da meta"
               type="text"
-              placeholder="Ex: Limite de alimentacao"
+              placeholder="Ex: Limite de alimentação"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -148,7 +148,7 @@ export function GoalModal({
 
             <Input
               id="amount"
-              label="Limite maximo"
+              label="Limite máximo"
               type="number"
               step="0.01"
               min="0"
@@ -164,7 +164,7 @@ export function GoalModal({
                 htmlFor="period"
                 className="block text-sm font-medium text-fg mb-1.5"
               >
-                Periodo
+                Período
               </label>
               <select
                 id="period"

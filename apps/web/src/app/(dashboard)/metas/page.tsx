@@ -140,13 +140,13 @@ export default function MetasPage() {
         }
       />
 
-      <div className="p-5 md:p-7">
+      <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : goals.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <Target size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">Nenhuma meta definida.</p>
             <p className="text-fg-muted text-xs mt-1">
@@ -158,7 +158,7 @@ export default function MetasPage() {
             {goals.map((goal) => (
               <div
                 key={goal.id}
-                className="rounded-lg border border-border bg-surface p-5 transition-colors hover:border-fg/20"
+                className="rounded-[20px] border border-border bg-surface shadow-xs p-5 transition-colors hover:border-fg/20"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">

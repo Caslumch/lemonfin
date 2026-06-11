@@ -38,10 +38,10 @@ export function DeleteCardModal({
         onClick={onClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-sm bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              Remover cartao
+              Remover cartão
             </h2>
             <button
               onClick={onClose}
@@ -54,11 +54,11 @@ export function DeleteCardModal({
             <p className="text-sm text-fg-secondary">
               Tem certeza que deseja remover
               {cardName ? (
-                <> o cartao <strong>"{cardName}"</strong></>
+                <> o cartão <strong>"{cardName}"</strong></>
               ) : (
-                " este cartao"
+                " este cartão"
               )}
-              ? As transacoes vinculadas nao serao removidas.
+              ? As transações vinculadas não serão removidas.
             </p>
             <div className="flex gap-3 mt-6">
               <Button

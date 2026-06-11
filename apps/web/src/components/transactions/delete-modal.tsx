@@ -38,10 +38,10 @@ export function DeleteModal({
         onClick={onClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-sm bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              Remover transacao
+              Remover transação
             </h2>
             <button
               onClick={onClose}
@@ -54,11 +54,11 @@ export function DeleteModal({
             <p className="text-sm text-fg-secondary">
               Tem certeza que deseja remover
               {description ? (
-                <> a transacao <strong>"{description}"</strong></>
+                <> a transação <strong>"{description}"</strong></>
               ) : (
-                " esta transacao"
+                " esta transação"
               )}
-              ? Esta acao nao pode ser desfeita.
+              ? Esta ação não pode ser desfeita.
             </p>
             <div className="flex gap-3 mt-6">
               <Button

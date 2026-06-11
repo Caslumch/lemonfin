@@ -47,7 +47,7 @@ export function CategoryIconWithBg({
 }: CategoryIconProps & { colorBg?: string; colorText?: string }) {
   return (
     <div
-      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+      className="w-8 h-8 rounded-[12px] flex items-center justify-center shrink-0"
       style={{ backgroundColor: colorBg, color: colorText }}
     >
       <CategoryIcon slug={slug} size={size} />

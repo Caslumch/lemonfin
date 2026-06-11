@@ -1,0 +1,78 @@
+<!-- @dsCard group="LemonFin App" viewport="1320x860" name="LemonFin — App" subtitle="Dashboard + Transações no novo visual (interativo)" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LemonFin</title>
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--shell-bg);
+    font-family: var(--font-body);
+    color: var(--text-primary);
+  }
+  #root { height: 100vh; }
+  .app { display: flex; height: 100vh; padding: 14px; gap: 14px; }
+  .rail { border-radius: var(--radius-2xl); overflow: hidden; display: flex; }
+  .content {
+    flex: 1; min-width: 0;
+    background: var(--bg-content);
+    border-radius: var(--radius-3xl);
+    overflow-y: auto;
+    padding: 34px 36px 60px;
+  }
+  .content::-webkit-scrollbar { width: 10px; }
+  .content::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; border: 3px solid var(--bg-content); }
+  .soon { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 70vh; gap: 14px; color: var(--text-tertiary); }
+  .soon h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--text-secondary); margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="Sidebar.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+<script type="text/babel" src="Transactions.jsx"></script>
+<script type="text/babel">
+function Soon({ label }) {
+  const Ic = window.LFIcons;
+  return (
+    <div className="soon">
+      <div style={{ color: 'var(--gray-300)' }}>{React.createElement(Ic.bulb, { size: 56 })}</div>
+      <h2>{label}</h2>
+      <p style={{ margin: 0, fontSize: 14 }}>Em breve nesta demonstração.</p>
+    </div>
+  );
+}
+
+const LABELS = { categories: 'Categorias', cards: 'Cartões', goals: 'Metas', insights: 'Insights', settings: 'Configurações' };
+
+function App() {
+  const [active, setActive] = React.useState('home');
+  const { Sidebar, Dashboard, Transactions } = window;
+  let screen;
+  if (active === 'home') screen = <Dashboard />;
+  else if (active === 'transactions') screen = <Transactions />;
+  else screen = <Soon label={LABELS[active] || 'Tela'} />;
+
+  return (
+    <div className="app">
+      <div className="rail">
+        <Sidebar active={active} onNavigate={setActive} />
+      </div>
+      <main className="content">{screen}</main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

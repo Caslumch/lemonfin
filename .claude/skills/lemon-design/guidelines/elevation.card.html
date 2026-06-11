@@ -1,0 +1,21 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Elevation" subtitle="Soft, low-contrast shadows + colored glows" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;background:var(--bg-content);font-family:var(--font-body);padding:26px}
+  .row{display:flex;gap:22px}
+  .item{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .box{width:90px;height:62px;background:var(--surface);border-radius:var(--radius-lg)}
+  .t{font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)}
+</style></head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-xs)"></div><span class="t">xs</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-sm)"></div><span class="t">sm</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-md)"></div><span class="t">md</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-lg)"></div><span class="t">lg</span></div>
+    <div class="item"><div class="box" style="background:var(--lemon-400);box-shadow:var(--shadow-lemon)"></div><span class="t">lemon glow</span></div>
+    <div class="item"><div class="box" style="background:var(--grape-500);box-shadow:var(--shadow-grape)"></div><span class="t">grape glow</span></div>
+  </div>
+</body></html>

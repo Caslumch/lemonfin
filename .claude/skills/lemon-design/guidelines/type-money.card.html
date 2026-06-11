@@ -1,0 +1,23 @@
+<!-- @dsCard group="Type" viewport="700x180" name="Money & mono" subtitle="Big values (Outfit) · tabular figures (JetBrains Mono)" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;background:var(--bg-content);font-family:var(--font-body);padding:24px;color:var(--text-primary)}
+  .big{font-family:var(--font-display);font-weight:700;font-size:44px;letter-spacing:-.02em;font-feature-settings:var(--num-features)}
+  .cents{font-size:24px;color:var(--text-tertiary)}
+  .mono{font-family:var(--font-mono);font-size:15px;font-weight:600;font-feature-settings:var(--num-features)}
+  .neg{color:var(--danger)}.pos{color:var(--success-strong)}
+  .spec{font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary);margin-top:10px}
+  .rows{display:flex;gap:30px;align-items:baseline}
+</style></head>
+<body>
+  <div class="rows">
+    <span class="big">R$ 6.556<span class="cents">,73</span></span>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <span class="mono pos">+ R$ 1.200,00</span>
+      <span class="mono neg">− R$ 70,00</span>
+    </div>
+  </div>
+  <div class="spec">Hero value: Outfit 700, cents in gray-400. Inline amounts: JetBrains Mono 600, tabular.</div>
+</body></html>

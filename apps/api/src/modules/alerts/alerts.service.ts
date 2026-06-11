@@ -161,8 +161,8 @@ export class AlertsService {
         '⚠️ *Alerta de gastos*',
         '',
         hasGoalAlerts
-          ? 'Atencao com suas metas e gastos nestas categorias:'
-          : 'Voce ja gastou uma boa parte do que gastou no mes passado nestas categorias:',
+          ? 'Atenção com suas metas e gastos nestas categorias:'
+          : 'Você já gastou uma boa parte do que gastou no mês passado nestas categorias:',
         '',
         ...alerts,
         '',
@@ -225,7 +225,7 @@ export class AlertsService {
       '🏷️ *Top categorias da semana:*',
       ...topCategories,
       '',
-      `📅 *No mes:* ${formatBRL(monthSummary.expense)} gastos de ${formatBRL(monthSummary.income)} recebidos`,
+      `📅 *No mês:* ${formatBRL(monthSummary.expense)} gastos de ${formatBRL(monthSummary.income)} recebidos`,
       '',
       'Boa semana! 🍋',
     ].join('\n');
@@ -329,9 +329,9 @@ export class AlertsService {
     ];
 
     if (overallVariation !== 0) {
-      const direction = overallVariation > 0 ? '📈 Aumento' : '📉 Reducao';
+      const direction = overallVariation > 0 ? '📈 Aumento' : '📉 Redução';
       lines.push(
-        `${direction} de ${Math.abs(Math.round(overallVariation))}% nos gastos vs mes anterior`,
+        `${direction} de ${Math.abs(Math.round(overallVariation))}% nos gastos vs mês anterior`,
       );
     }
 
@@ -347,7 +347,7 @@ export class AlertsService {
     }
 
     if (shrinking.length > 0) {
-      lines.push('', '⬇️ *Categorias que mais diminuiram:*');
+      lines.push('', '⬇️ *Categorias que mais diminuíram:*');
       for (const c of shrinking) {
         const icon = c.category?.icon ?? '';
         const catName = c.category?.name ?? 'Outros';
@@ -357,7 +357,7 @@ export class AlertsService {
       }
     }
 
-    lines.push('', 'Bom mes! 🍋');
+    lines.push('', 'Bom mês! 🍋');
 
     await this.wmodeClient.sendMessage({
       to: phone,

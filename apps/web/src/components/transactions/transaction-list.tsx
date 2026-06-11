@@ -64,9 +64,9 @@ export function TransactionList({
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse rounded-lg border border-border bg-surface p-4 flex items-center gap-4"
+            className="animate-pulse rounded-[20px] border border-border bg-surface p-4 flex items-center gap-4"
           >
-            <div className="w-10 h-10 rounded-md bg-muted" />
+            <div className="w-10 h-10 rounded-[12px] bg-muted" />
             <div className="flex-1 space-y-2">
               <div className="h-4 w-40 bg-muted rounded" />
               <div className="h-3 w-24 bg-muted rounded" />
@@ -80,9 +80,9 @@ export function TransactionList({
 
   if (transactions.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-12 text-center">
+      <div className="rounded-[20px] border border-border bg-surface p-12 text-center">
         <p className="text-fg-muted text-sm">
-          Nenhuma transacao encontrada.
+          Nenhuma transação encontrada.
         </p>
       </div>
     );
@@ -97,7 +97,7 @@ export function TransactionList({
         return (
           <div
             key={tx.id}
-            className="rounded-lg border border-border bg-surface px-4 py-3 flex items-center gap-4 hover:border-fg-muted transition-colors animate-fade-in-up"
+            className="rounded-[20px] border border-border bg-surface px-4 py-3.5 flex items-center gap-4 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 animate-fade-in-up"
             style={{ animationDelay: `${index * 50}ms` }}
           >
             {/* Category badge */}

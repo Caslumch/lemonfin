@@ -38,10 +38,10 @@ export function DeleteRecurringModal({
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-sm bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              Excluir recorrencia
+              Excluir recorrência
             </h2>
             <button
               onClick={onClose}
@@ -53,9 +53,9 @@ export function DeleteRecurringModal({
 
           <div className="p-6">
             <p className="text-sm text-fg-secondary mb-6">
-              Tem certeza que deseja excluir a recorrencia{" "}
+              Tem certeza que deseja excluir a recorrência{" "}
               <strong className="text-fg">{recurringName}</strong>? As
-              transacoes ja lancadas serao mantidas. Esta acao nao pode ser
+              transações já lançadas serão mantidas. Esta ação não pode ser
               desfeita.
             </p>
 

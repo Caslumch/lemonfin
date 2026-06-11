@@ -130,11 +130,11 @@ export default function ConfiguracoesPage() {
         method: "POST",
         body: JSON.stringify({ name: familyName.trim() }),
       });
-      toast.success("Familia criada com sucesso!");
+      toast.success("Família criada com sucesso!");
       setFamilyName("");
       fetchFamily();
     } catch {
-      toast.error("Erro ao criar familia");
+      toast.error("Erro ao criar família");
     } finally {
       setCreating(false);
     }
@@ -149,11 +149,11 @@ export default function ConfiguracoesPage() {
         method: "POST",
         body: JSON.stringify({ code: joinCode.trim().toUpperCase() }),
       });
-      toast.success("Voce entrou na familia!");
+      toast.success("Você entrou na família!");
       setJoinCode("");
       fetchFamily();
     } catch {
-      toast.error("Codigo invalido ou voce ja faz parte de uma familia");
+      toast.error("Código inválido ou você já faz parte de uma família");
     } finally {
       setJoining(false);
     }
@@ -163,10 +163,10 @@ export default function ConfiguracoesPage() {
     setLeaving(true);
     try {
       await fetchApi("/families/leave", { method: "DELETE" });
-      toast.success("Voce saiu da familia");
+      toast.success("Você saiu da família");
       setFamily(null);
     } catch {
-      toast.error("Erro ao sair da familia. Donos nao podem sair.");
+      toast.error("Erro ao sair da família. Donos não podem sair.");
     } finally {
       setLeaving(false);
     }
@@ -175,7 +175,7 @@ export default function ConfiguracoesPage() {
   function copyCode() {
     if (!family) return;
     navigator.clipboard.writeText(family.code);
-    toast.success("Codigo copiado!");
+    toast.success("Código copiado!");
   }
 
   const roleLabel: Record<string, string> = {
@@ -186,11 +186,11 @@ export default function ConfiguracoesPage() {
 
   return (
     <>
-      <ContentHeader title="Configuracoes" />
+      <ContentHeader title="Configurações" />
 
-      <div className="p-5 md:p-7 space-y-6 max-w-2xl">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-6 max-w-2xl">
         {/* Profile section */}
-        <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
             <User size={18} className="text-lima" />
             <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
@@ -255,7 +255,7 @@ export default function ConfiguracoesPage() {
                 ) : (
                   <>
                     <Save size={14} className="mr-2" />
-                    Salvar alteracoes
+                    Salvar alterações
                   </>
                 )}
               </Button>
@@ -264,11 +264,11 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* Family section */}
-        <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
             <Users size={18} className="text-lima" />
             <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
-              Familia
+              Família
             </h2>
           </div>
 
@@ -281,22 +281,22 @@ export default function ConfiguracoesPage() {
             <div className="space-y-5">
               {/* Family name + code */}
               <div>
-                <p className="text-sm text-fg-muted mb-1">Nome da familia</p>
+                <p className="text-sm text-fg-muted mb-1">Nome da família</p>
                 <p className="text-fg font-medium">{family.name}</p>
               </div>
 
               <div>
-                <p className="text-sm text-fg-muted mb-2">Codigo de convite</p>
+                <p className="text-sm text-fg-muted mb-2">Código de convite</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded-md border border-border bg-muted px-4 py-2.5 font-[family-name:var(--font-mono)] text-sm text-fg tracking-widest text-center">
+                  <code className="flex-1 rounded-[12px] border border-border bg-muted px-4 py-2.5 font-[family-name:var(--font-mono)] text-sm text-fg tracking-widest text-center">
                     {family.code}
                   </code>
-                  <Button variant="outline" size="icon" onClick={copyCode} title="Copiar codigo">
+                  <Button variant="outline" size="icon" onClick={copyCode} title="Copiar código">
                     <Copy size={16} />
                   </Button>
                 </div>
                 <p className="text-xs text-fg-muted mt-1.5">
-                  Compartilhe este codigo para convidar alguem
+                  Compartilhe este código para convidar alguém
                 </p>
               </div>
 
@@ -309,7 +309,7 @@ export default function ConfiguracoesPage() {
                   {family.members.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center gap-3 rounded-md border border-border bg-page px-4 py-3"
+                      className="flex items-center gap-3 rounded-[12px] border border-border bg-page px-4 py-3"
                     >
                       <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                         {member.role === "OWNER" ? (
@@ -357,7 +357,7 @@ export default function ConfiguracoesPage() {
                   ) : (
                     <>
                       <LogOut size={14} className="mr-2" />
-                      Sair da familia
+                      Sair da família
                     </>
                   )}
                 </Button>
@@ -369,12 +369,12 @@ export default function ConfiguracoesPage() {
               {/* Create */}
               <div>
                 <p className="text-sm text-fg-muted mb-3">
-                  Crie uma familia para compartilhar seus dados financeiros
+                  Crie uma família para compartilhar seus dados financeiros
                 </p>
                 <form onSubmit={handleCreate} className="flex gap-2">
                   <Input
                     id="familyName"
-                    placeholder="Nome da familia"
+                    placeholder="Nome da família"
                     value={familyName}
                     onChange={(e) => setFamilyName(e.target.value)}
                     required
@@ -401,12 +401,12 @@ export default function ConfiguracoesPage() {
               {/* Join */}
               <div>
                 <p className="text-sm text-fg-muted mb-3">
-                  Entre em uma familia existente com um codigo de convite
+                  Entre em uma família existente com um código de convite
                 </p>
                 <form onSubmit={handleJoin} className="flex gap-2">
                   <Input
                     id="joinCode"
-                    placeholder="Codigo de 8 caracteres"
+                    placeholder="Código de 8 caracteres"
                     value={joinCode}
                     onChange={(e) =>
                       setJoinCode(e.target.value.toUpperCase().slice(0, 8))

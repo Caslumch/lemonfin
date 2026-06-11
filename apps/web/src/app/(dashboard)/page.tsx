@@ -49,7 +49,7 @@ function WelcomeToast() {
       welcomeShown.current = true;
       const firstName = session?.user?.name?.split(" ")[0] ?? "";
       toast(`Bem-vindo(a)${firstName ? `, ${firstName}` : ""}!`, {
-        description: "Sua conta esta pronta. Bora organizar suas financas!",
+        description: "Sua conta está pronta. Bora organizar suas finanças!",
       });
       router.replace("/");
     }
@@ -161,7 +161,7 @@ export default function DashboardPage() {
       ),
     },
     {
-      label: "Saidas",
+      label: "Saídas",
       value: summary?.expense ?? 0,
       icon: TrendingDown,
       color: "text-danger",
@@ -192,36 +192,37 @@ export default function DashboardPage() {
       </Suspense>
       <ContentHeader title="Dashboard" />
 
-      <div className="p-5 md:p-7 space-y-6">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-6">
         {/* Main balance card */}
-        <div className="rounded-lg bg-dark text-white p-6 animate-fade-in-up">
+        <div className="rounded-[24px] bg-surface-accent text-on-dark p-7 shadow-md animate-fade-in-up">
           {loading ? (
             <div className="animate-pulse space-y-3">
-              <div className="h-4 w-24 bg-gray-600 rounded" />
-              <div className="h-10 w-48 bg-gray-600 rounded" />
+              <div className="h-4 w-24 bg-white/15 rounded-full" />
+              <div className="h-10 w-48 bg-white/15 rounded-full" />
             </div>
           ) : (
             <>
-              <p className="text-sm text-gray-400 mb-1">Saldo total</p>
+              <div className="flex items-center gap-2 mb-1.5">
+                <Wallet size={16} className="text-on-dark-muted" />
+                <p className="text-sm text-on-dark-muted">Saldo total</p>
+              </div>
               <p
                 className={cn(
-                  "font-[family-name:var(--font-display)] text-4xl font-bold",
-                  (summary?.balance ?? 0) >= 0
-                    ? "text-lima"
-                    : "text-danger",
+                  "font-[family-name:var(--font-display)] text-[40px] leading-none font-bold tracking-tight",
+                  (summary?.balance ?? 0) >= 0 ? "text-lima" : "text-danger",
                 )}
               >
                 {formatCurrency(summary?.balance ?? 0)}
               </p>
-              <div className="flex gap-6 mt-3">
-                <span className="text-sm text-success">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 mt-4">
+                <span className="text-sm text-success font-medium">
                   + {formatCurrency(summary?.income ?? 0)}
                 </span>
-                <span className="text-sm text-danger">
+                <span className="text-sm text-danger font-medium">
                   - {formatCurrency((summary?.expense ?? 0) - (summary?.cardExpense ?? 0))}
                 </span>
                 {(summary?.cardExpense ?? 0) > 0 && (
-                  <span className="text-sm text-warning">
+                  <span className="text-sm text-warning font-medium">
                     Fatura: {formatCurrency(summary?.cardExpense ?? 0)}
                   </span>
                 )}
@@ -237,24 +238,24 @@ export default function DashboardPage() {
             return (
               <div
                 key={stat.label}
-                className="rounded-lg border border-border bg-surface p-4 animate-fade-in-up"
+                className="rounded-[20px] border border-border bg-surface p-4 shadow-xs animate-fade-in-up"
                 style={{ animationDelay: `${index * 80}ms` }}
               >
                 {loading ? (
                   <div className="animate-pulse space-y-2">
-                    <div className="h-3 w-16 bg-muted rounded" />
-                    <div className="h-6 w-24 bg-muted rounded" />
+                    <div className="h-3 w-16 bg-muted rounded-full" />
+                    <div className="h-6 w-24 bg-muted rounded-full" />
                   </div>
                 ) : (
                   <>
                     <div className="flex items-center gap-2 mb-2">
                       <div
                         className={cn(
-                          "w-7 h-7 rounded-md flex items-center justify-center",
+                          "w-8 h-8 rounded-[12px] flex items-center justify-center",
                           stat.bg,
                         )}
                       >
-                        <Icon size={14} className={stat.color} />
+                        <Icon size={15} className={stat.color} />
                       </div>
                       <span className="text-xs text-fg-muted">
                         {stat.label}
@@ -289,7 +290,7 @@ export default function DashboardPage() {
                           {stat.variation.toFixed(1)}%
                         </span>
                         <span className="text-xs text-fg-muted ml-0.5">
-                          vs mes anterior
+                          vs mês anterior
                         </span>
                       </div>
                     )}
@@ -302,7 +303,7 @@ export default function DashboardPage() {
 
         {/* Spending alerts */}
         {!loading && alerts.length > 0 && (
-          <div className="rounded-lg border border-warning/30 bg-warning-muted p-4 animate-fade-in-up">
+          <div className="rounded-[20px] border border-warning/30 bg-warning-muted p-5 animate-fade-in-up">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={16} className="text-warning" />
@@ -335,7 +336,7 @@ export default function DashboardPage() {
                         : "text-warning",
                     )}
                   >
-                    {Math.round(alert.percentOfPrevious)}% do mes anterior
+                    {Math.round(alert.percentOfPrevious)}% do mês anterior
                   </span>
                 </div>
               ))}
@@ -345,12 +346,12 @@ export default function DashboardPage() {
 
         {/* Goals progress */}
         {!loading && goals.length > 0 && (
-          <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+          <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Target size={16} className="text-lima" />
                 <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
-                  Metas do mes
+                  Metas do mês
                 </h3>
               </div>
               <Link
@@ -414,10 +415,10 @@ export default function DashboardPage() {
         <EvolutionChart data={monthly} loading={loading} />
 
         {/* Recent transactions */}
-        <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+        <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
-              Transacoes recentes
+              Transações recentes
             </h3>
             <Link
               href="/transacoes"
@@ -441,7 +442,7 @@ export default function DashboardPage() {
             </div>
           ) : recent.length === 0 ? (
             <p className="text-sm text-fg-muted text-center py-6">
-              Nenhuma transacao registrada ainda.
+              Nenhuma transação registrada ainda.
             </p>
           ) : (
             <div className="space-y-2">

@@ -53,10 +53,10 @@ export default function CartoesPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Cartao criado com sucesso");
+      toast.success("Cartão criado com sucesso");
       fetchCards();
     } catch {
-      toast.error("Erro ao criar cartao");
+      toast.error("Erro ao criar cartão");
       throw new Error("create failed");
     }
   }
@@ -75,10 +75,10 @@ export default function CartoesPage() {
         body: JSON.stringify(data),
       });
       setEditingCard(null);
-      toast.success("Cartao atualizado");
+      toast.success("Cartão atualizado");
       fetchCards();
     } catch {
-      toast.error("Erro ao atualizar cartao");
+      toast.error("Erro ao atualizar cartão");
       throw new Error("update failed");
     }
   }
@@ -90,10 +90,10 @@ export default function CartoesPage() {
         method: "DELETE",
       });
       setDeletingCard(null);
-      toast.success("Cartao removido");
+      toast.success("Cartão removido");
       fetchCards();
     } catch {
-      toast.error("Erro ao remover cartao");
+      toast.error("Erro ao remover cartão");
     }
   }
 
@@ -101,8 +101,8 @@ export default function CartoesPage() {
   if (viewingCard) {
     return (
       <>
-        <ContentHeader title="Cartoes" />
-        <div className="p-5 md:p-7">
+        <ContentHeader title="Cartões" />
+        <div className="px-5 pb-8 pt-2 md:px-8">
           <InvoiceView
             cardId={viewingCard.id}
             cardName={viewingCard.name}
@@ -116,27 +116,27 @@ export default function CartoesPage() {
   return (
     <>
       <ContentHeader
-        title="Cartoes"
+        title="Cartões"
         actions={
           <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Novo cartao
+            + Novo cartão
           </Button>
         }
       />
 
-      <div className="p-5 md:p-7">
+      <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : cards.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <CreditCard size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">
-              Nenhum cartao cadastrado.
+              Nenhum cartão cadastrado.
             </p>
             <p className="text-fg-muted text-xs mt-1">
-              Adicione um cartao para acompanhar faturas e parcelamentos.
+              Adicione um cartão para acompanhar faturas e parcelamentos.
             </p>
           </div>
         ) : (
@@ -144,7 +144,7 @@ export default function CartoesPage() {
             {cards.map((card) => (
               <div
                 key={card.id}
-                className="rounded-lg border border-border bg-surface p-5 hover:border-fg/20 transition-colors cursor-pointer"
+                className="rounded-[20px] border border-border bg-surface shadow-xs p-5 hover:border-fg/20 transition-colors cursor-pointer"
                 onClick={() => setViewingCard(card)}
               >
                 <div className="flex items-start justify-between mb-3">

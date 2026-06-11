@@ -52,7 +52,7 @@ export default function InsightsPage() {
     <>
       <ContentHeader title="Insights" />
 
-      <div className="p-5 md:p-7 space-y-6">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-6">
         {/* Month comparison header */}
         <MonthComparisonCards data={data} loading={loading} />
 
@@ -72,11 +72,11 @@ export default function InsightsPage() {
             color="text-danger"
           />
           <TrendSection
-            title="Categorias que mais diminuiram"
+            title="Categorias que mais diminuíram"
             icon={TrendingDown}
             items={data?.topShrinking ?? []}
             loading={loading}
-            emptyText="Nenhuma categoria com reducao significativa."
+            emptyText="Nenhuma categoria com redução significativa."
             color="text-success"
           />
         </div>
@@ -104,7 +104,7 @@ function MonthComparisonCards({
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-lg border border-border bg-surface p-5 animate-pulse"
+            className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-pulse"
           >
             <div className="h-3 w-20 bg-muted rounded mb-3" />
             <div className="h-7 w-28 bg-muted rounded mb-2" />
@@ -126,7 +126,7 @@ function MonthComparisonCards({
 
   const items = [
     {
-      label: "Gastos este mes",
+      label: "Gastos este mês",
       value: data.currentMonth.expense,
       prev: data.previousMonth.expense,
       variation: data.overallVariation,
@@ -134,7 +134,7 @@ function MonthComparisonCards({
       icon: BarChart3,
     },
     {
-      label: "Receita este mes",
+      label: "Receita este mês",
       value: data.currentMonth.income,
       prev: data.previousMonth.income,
       variation: incomeVariation,
@@ -142,7 +142,7 @@ function MonthComparisonCards({
       icon: Target,
     },
     {
-      label: "Saldo este mes",
+      label: "Saldo este mês",
       value: data.currentMonth.balance,
       prev: data.previousMonth.balance,
       variation:
@@ -163,7 +163,7 @@ function MonthComparisonCards({
         return (
           <div
             key={item.label}
-            className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up"
+            className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-fade-in-up"
             style={{ animationDelay: `${index * 80}ms` }}
           >
             <div className="flex items-center gap-2 mb-3">
@@ -177,7 +177,7 @@ function MonthComparisonCards({
             </p>
             <div className="flex items-center gap-2 mt-2">
               <span className="text-xs text-fg-muted">
-                Mes anterior: {formatCurrency(item.prev)}
+                Mês anterior: {formatCurrency(item.prev)}
               </span>
               {item.variation !== 0 && (
                 <VariationBadge
@@ -195,7 +195,7 @@ function MonthComparisonCards({
 
 function AlertsSection({ alerts }: { alerts: SpendingAlert[] }) {
   return (
-    <div className="rounded-lg border border-warning/30 bg-warning-muted p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-warning/30 bg-warning-muted p-5 animate-fade-in-up">
       <div className="flex items-center gap-2 mb-4">
         <AlertTriangle size={18} className="text-warning" />
         <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
@@ -220,7 +220,7 @@ function AlertsSection({ alerts }: { alerts: SpendingAlert[] }) {
               </p>
               <p className="text-xs text-fg-muted">
                 {formatCurrency(alert.currentTotal)} de{" "}
-                {formatCurrency(alert.previousTotal)} do mes passado
+                {formatCurrency(alert.previousTotal)} do mês passado
               </p>
             </div>
             <div className="text-right shrink-0">
@@ -262,11 +262,11 @@ function TrendSection({
 }) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-pulse">
+      <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-pulse">
         <div className="h-5 w-48 bg-muted rounded mb-4" />
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 py-2">
-            <div className="w-8 h-8 bg-muted rounded-md" />
+            <div className="w-8 h-8 bg-muted rounded-[12px]" />
             <div className="flex-1 space-y-1.5">
               <div className="h-3 w-28 bg-muted rounded" />
               <div className="h-2 w-20 bg-muted rounded" />
@@ -279,7 +279,7 @@ function TrendSection({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-fade-in-up">
       <div className="flex items-center gap-2 mb-4">
         <Icon size={16} className={color} />
         <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
@@ -331,11 +331,11 @@ function ComparisonTable({
 }) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-pulse">
+      <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-pulse">
         <div className="h-5 w-56 bg-muted rounded mb-4" />
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 py-3">
-            <div className="w-8 h-8 bg-muted rounded-md" />
+            <div className="w-8 h-8 bg-muted rounded-[12px]" />
             <div className="flex-1 h-3 bg-muted rounded" />
             <div className="w-20 h-3 bg-muted rounded" />
             <div className="w-20 h-3 bg-muted rounded" />
@@ -349,7 +349,7 @@ function ComparisonTable({
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5 animate-fade-in-up">
       <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg mb-4">
         Comparativo completo por categoria
       </h3>
@@ -360,13 +360,13 @@ function ComparisonTable({
           Categoria
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Mes anterior
+          Mês anterior
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Mes atual
+          Mês atual
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Variacao
+          Variação
         </span>
       </div>
 
