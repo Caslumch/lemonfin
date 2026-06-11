@@ -72,11 +72,11 @@ export default function InsightsPage() {
             color="text-danger"
           />
           <TrendSection
-            title="Categorias que mais diminuiram"
+            title="Categorias que mais diminuíram"
             icon={TrendingDown}
             items={data?.topShrinking ?? []}
             loading={loading}
-            emptyText="Nenhuma categoria com reducao significativa."
+            emptyText="Nenhuma categoria com redução significativa."
             color="text-success"
           />
         </div>
@@ -126,7 +126,7 @@ function MonthComparisonCards({
 
   const items = [
     {
-      label: "Gastos este mes",
+      label: "Gastos este mês",
       value: data.currentMonth.expense,
       prev: data.previousMonth.expense,
       variation: data.overallVariation,
@@ -134,7 +134,7 @@ function MonthComparisonCards({
       icon: BarChart3,
     },
     {
-      label: "Receita este mes",
+      label: "Receita este mês",
       value: data.currentMonth.income,
       prev: data.previousMonth.income,
       variation: incomeVariation,
@@ -142,7 +142,7 @@ function MonthComparisonCards({
       icon: Target,
     },
     {
-      label: "Saldo este mes",
+      label: "Saldo este mês",
       value: data.currentMonth.balance,
       prev: data.previousMonth.balance,
       variation:
@@ -177,7 +177,7 @@ function MonthComparisonCards({
             </p>
             <div className="flex items-center gap-2 mt-2">
               <span className="text-xs text-fg-muted">
-                Mes anterior: {formatCurrency(item.prev)}
+                Mês anterior: {formatCurrency(item.prev)}
               </span>
               {item.variation !== 0 && (
                 <VariationBadge
@@ -220,7 +220,7 @@ function AlertsSection({ alerts }: { alerts: SpendingAlert[] }) {
               </p>
               <p className="text-xs text-fg-muted">
                 {formatCurrency(alert.currentTotal)} de{" "}
-                {formatCurrency(alert.previousTotal)} do mes passado
+                {formatCurrency(alert.previousTotal)} do mês passado
               </p>
             </div>
             <div className="text-right shrink-0">
@@ -360,13 +360,13 @@ function ComparisonTable({
           Categoria
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Mes anterior
+          Mês anterior
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Mes atual
+          Mês atual
         </span>
         <span className="text-xs text-fg-muted uppercase tracking-wide text-right">
-          Variacao
+          Variação
         </span>
       </div>
 

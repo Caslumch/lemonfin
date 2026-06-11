@@ -49,7 +49,7 @@ function WelcomeToast() {
       welcomeShown.current = true;
       const firstName = session?.user?.name?.split(" ")[0] ?? "";
       toast(`Bem-vindo(a)${firstName ? `, ${firstName}` : ""}!`, {
-        description: "Sua conta esta pronta. Bora organizar suas financas!",
+        description: "Sua conta está pronta. Bora organizar suas finanças!",
       });
       router.replace("/");
     }
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                           {stat.variation.toFixed(1)}%
                         </span>
                         <span className="text-xs text-fg-muted ml-0.5">
-                          vs mes anterior
+                          vs mês anterior
                         </span>
                       </div>
                     )}
@@ -335,7 +335,7 @@ export default function DashboardPage() {
                         : "text-warning",
                     )}
                   >
-                    {Math.round(alert.percentOfPrevious)}% do mes anterior
+                    {Math.round(alert.percentOfPrevious)}% do mês anterior
                   </span>
                 </div>
               ))}
@@ -350,7 +350,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <Target size={16} className="text-lima" />
                 <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
-                  Metas do mes
+                  Metas do mês
                 </h3>
               </div>
               <Link
@@ -417,7 +417,7 @@ export default function DashboardPage() {
         <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
-              Transacoes recentes
+              Transações recentes
             </h3>
             <Link
               href="/transacoes"
@@ -441,7 +441,7 @@ export default function DashboardPage() {
             </div>
           ) : recent.length === 0 ? (
             <p className="text-sm text-fg-muted text-center py-6">
-              Nenhuma transacao registrada ainda.
+              Nenhuma transação registrada ainda.
             </p>
           ) : (
             <div className="space-y-2">

@@ -82,7 +82,7 @@ export function TransactionList({
     return (
       <div className="rounded-lg border border-border bg-surface p-12 text-center">
         <p className="text-fg-muted text-sm">
-          Nenhuma transacao encontrada.
+          Nenhuma transação encontrada.
         </p>
       </div>
     );

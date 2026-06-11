@@ -59,10 +59,10 @@ export default function RecorrentesPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Recorrencia criada com sucesso");
+      toast.success("Recorrência criada com sucesso");
       fetchItems();
     } catch {
-      toast.error("Erro ao criar recorrencia");
+      toast.error("Erro ao criar recorrência");
       throw new Error("create failed");
     }
   }
@@ -75,10 +75,10 @@ export default function RecorrentesPage() {
         body: JSON.stringify({ ...data, cardId: data.cardId ?? null }),
       });
       setEditing(null);
-      toast.success("Recorrencia atualizada");
+      toast.success("Recorrência atualizada");
       fetchItems();
     } catch {
-      toast.error("Erro ao atualizar recorrencia");
+      toast.error("Erro ao atualizar recorrência");
       throw new Error("update failed");
     }
   }
@@ -91,7 +91,7 @@ export default function RecorrentesPage() {
       });
       fetchItems();
     } catch {
-      toast.error("Erro ao atualizar recorrencia");
+      toast.error("Erro ao atualizar recorrência");
     }
   }
 
@@ -100,10 +100,10 @@ export default function RecorrentesPage() {
     try {
       await fetchApi(`/recurring/${deleting.id}`, { method: "DELETE" });
       setDeleting(null);
-      toast.success("Recorrencia removida");
+      toast.success("Recorrência removida");
       fetchItems();
     } catch {
-      toast.error("Erro ao remover recorrencia");
+      toast.error("Erro ao remover recorrência");
     }
   }
 
@@ -135,13 +135,13 @@ export default function RecorrentesPage() {
         {!loading && items.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-border bg-surface p-5">
-              <p className="text-xs text-fg-muted mb-1">Despesas fixas / mes</p>
+              <p className="text-xs text-fg-muted mb-1">Despesas fixas / mês</p>
               <p className="text-2xl font-bold text-danger font-[family-name:var(--font-mono)]">
                 {formatBRL(monthlyExpense)}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-surface p-5">
-              <p className="text-xs text-fg-muted mb-1">Receitas fixas / mes</p>
+              <p className="text-xs text-fg-muted mb-1">Receitas fixas / mês</p>
               <p className="text-2xl font-bold text-success font-[family-name:var(--font-mono)]">
                 {formatBRL(monthlyIncome)}
               </p>
@@ -157,11 +157,11 @@ export default function RecorrentesPage() {
           <div className="rounded-lg border border-border bg-surface p-12 text-center">
             <Repeat size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">
-              Nenhuma transacao recorrente.
+              Nenhuma transação recorrente.
             </p>
             <p className="text-fg-muted text-xs mt-1">
-              Cadastre contas fixas (aluguel, assinaturas, salario) e o LemonFin
-              lanca automaticamente todo mes.
+              Cadastre contas fixas (aluguel, assinaturas, salário) e o LemonFin
+              lança automaticamente todo mês.
             </p>
           </div>
         ) : (

@@ -35,7 +35,7 @@ export function SummaryCards({ summary, loading }: SummaryCardsProps) {
       bg: "bg-danger-muted",
     },
     {
-      label: "Fatura cartao",
+      label: "Fatura cartão",
       value: summary?.cardExpense ?? 0,
       count: 0,
       icon: CreditCard,
@@ -93,7 +93,7 @@ export function SummaryCards({ summary, loading }: SummaryCardsProps) {
                   {formatCurrency(card.value)}
                 </p>
                 <p className="text-xs text-fg-muted mt-1">
-                  {card.count} {card.count === 1 ? "transacao" : "transacoes"}
+                  {card.count} {card.count === 1 ? "transação" : "transações"}
                 </p>
               </>
             )}

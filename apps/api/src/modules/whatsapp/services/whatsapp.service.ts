@@ -42,8 +42,8 @@ export class WhatsappService {
       // await this.wmodeClient.sendMessage({
       //   to: from,
       //   content:
-      //     'Ola! Voce ainda nao tem uma conta no LemonFin vinculada a este numero. ' +
-      //     'Acesse o app e cadastre seu telefone nas configuracoes para comecar a registrar transacoes pelo WhatsApp!',
+      //     'Olá! Você ainda não tem uma conta no LemonFin vinculada a este número. ' +
+      //     'Acesse o app e cadastre seu telefone nas configurações para começar a registrar transações pelo WhatsApp!',
       // });
       this.logger.log(`Ignoring message from unregistered phone: ${phone}`);
       return;
@@ -141,9 +141,9 @@ export class WhatsappService {
               `${emoji} *Despesa registrada!*\n\n` +
               `*Valor:* ${amountFormatted}\n` +
               `*Categoria:* ${category.icon} ${category.name}\n` +
-              `*Descricao:* ${data.description}\n\n` +
-              `⚠️ Voce tem ${userCards.length} cartoes cadastrados (${names}). ` +
-              `Para vincular ao cartao, diga o nome. Ex: _"comprei X no ${userCards[0].name}"_`,
+              `*Descrição:* ${data.description}\n\n` +
+              `⚠️ Você tem ${userCards.length} cartões cadastrados (${names}). ` +
+              `Para vincular ao cartão, diga o nome. Ex: _"comprei X no ${userCards[0].name}"_`,
           });
 
           this.logger.log(
@@ -181,7 +181,7 @@ export class WhatsappService {
       currency: 'BRL',
     });
 
-    const cardInfo = cardLabel ? `\n*Cartao:* ${cardLabel}` : '';
+    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
 
     await this.wmodeClient.sendMessage({
       to: from,
@@ -189,7 +189,7 @@ export class WhatsappService {
         `${emoji} *${typeLabel} registrada!*\n\n` +
         `*Valor:* ${amountFormatted}\n` +
         `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
-        `*Descricao:* ${data.description}\n\n` +
+        `*Descrição:* ${data.description}\n\n` +
         `_Registrado via WhatsApp_`,
     });
 
@@ -241,7 +241,7 @@ export class WhatsappService {
         message =
           `💸 *Despesas de ${monthName}*\n\n` +
           `*Total:* ${expenseFormatted}\n` +
-          `*Transacoes:* ${summary.expenseCount}\n\n` +
+          `*Transações:* ${summary.expenseCount}\n\n` +
           `_Envie "resumo" para ver o quadro completo_`;
         break;
 
@@ -249,7 +249,7 @@ export class WhatsappService {
         message =
           `💰 *Receitas de ${monthName}*\n\n` +
           `*Total:* ${incomeFormatted}\n` +
-          `*Transacoes:* ${summary.incomeCount}\n\n` +
+          `*Transações:* ${summary.incomeCount}\n\n` +
           `_Envie "resumo" para ver o quadro completo_`;
         break;
 
@@ -265,8 +265,8 @@ export class WhatsappService {
       default:
         message =
           `📊 *Resumo de ${monthName}*\n\n` +
-          `💰 *Receitas:* ${incomeFormatted} (${summary.incomeCount} transacoes)\n` +
-          `💸 *Despesas:* ${expenseFormatted} (${summary.expenseCount} transacoes)\n` +
+          `💰 *Receitas:* ${incomeFormatted} (${summary.incomeCount} transações)\n` +
+          `💸 *Despesas:* ${expenseFormatted} (${summary.expenseCount} transações)\n` +
           `${balanceEmoji} *Saldo:* ${balanceFormatted}\n\n` +
           `_Dica: envie "me da uma dica" para receber orientacoes financeiras_`;
         break;
@@ -281,7 +281,7 @@ export class WhatsappService {
     if (!last) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Nenhuma transacao encontrada para cancelar.',
+        content: 'Nenhuma transação encontrada para cancelar.',
       });
       return;
     }
@@ -296,11 +296,11 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `🗑️ *Transacao cancelada!*\n\n` +
+        `🗑️ *Transação cancelada!*\n\n` +
         `*Valor:* ${amountFormatted}\n` +
         `*Categoria:* ${last.category.icon} ${last.category.name}\n` +
-        `*Descricao:* ${last.description || '-'}\n\n` +
-        `_A transacao foi removida com sucesso_`,
+        `*Descrição:* ${last.description || '-'}\n\n` +
+        `_A transação foi removida com sucesso_`,
     });
 
     this.logger.log(`Transaction ${last.id} cancelled by user ${userId}`);
@@ -316,7 +316,7 @@ export class WhatsappService {
     if (!last) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Nenhuma transacao encontrada para corrigir.',
+        content: 'Nenhuma transação encontrada para corrigir.',
       });
       return;
     }
@@ -338,11 +338,11 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `✏️ *Transacao corrigida!*\n\n` +
+        `✏️ *Transação corrigida!*\n\n` +
         `*Antes:* ${oldFormatted}\n` +
         `*Agora:* ${newFormatted}\n` +
         `*Categoria:* ${last.category.icon} ${last.category.name}\n` +
-        `*Descricao:* ${last.description || '-'}\n\n` +
+        `*Descrição:* ${last.description || '-'}\n\n` +
         `_Valor atualizado com sucesso_`,
     });
 
@@ -428,7 +428,7 @@ export class WhatsappService {
       currency: 'BRL',
     });
 
-    const cardInfo = cardLabel ? `\n*Cartao:* ${cardLabel}` : '';
+    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
 
     await this.wmodeClient.sendMessage({
       to: from,
@@ -437,8 +437,8 @@ export class WhatsappService {
         `*Total:* ${totalFormatted}\n` +
         `*Parcelas:* ${data.installments}x de ${perFormatted}\n` +
         `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
-        `*Descricao:* ${data.description}\n\n` +
-        `_${data.installments} transacoes criadas com datas futuras_`,
+        `*Descrição:* ${data.description}\n\n` +
+        `_${data.installments} transações criadas com datas futuras_`,
     });
 
     this.logger.log(

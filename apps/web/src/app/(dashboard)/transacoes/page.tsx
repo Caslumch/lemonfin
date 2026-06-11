@@ -157,11 +157,11 @@ export default function TransacoesPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Transacao criada com sucesso");
+      toast.success("Transação criada com sucesso");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao criar transacao");
+      toast.error("Erro ao criar transação");
       throw new Error("create failed");
     }
   }
@@ -181,11 +181,11 @@ export default function TransacoesPage() {
         body: JSON.stringify(data),
       });
       setEditingTx(null);
-      toast.success("Transacao atualizada");
+      toast.success("Transação atualizada");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao atualizar transacao");
+      toast.error("Erro ao atualizar transação");
       throw new Error("update failed");
     }
   }
@@ -197,21 +197,21 @@ export default function TransacoesPage() {
         method: "DELETE",
       });
       setDeletingTx(null);
-      toast.success("Transacao excluida");
+      toast.success("Transação excluída");
       fetchTransactions();
       fetchSummary();
     } catch {
-      toast.error("Erro ao excluir transacao");
+      toast.error("Erro ao excluir transação");
     }
   }
 
   return (
     <>
       <ContentHeader
-        title="Transacoes"
+        title="Transações"
         actions={
           <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova transacao
+            + Nova transação
           </Button>
         }
       />
@@ -248,7 +248,7 @@ export default function TransacoesPage() {
         {meta.totalPages > 1 && (
           <div className="flex items-center justify-between pt-2">
             <p className="text-xs text-fg-muted">
-              {meta.total} {meta.total === 1 ? "transacao" : "transacoes"}
+              {meta.total} {meta.total === 1 ? "transação" : "transações"}
             </p>
             <div className="flex gap-2">
               <Button
@@ -268,7 +268,7 @@ export default function TransacoesPage() {
                 disabled={page >= meta.totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Proximo
+                Próximo
               </Button>
             </div>
           </div>

@@ -10,11 +10,11 @@ import type { Card } from "@/types/card";
 import type { Recurring } from "@/types/recurring";
 
 const recurringSchema = z.object({
-  description: z.string().min(1, "Descricao e obrigatoria"),
+  description: z.string().min(1, "Descrição é obrigatória"),
   amount: z.number().positive("Valor deve ser positivo"),
   type: z.enum(["INCOME", "EXPENSE"]),
-  dayOfMonth: z.number().int().min(1, "Dia invalido").max(31, "Dia invalido"),
-  categoryId: z.string().min(1, "Categoria e obrigatoria"),
+  dayOfMonth: z.number().int().min(1, "Dia inválido").max(31, "Dia inválido"),
+  categoryId: z.string().min(1, "Categoria é obrigatória"),
   cardId: z.string().optional(),
 });
 
@@ -113,7 +113,7 @@ export function RecurringModal({
         <div className="w-full max-w-md bg-surface rounded-lg shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              {isEditing ? "Editar recorrencia" : "Nova recorrencia"}
+              {isEditing ? "Editar recorrência" : "Nova recorrência"}
             </h2>
             <button
               onClick={onClose}
@@ -126,9 +126,9 @@ export function RecurringModal({
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <Input
               id="description"
-              label="Descricao"
+              label="Descrição"
               type="text"
-              placeholder="Ex: Aluguel, Netflix, Salario"
+              placeholder="Ex: Aluguel, Netflix, Salário"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               required
@@ -201,7 +201,7 @@ export function RecurringModal({
 
             <Input
               id="dayOfMonth"
-              label="Dia do mes"
+              label="Dia do mês"
               type="number"
               min="1"
               max="31"
@@ -216,7 +216,7 @@ export function RecurringModal({
                 htmlFor="card"
                 className="block text-sm font-medium text-fg mb-1.5"
               >
-                Cartao{" "}
+                Cartão{" "}
                 <span className="text-fg-muted font-normal">(opcional)</span>
               </label>
               <select
@@ -252,7 +252,7 @@ export function RecurringModal({
                   ? "Salvando..."
                   : isEditing
                     ? "Salvar"
-                    : "Criar recorrencia"}
+                    : "Criar recorrência"}
               </Button>
             </div>
           </form>

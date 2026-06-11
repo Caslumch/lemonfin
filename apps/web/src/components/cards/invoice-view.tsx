@@ -108,7 +108,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       ) : !invoice || invoice.transactions.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-8 text-center">
           <p className="text-fg-muted text-sm">
-            Nenhuma transacao neste periodo.
+            Nenhuma transação neste período.
           </p>
         </div>
       ) : (

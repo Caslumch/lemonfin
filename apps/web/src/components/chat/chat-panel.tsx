@@ -19,7 +19,7 @@ interface ChatPanelProps {
 const SUGGESTIONS = [
   "Estou gastando muito?",
   "Onde posso economizar?",
-  "Resumo do mes",
+  "Resumo do mês",
 ];
 
 export function ChatPanel({ isOpen }: ChatPanelProps) {
@@ -209,7 +209,7 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
             </div>
             <div>
               <p className="text-sm font-medium text-fg">
-                Ola! Sou seu assistente financeiro.
+                Olá! Sou seu assistente financeiro.
               </p>
               <p className="mt-1 text-xs text-fg-muted">
                 Pergunte sobre seus gastos, receitas ou dicas.

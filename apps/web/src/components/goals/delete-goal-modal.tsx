@@ -54,7 +54,7 @@ export function DeleteGoalModal({
           <div className="p-6">
             <p className="text-sm text-fg-secondary mb-6">
               Tem certeza que deseja excluir a meta{" "}
-              <strong className="text-fg">{goalName}</strong>? Esta acao nao
+              <strong className="text-fg">{goalName}</strong>? Esta ação não
               pode ser desfeita.
             </p>
 

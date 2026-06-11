@@ -28,7 +28,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("As senhas nao coincidem");
+      setError("As senhas não coincidem");
       return;
     }
 
@@ -95,7 +95,7 @@ export default function RegisterPage() {
             </span>
           </div>
           <p className="text-sm text-fg-secondary">
-            Crie sua conta para comecar
+            Crie sua conta para começar
           </p>
         </div>
 
@@ -144,7 +144,7 @@ export default function RegisterPage() {
               id="password"
               label="Senha"
               type={showPassword ? "text" : "password"}
-              placeholder="Minimo 8 caracteres"
+              placeholder="Mínimo 8 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -200,7 +200,7 @@ export default function RegisterPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-fg-secondary">
-          Ja tem conta?{" "}
+          Já tem conta?{" "}
           <Link
             href="/login"
             className="font-medium text-fg hover:underline"

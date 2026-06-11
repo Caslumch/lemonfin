@@ -27,13 +27,13 @@ import { themeAtom } from "@/store/theme";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/transacoes", label: "Transacoes", icon: ArrowUpDown },
+  { href: "/transacoes", label: "Transações", icon: ArrowUpDown },
   { href: "/categorias", label: "Categorias", icon: Layers },
-  { href: "/cartoes", label: "Cartoes", icon: CreditCard },
+  { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/metas", label: "Metas", icon: Target },
   { href: "/recorrentes", label: "Recorrentes", icon: Repeat },
   { href: "/insights", label: "Insights", icon: Lightbulb },
-  { href: "/configuracoes", label: "Configuracoes", icon: Settings },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -56,28 +56,28 @@ export function Sidebar() {
   const ThemeIcon = theme === "dark" ? Moon : Sun;
 
   const sidebarContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full text-white/60">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 py-8">
-        <svg width="28" height="28" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+        <svg width="30" height="30" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
           <defs>
             <radialGradient id="sidebar-logo" cx="38%" cy="35%" r="65%">
-              <stop offset="0%" stopColor="#CCEB3A"/>
-              <stop offset="50%" stopColor="#B8D900"/>
-              <stop offset="100%" stopColor="#A3C200"/>
+              <stop offset="0%" stopColor="#E2FF4D"/>
+              <stop offset="50%" stopColor="#D4F400"/>
+              <stop offset="100%" stopColor="#A8C200"/>
             </radialGradient>
           </defs>
           <circle cx="256" cy="256" r="256" fill="url(#sidebar-logo)"/>
         </svg>
         {!collapsed && (
-          <span className="font-[family-name:var(--font-display)] text-xl font-bold text-fg tracking-tight">
+          <span className="font-[family-name:var(--font-display)] text-xl font-bold text-white tracking-tight">
             LemonFin
           </span>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 px-3 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -87,29 +87,27 @@ export function Sidebar() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] tracking-wide transition-all duration-150",
+                "flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-sm tracking-wide transition-all duration-150",
                 active
-                  ? "bg-surface-raised font-semibold text-fg"
-                  : "text-fg-muted hover:text-fg hover:bg-subtle",
+                  ? "bg-[#6C5CE7] font-semibold text-white shadow-[0_8px_22px_rgba(108,92,231,0.40)]"
+                  : "text-white/55 hover:text-white hover:bg-white/[0.07]",
                 collapsed && "justify-center px-0"
               )}
             >
               <Icon size={20} className="shrink-0" />
-              {!collapsed && (
-                <span className="text-sm">{item.label}</span>
-              )}
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
       {/* Bottom actions */}
-      <div className="px-3 py-2 space-y-0.5">
+      <div className="px-3 py-2 space-y-1">
         {/* Theme toggle */}
         <button
           onClick={cycleTheme}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-md text-fg-muted hover:text-fg hover:bg-subtle transition-all duration-150 w-full cursor-pointer",
+            "flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-white/55 hover:text-white hover:bg-white/[0.07] transition-all duration-150 w-full cursor-pointer",
             collapsed && "justify-center px-0"
           )}
           title={`Tema: ${theme}`}
@@ -124,7 +122,7 @@ export function Sidebar() {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "hidden lg:flex items-center gap-3 px-3 py-2.5 rounded-md text-fg-muted hover:text-fg hover:bg-subtle transition-all duration-150 w-full cursor-pointer",
+            "hidden lg:flex items-center gap-3 px-3 py-2.5 rounded-[12px] text-white/55 hover:text-white hover:bg-white/[0.07] transition-all duration-150 w-full cursor-pointer",
             collapsed && "justify-center px-0"
           )}
         >
@@ -153,17 +151,17 @@ export function Sidebar() {
               collapsed && "justify-center"
             )}
           >
-            <div className="w-[30px] h-[30px] rounded-full bg-surface-raised flex items-center justify-center shrink-0">
-              <span className="text-xs font-semibold text-lima">
+            <div className="w-[32px] h-[32px] rounded-full bg-[#6C5CE7] flex items-center justify-center shrink-0">
+              <span className="text-xs font-semibold text-white">
                 {(session.user.name || "U").charAt(0).toUpperCase()}
               </span>
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-fg truncate">
+                <p className="text-xs font-medium text-white truncate">
                   {session.user.name}
                 </p>
-                <p className="text-[11px] text-fg-muted truncate">
+                <p className="text-[11px] text-white/45 truncate">
                   {session.user.email}
                 </p>
               </div>
@@ -171,7 +169,7 @@ export function Sidebar() {
             {!collapsed && (
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
-                className="text-fg-muted hover:text-danger transition-colors cursor-pointer"
+                className="text-white/45 hover:text-danger transition-colors cursor-pointer"
                 title="Sair"
               >
                 <LogOut size={16} />
@@ -188,7 +186,7 @@ export function Sidebar() {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden md:flex flex-col bg-surface border-r border-border h-screen sticky top-0 transition-[width] duration-200 ease-in-out shrink-0",
+          "hidden md:flex flex-col bg-shell-sidebar rounded-[28px] transition-[width] duration-200 ease-in-out shrink-0",
           collapsed ? "w-16" : "w-[220px]"
         )}
       >
@@ -198,7 +196,7 @@ export function Sidebar() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -206,7 +204,7 @@ export function Sidebar() {
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[220px] bg-surface border-r border-border transform transition-transform duration-200 ease-in-out md:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[220px] bg-shell-sidebar transform transition-transform duration-200 ease-in-out md:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

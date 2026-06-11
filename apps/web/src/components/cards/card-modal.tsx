@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import type { Card } from "@/types/card";
 
 const cardSchema = z.object({
-  name: z.string().min(1, "Nome e obrigatorio"),
+  name: z.string().min(1, "Nome é obrigatório"),
   brand: z.string().optional(),
   limit: z.number().positive("Limite deve ser positivo").optional(),
   closingDay: z
@@ -113,7 +113,7 @@ export function CardModal({
         <div className="w-full max-w-md bg-surface rounded-lg shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              {isEditing ? "Editar cartao" : "Novo cartao"}
+              {isEditing ? "Editar cartão" : "Novo cartão"}
             </h2>
             <button
               onClick={onClose}
@@ -126,7 +126,7 @@ export function CardModal({
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <Input
               id="name"
-              label="Nome do cartao"
+              label="Nome do cartão"
               type="text"
               placeholder="Ex: Nubank, Inter"
               value={name}

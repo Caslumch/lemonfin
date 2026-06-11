@@ -5,38 +5,55 @@
 
 /* ===== Literal Colors (static, inlined into utilities) ===== */
 @theme inline {
-  --color-lima: #C5E835;
-  --color-lima-hover: #B0D02E;
-  --color-lima-muted: #C5E83518;
-  --color-lima-text: #0A0A0A;
+  /* Brand · Lemon (primary) — lemon-design #D4F400 */
+  --color-lima: #D4F400;
+  --color-lima-hover: #BDD900;
+  --color-lima-muted: #D4F40018;
+  --color-lima-text: #0D0D0D;
 
-  --color-dark: #09090B;
-  --color-dark-soft: #111113;
+  /* Brand · Grape (secondary, new) — accent: active nav, +buttons, charts */
+  --color-uva: #6C5CE7;
+  --color-uva-hover: #5544D6;
+  --color-uva-muted: #6C5CE718;
+  --color-uva-text: #FFFFFF;
+
+  --color-dark: #0D0D0D;
+  --color-dark-soft: #1A1A1A;
+
+  /* Dark shell tones (the frame) */
+  --color-shell: #1C1C1E;
+  --color-shell-sidebar: #0D0D0D;
+  --color-surface-dark: #0D0D0D;
 
   --color-gray-50: #FAFAFA;
   --color-gray-100: #F4F4F5;
   --color-gray-200: #E4E4E7;
+  --color-gray-300: #D4D4D8;
   --color-gray-400: #A1A1AA;
   --color-gray-600: #52525B;
   --color-gray-900: #18181B;
 
-  --color-success: #34D399;
+  --color-success: #22C55E;
   --color-success-muted: initial;
-  --color-danger: #F87171;
+  --color-danger: #EF4444;
   --color-danger-muted: initial;
-  --color-warning: #FBBF24;
+  --color-warning: #F59E0B;
   --color-warning-muted: initial;
 
   /* Remove defaults Tailwind would generate for these */
   --color-page: initial;
+  --color-shell-bg: initial;
   --color-surface: initial;
   --color-surface-raised: initial;
+  --color-surface-accent: initial;
   --color-subtle: initial;
   --color-muted: initial;
   --color-border: initial;
   --color-fg: initial;
   --color-fg-secondary: initial;
   --color-fg-muted: initial;
+  --color-on-dark: initial;
+  --color-on-dark-muted: initial;
 
   --color-cat-alimentacao: initial;
   --color-cat-alimentacao-text: initial;
@@ -64,40 +81,56 @@
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
 
-  /* Border Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Border Radius — rounder, lemon-design language */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
   --radius-xl: 24px;
+  --radius-2xl: 28px;
+  --radius-3xl: 36px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
-  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.10);
+  /* Shadows — soft, low-contrast diffuse */
+  --shadow-xs: 0 1px 2px rgba(13, 13, 13, 0.04);
+  --shadow-sm: 0 2px 8px rgba(13, 13, 13, 0.05);
+  --shadow-md: 0 6px 20px rgba(13, 13, 13, 0.06);
+  --shadow-lg: 0 16px 40px rgba(13, 13, 13, 0.10);
+  --shadow-xl: 0 24px 60px rgba(13, 13, 13, 0.14);
+
+  /* Colored glows for emphasis */
+  --shadow-lemon: 0 8px 24px rgba(212, 244, 0, 0.40);
+  --shadow-grape: 0 8px 22px rgba(108, 92, 231, 0.40);
 }
 
 /* ===== Semantic Token Variables (light mode defaults) ===== */
 
 :root {
-  /* Surfaces */
-  --color-page: #F0F0F2;
-  --color-surface: #F7F7F8;
-  --color-surface-raised: #EBEBED;
-  --color-subtle: #EBEBED;
-  --color-muted: #DDDDE0;
-  --color-border: #D8D8DC;
+  /* Shell — the dark frame (same in both themes) */
+  --color-shell-bg: #1C1C1E;
+
+  /* Surfaces — light framed panel */
+  --color-page: #F4F4F2;          /* the light content panel */
+  --color-surface: #FFFFFF;        /* default card */
+  --color-surface-raised: #FAFAF9; /* subtle raised card */
+  --color-surface-accent: #0D0D0D; /* black highlight card */
+  --color-subtle: #F1F1EF;         /* inputs, wells, tracks */
+  --color-muted: #E8E8E5;
+  --color-border: rgba(13, 13, 13, 0.07);
 
   /* Text */
-  --color-fg: #09090B;
-  --color-fg-secondary: #52525B;
-  --color-fg-muted: #A1A1AA;
+  --color-fg: #0D0D0D;
+  --color-fg-secondary: #6B6B6B;
+  --color-fg-muted: #9E9E9E;
+
+  /* Text on dark accent cards */
+  --color-on-dark: #FFFFFF;
+  --color-on-dark-muted: rgba(255, 255, 255, 0.58);
 
   /* Semantic status */
-  --color-success-muted: #34D39915;
-  --color-danger-muted: #F8717115;
-  --color-warning-muted: #FBBF2415;
+  --color-success-muted: #22C55E15;
+  --color-danger-muted: #EF444415;
+  --color-warning-muted: #F59E0B15;
 
   /* Category colors */
   --color-cat-alimentacao: #FFF3E0;
@@ -125,23 +158,31 @@
 /* ===== Dark Mode Overrides ===== */
 
 .dark {
-  /* Surfaces */
-  --color-page: #09090B;
-  --color-surface: #111113;
-  --color-surface-raised: #18181B;
-  --color-subtle: #18181B;
-  --color-muted: #27272A;
-  --color-border: rgba(255, 255, 255, 0.04);
+  /* Shell stays dark; the inner panel goes dark too */
+  --color-shell-bg: #000000;
+
+  /* Surfaces — dark framed panel */
+  --color-page: #111113;           /* dark content panel */
+  --color-surface: #1A1A1D;        /* default card */
+  --color-surface-raised: #222226; /* raised card */
+  --color-surface-accent: #000000; /* darkest highlight card */
+  --color-subtle: #222226;         /* inputs, wells, tracks */
+  --color-muted: #2E2E33;
+  --color-border: rgba(255, 255, 255, 0.07);
 
   /* Text */
   --color-fg: #FAFAFA;
   --color-fg-secondary: #A1A1AA;
-  --color-fg-muted: #52525B;
+  --color-fg-muted: #6B6B70;
+
+  /* Text on dark accent cards (already light) */
+  --color-on-dark: #FFFFFF;
+  --color-on-dark-muted: rgba(255, 255, 255, 0.58);
 
   /* Semantic adjustments */
-  --color-success-muted: #34D39915;
-  --color-danger-muted: #F8717115;
-  --color-warning-muted: #FBBF2415;
+  --color-success-muted: #22C55E1F;
+  --color-danger-muted: #EF44441F;
+  --color-warning-muted: #F59E0B1F;
 
   /* Category colors */
   --color-cat-alimentacao: #E6510020;
@@ -176,8 +217,11 @@
 
 /* Surfaces */
 @utility bg-page { background-color: var(--color-page); }
+@utility bg-shell { background-color: var(--color-shell-bg); }
+@utility bg-shell-sidebar { background-color: var(--color-shell-sidebar); }
 @utility bg-surface { background-color: var(--color-surface); }
 @utility bg-surface-raised { background-color: var(--color-surface-raised); }
+@utility bg-surface-accent { background-color: var(--color-surface-accent); }
 @utility bg-subtle { background-color: var(--color-subtle); }
 @utility bg-muted { background-color: var(--color-muted); }
 
@@ -188,6 +232,8 @@
 @utility text-fg { color: var(--color-fg); }
 @utility text-fg-secondary { color: var(--color-fg-secondary); }
 @utility text-fg-muted { color: var(--color-fg-muted); }
+@utility text-on-dark { color: var(--color-on-dark); }
+@utility text-on-dark-muted { color: var(--color-on-dark-muted); }
 
 /* Semantic status backgrounds */
 @utility bg-success-muted { background-color: var(--color-success-muted); }
@@ -255,7 +301,7 @@
 /* ===== Base Styles ===== */
 
 body {
-  background-color: var(--color-page);
+  background-color: var(--color-shell-bg);
   color: var(--color-fg);
   font-family: var(--font-body), system-ui, sans-serif;
 }

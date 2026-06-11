@@ -53,10 +53,10 @@ export default function CartoesPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Cartao criado com sucesso");
+      toast.success("Cartão criado com sucesso");
       fetchCards();
     } catch {
-      toast.error("Erro ao criar cartao");
+      toast.error("Erro ao criar cartão");
       throw new Error("create failed");
     }
   }
@@ -75,10 +75,10 @@ export default function CartoesPage() {
         body: JSON.stringify(data),
       });
       setEditingCard(null);
-      toast.success("Cartao atualizado");
+      toast.success("Cartão atualizado");
       fetchCards();
     } catch {
-      toast.error("Erro ao atualizar cartao");
+      toast.error("Erro ao atualizar cartão");
       throw new Error("update failed");
     }
   }
@@ -90,10 +90,10 @@ export default function CartoesPage() {
         method: "DELETE",
       });
       setDeletingCard(null);
-      toast.success("Cartao removido");
+      toast.success("Cartão removido");
       fetchCards();
     } catch {
-      toast.error("Erro ao remover cartao");
+      toast.error("Erro ao remover cartão");
     }
   }
 
@@ -101,7 +101,7 @@ export default function CartoesPage() {
   if (viewingCard) {
     return (
       <>
-        <ContentHeader title="Cartoes" />
+        <ContentHeader title="Cartões" />
         <div className="p-5 md:p-7">
           <InvoiceView
             cardId={viewingCard.id}
@@ -116,10 +116,10 @@ export default function CartoesPage() {
   return (
     <>
       <ContentHeader
-        title="Cartoes"
+        title="Cartões"
         actions={
           <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Novo cartao
+            + Novo cartão
           </Button>
         }
       />
@@ -133,10 +133,10 @@ export default function CartoesPage() {
           <div className="rounded-lg border border-border bg-surface p-12 text-center">
             <CreditCard size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">
-              Nenhum cartao cadastrado.
+              Nenhum cartão cadastrado.
             </p>
             <p className="text-fg-muted text-xs mt-1">
-              Adicione um cartao para acompanhar faturas e parcelamentos.
+              Adicione um cartão para acompanhar faturas e parcelamentos.
             </p>
           </div>
         ) : (
