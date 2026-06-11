@@ -8,6 +8,7 @@ import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LemonLogo } from "@/components/ui/lemon-logo";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 
@@ -84,12 +85,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-page px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-lima rounded-md flex items-center justify-center">
-              <span className="font-[family-name:var(--font-display)] font-bold text-dark text-lg">
-                $
-              </span>
-            </div>
+          <div className="inline-flex items-center gap-2.5 mb-2">
+            <LemonLogo size={32} className="shrink-0" />
             <span className="font-[family-name:var(--font-display)] text-xl font-extrabold text-fg">
               LemonFin
             </span>
