@@ -1,6 +1,7 @@
 import { Controller, Post, Body, UsePipes, Logger } from '@nestjs/common';
 import { SignUpUseCase } from '../use-cases/sign-up.use-case';
 import { SignInUseCase } from '../use-cases/sign-in.use-case';
+import { VerifyTwoFactorUseCase } from '../use-cases/verify-2fa.use-case';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { z } from 'zod';
 
@@ -19,6 +20,11 @@ const signInSchema = z.object({
   password: z.string().min(1),
 });
 
+const verifyTwoFactorSchema = z.object({
+  tempToken: z.string().min(1),
+  code: z.string().min(1),
+});
+
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
@@ -26,6 +32,7 @@ export class AuthController {
   constructor(
     private readonly signUpUseCase: SignUpUseCase,
     private readonly signInUseCase: SignInUseCase,
+    private readonly verifyTwoFactorUseCase: VerifyTwoFactorUseCase,
   ) {}
 
   @Post('sign-up')
@@ -48,5 +55,12 @@ export class AuthController {
   signIn(@Body() body: { email: string; password: string }) {
     this.logger.log(`Sign-in attempt [email:${body.email}]`);
     return this.signInUseCase.execute(body);
+  }
+
+  @Post('verify-2fa')
+  @UsePipes(new ZodValidationPipe(verifyTwoFactorSchema))
+  verifyTwoFactor(@Body() body: { tempToken: string; code: string }) {
+    this.logger.log('2FA verification attempt');
+    return this.verifyTwoFactorUseCase.execute(body);
   }
 }

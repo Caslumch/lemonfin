@@ -43,4 +43,30 @@ export class UsersRepository {
       select: { id: true, onboardedAt: true },
     });
   }
+
+  async updatePassword(id: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+      select: { id: true },
+    });
+  }
+
+  async updateTwoFactor(
+    id: string,
+    data: {
+      twoFactorEnabled?: boolean;
+      twoFactorSecret?: string | null;
+      backupCodes?: string[];
+    },
+  ) {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        twoFactorEnabled: true,
+      },
+    });
+  }
 }
