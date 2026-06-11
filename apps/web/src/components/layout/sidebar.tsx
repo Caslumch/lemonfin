@@ -10,6 +10,7 @@ import {
   Layers,
   CreditCard,
   Target,
+  Repeat,
   Lightbulb,
   Settings,
   PanelLeftClose,
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/categorias", label: "Categorias", icon: Layers },
   { href: "/cartoes", label: "Cartoes", icon: CreditCard },
   { href: "/metas", label: "Metas", icon: Target },
+  { href: "/recorrentes", label: "Recorrentes", icon: Repeat },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/configuracoes", label: "Configuracoes", icon: Settings },
 ];

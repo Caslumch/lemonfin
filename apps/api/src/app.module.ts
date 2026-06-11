@@ -13,6 +13,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { GoalsModule } from './modules/goals/goals.module';
+import { RecurringModule } from './modules/recurring/recurring.module';
 import { HealthController } from './health.controller';
 import { KeepAliveService } from './keep-alive.service';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -35,6 +36,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ChatModule,
     AlertsModule,
     GoalsModule,
+    RecurringModule,
   ],
   controllers: [HealthController],
   providers: [
