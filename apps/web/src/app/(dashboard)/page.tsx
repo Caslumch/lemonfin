@@ -5,7 +5,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   ArrowDownRight,
-  TrendingUp,
   TrendingDown,
   Wallet,
   PiggyBank,
@@ -24,8 +23,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
-import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
-import { EvolutionChart } from "@/components/dashboard/evolution-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { BudgetCard } from "@/components/dashboard/budget-card";
 import { BudgetModal } from "@/components/dashboard/budget-modal";
@@ -234,7 +231,7 @@ export default function DashboardPage() {
       </Suspense>
 
       <div className="px-5 pb-8 pt-6 md:px-8 md:pt-8">
-        <div className="flex flex-col gap-[22px] lg:flex-row">
+        <div className="flex flex-col gap-5 lg:flex-row lg:gap-5">
           {/* ===== Main column ===== */}
           <div className="flex min-w-0 flex-1 flex-col gap-5">
             {/* Header */}
@@ -418,10 +415,115 @@ export default function DashboardPage() {
 
             {/* Despesas — full width bar chart */}
             <MonthlyChart data={monthly} loading={loading} />
+
+            {/* Spending alerts */}
+            {!loading && alerts.length > 0 && (
+              <div className="rounded-[20px] border border-warning/30 bg-warning-muted p-5 animate-fade-in-up">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-warning" />
+                    <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
+                      Alertas de gastos
+                    </h3>
+                  </div>
+                  <Link
+                    href="/insights"
+                    className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
+                  >
+                    Ver detalhes <ArrowRight size={12} />
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {alerts.slice(0, 3).map((alert) => (
+                    <div
+                      key={alert.categoryId}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <CategoryIcon slug={alert.category?.slug} size={14} />
+                      <span className="text-fg flex-1 truncate">
+                        {alert.category?.name ?? "Outros"}
+                      </span>
+                      <span
+                        className={cn(
+                          "font-[family-name:var(--font-mono)] text-xs font-bold",
+                          alert.percentOfPrevious >= 100
+                            ? "text-danger"
+                            : "text-warning",
+                        )}
+                      >
+                        {Math.round(alert.percentOfPrevious)}% do mês anterior
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Goals progress */}
+            {!loading && goals.length > 0 && (
+              <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Target size={16} className="text-lima" />
+                    <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
+                      Metas do mês
+                    </h3>
+                  </div>
+                  <Link
+                    href="/metas"
+                    className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
+                  >
+                    Ver todas <ArrowRight size={12} />
+                  </Link>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {goals.slice(0, 6).map((goal) => {
+                    const pct = goal.progress.percentage;
+                    const barColor = goal.progress.exceeded
+                      ? "bg-danger"
+                      : pct >= 80
+                        ? "bg-warning"
+                        : "bg-lima";
+                    return (
+                      <div key={goal.id} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-fg truncate">
+                            <CategoryIcon slug={goal.category?.slug} size={12} className="inline mr-1" />
+                            {goal.category?.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "font-medium",
+                              goal.progress.exceeded
+                                ? "text-danger"
+                                : pct >= 80
+                                  ? "text-warning"
+                                  : "text-fg-muted",
+                            )}
+                          >
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-subtle rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-fg-muted">
+                          {formatCurrency(goal.progress.spent)} / {formatCurrency(goal.progress.limit)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ===== Right column ===== */}
-          <div className="lg:w-[340px] lg:shrink-0">
+          <div className="flex flex-col gap-5 lg:w-[340px] lg:shrink-0">
+            {/* Meus Cartões */}
             <div className="flex flex-col gap-4 rounded-[24px] bg-surface-accent p-5 text-on-dark shadow-md animate-fade-in-up">
               <div className="flex items-start justify-between">
                 <div>
@@ -469,196 +571,16 @@ export default function DashboardPage() {
                 </Link>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* ===== Below the main grid: forecast / budget / alerts / goals / extras ===== */}
-        <div className="mt-6 space-y-6">
-          {/* Forecast card */}
-          <ForecastCard forecast={forecast} loading={loading} />
+            {/* Forecast card */}
+            <ForecastCard forecast={forecast} loading={loading} />
 
-          {/* Budget card */}
-          <BudgetCard
-            budget={budget}
-            loading={loading}
-            onEdit={() => setBudgetModalOpen(true)}
-          />
-
-          {/* Spending alerts */}
-          {!loading && alerts.length > 0 && (
-            <div className="rounded-[20px] border border-warning/30 bg-warning-muted p-5 animate-fade-in-up">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-warning" />
-                  <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
-                    Alertas de gastos
-                  </h3>
-                </div>
-                <Link
-                  href="/insights"
-                  className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
-                >
-                  Ver detalhes <ArrowRight size={12} />
-                </Link>
-              </div>
-              <div className="space-y-2">
-                {alerts.slice(0, 3).map((alert) => (
-                  <div
-                    key={alert.categoryId}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <CategoryIcon slug={alert.category?.slug} size={14} />
-                    <span className="text-fg flex-1 truncate">
-                      {alert.category?.name ?? "Outros"}
-                    </span>
-                    <span
-                      className={cn(
-                        "font-[family-name:var(--font-mono)] text-xs font-bold",
-                        alert.percentOfPrevious >= 100
-                          ? "text-danger"
-                          : "text-warning",
-                      )}
-                    >
-                      {Math.round(alert.percentOfPrevious)}% do mês anterior
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Goals progress */}
-          {!loading && goals.length > 0 && (
-            <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Target size={16} className="text-lima" />
-                  <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
-                    Metas do mês
-                  </h3>
-                </div>
-                <Link
-                  href="/metas"
-                  className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
-                >
-                  Ver todas <ArrowRight size={12} />
-                </Link>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {goals.slice(0, 6).map((goal) => {
-                  const pct = goal.progress.percentage;
-                  const barColor = goal.progress.exceeded
-                    ? "bg-danger"
-                    : pct >= 80
-                      ? "bg-warning"
-                      : "bg-lima";
-                  return (
-                    <div key={goal.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-fg truncate">
-                          <CategoryIcon slug={goal.category?.slug} size={12} className="inline mr-1" />
-                          {goal.category?.name}
-                        </span>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            goal.progress.exceeded
-                              ? "text-danger"
-                              : pct >= 80
-                                ? "text-warning"
-                                : "text-fg-muted",
-                          )}
-                        >
-                          {pct}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-subtle rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-fg-muted">
-                        {formatCurrency(goal.progress.spent)} / {formatCurrency(goal.progress.limit)}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Charts grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <EvolutionChart data={monthly} loading={loading} />
-            <CategoryBreakdown data={categories} loading={loading} />
-          </div>
-
-          {/* Recent transactions (full list) */}
-          <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
-                Transações recentes
-              </h3>
-              <Link
-                href="/transacoes"
-                className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
-              >
-                Ver todas <ArrowRight size={12} />
-              </Link>
-            </div>
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="animate-pulse flex items-center gap-3">
-                    <div className="w-8 h-8 bg-muted rounded-md" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3 w-32 bg-muted rounded" />
-                      <div className="h-2.5 w-20 bg-muted rounded" />
-                    </div>
-                    <div className="h-3 w-16 bg-muted rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : recent.length === 0 ? (
-              <p className="text-sm text-fg-muted text-center py-6">
-                Nenhuma transação registrada ainda.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {recent.map((tx, index) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center gap-3 py-2 border-b border-border last:border-0 animate-fade-in-up"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <CategoryIconWithBg
-                      slug={tx.category.slug}
-                      colorBg={tx.category.colorBg}
-                      colorText={tx.category.colorText}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-fg truncate">
-                        {tx.description || tx.category.name}
-                      </p>
-                      <p className="text-xs text-fg-muted">
-                        {formatDate(tx.date)}
-                        {tx.user?.name && ` · ${tx.user.name.split(" ")[0]}`}
-                      </p>
-                    </div>
-                    <p
-                      className={cn(
-                        "font-[family-name:var(--font-mono)] text-sm font-medium shrink-0",
-                        tx.type === "INCOME" ? "text-success" : "text-danger",
-                      )}
-                    >
-                      {tx.type === "INCOME" ? "+" : "-"}{" "}
-                      {formatCurrency(Number(tx.amount))}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Budget card */}
+            <BudgetCard
+              budget={budget}
+              loading={loading}
+              onEdit={() => setBudgetModalOpen(true)}
+            />
           </div>
         </div>
       </div>

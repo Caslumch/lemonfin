@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CardModal } from "@/components/cards/card-modal";
 import { DeleteCardModal } from "@/components/cards/delete-card-modal";
 import { InvoiceView } from "@/components/cards/invoice-view";
+import { CreditCardVisual } from "@/components/dashboard/credit-card-visual";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 import type { Card } from "@/types/card";
@@ -142,58 +143,37 @@ export default function CartoesPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {cards.map((card) => (
-              <div
-                key={card.id}
-                className="rounded-[20px] border border-border bg-surface shadow-xs p-5 hover:border-fg/20 transition-colors cursor-pointer"
-                onClick={() => setViewingCard(card)}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard size={20} className="text-fg-secondary" />
-                    <h3 className="font-semibold text-fg">{card.name}</h3>
-                  </div>
-                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+              <div key={card.id} className="flex flex-col gap-2">
+                <CreditCardVisual card={card} />
+                <div className="flex items-center justify-between px-1">
+                  <button
+                    onClick={() => setViewingCard(card)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-uva hover:text-uva-hover transition-colors cursor-pointer"
+                  >
+                    Ver fatura
+                  </button>
+                  <div className="flex gap-1">
                     <button
                       onClick={() => {
                         setEditingCard(card);
                         setModalOpen(true);
                       }}
-                      className="p-1.5 rounded text-fg-muted hover:text-fg hover:bg-subtle transition-colors cursor-pointer"
+                      aria-label="Editar cartão"
+                      className="p-1.5 rounded-[10px] text-fg-muted hover:text-fg hover:bg-subtle transition-colors cursor-pointer"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => setDeletingCard(card)}
-                      className="p-1.5 rounded text-fg-muted hover:text-danger hover:bg-danger-muted transition-colors cursor-pointer"
+                      aria-label="Excluir cartão"
+                      className="p-1.5 rounded-[10px] text-fg-muted hover:text-danger hover:bg-danger-muted transition-colors cursor-pointer"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-
-                {card.brand && (
-                  <p className="text-xs text-fg-muted mb-2">{card.brand}</p>
-                )}
-
-                <div className="flex gap-4 text-xs text-fg-secondary">
-                  {card.limit && (
-                    <span>
-                      Limite:{" "}
-                      {Number(card.limit).toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
-                    </span>
-                  )}
-                  <span>Fecha dia {card.closingDay}</span>
-                  {card.dueDay && <span>Vence dia {card.dueDay}</span>}
-                </div>
-
-                <p className="text-xs text-fg-muted mt-3">
-                  Clique para ver a fatura
-                </p>
               </div>
             ))}
           </div>
