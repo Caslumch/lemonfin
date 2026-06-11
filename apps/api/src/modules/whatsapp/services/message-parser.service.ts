@@ -20,7 +20,7 @@ export interface ParsedInstallment {
 
 export type ParseResult =
   | { intent: 'transaction'; data: ParsedTransaction }
-  | { intent: 'query'; queryType: 'summary' | 'expenses' | 'income' | 'balance' }
+  | { intent: 'query'; queryType: 'summary' | 'expenses' | 'income' | 'balance' | 'forecast' }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
   | { intent: 'installment'; data: ParsedInstallment }
@@ -53,12 +53,14 @@ Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENS
 ### 2. QUERY — Consultar finanças
 Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financeiro.
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
+Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance"}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast"}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
 - balance: foco no saldo
+- forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
