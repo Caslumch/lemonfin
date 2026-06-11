@@ -157,6 +157,21 @@ export class TransactionsRepository {
     });
   }
 
+  // Despesas com descrição num período — usado para detectar assinaturas
+  // (mesma descrição recorrendo em meses distintos).
+  async findExpensesWithDescriptionSince(userIds: string[], since: Date) {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId: { in: userIds },
+        type: 'EXPENSE',
+        date: { gte: since },
+        description: { not: null },
+      },
+      select: { description: true, amount: true, date: true, categoryId: true },
+      orderBy: { date: 'asc' },
+    });
+  }
+
   async getMonthlyBreakdown(userIds: string[], months: number = 6) {
     const since = new Date();
     since.setMonth(since.getMonth() - months + 1);
