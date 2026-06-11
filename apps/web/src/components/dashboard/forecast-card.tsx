@@ -28,7 +28,7 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
 
   if (loading) {
     return (
-      <div className="rounded-[24px] bg-surface-accent p-7 shadow-md animate-fade-in-up">
+      <div className="rounded-[20px] bg-surface-accent p-5 shadow-md animate-fade-in-up">
         <div className="animate-pulse space-y-3">
           <div className="h-4 w-32 bg-white/15 rounded-full" />
           <div className="h-9 w-44 bg-white/15 rounded-full" />
@@ -43,7 +43,7 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
   const hasPending = forecast.pending.length > 0;
 
   return (
-    <div className="rounded-[24px] bg-surface-accent p-7 shadow-md animate-fade-in-up">
+    <div className="rounded-[20px] bg-surface-accent p-5 shadow-md animate-fade-in-up">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
