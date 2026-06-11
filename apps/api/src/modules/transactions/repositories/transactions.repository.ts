@@ -28,10 +28,11 @@ export class TransactionsRepository {
     type: 'INCOME' | 'EXPENSE';
     description?: string;
     date?: string;
-    source?: 'MANUAL' | 'WHATSAPP';
+    source?: 'MANUAL' | 'WHATSAPP' | 'RECURRING';
     userId: string;
     categoryId: string;
     cardId?: string;
+    recurringId?: string;
   }) {
     return this.prisma.transaction.create({
       data: {
@@ -43,6 +44,7 @@ export class TransactionsRepository {
         userId: data.userId,
         categoryId: data.categoryId,
         cardId: data.cardId,
+        recurringId: data.recurringId,
       },
       include: txInclude,
     });
