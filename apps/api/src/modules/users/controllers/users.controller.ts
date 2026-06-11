@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   UseGuards,
@@ -8,12 +9,19 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { UsersRepository } from '../repositories/users.repository';
+import { CompleteOnboardingUseCase } from '../use-cases/complete-onboarding.use-case';
+import { onboardingSchema } from '../dtos/onboarding.dto';
+import type { OnboardingInput } from '../dtos/onboarding.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    private readonly completeOnboarding: CompleteOnboardingUseCase,
+  ) {}
 
   @Get('me')
   async getProfile(@CurrentUser() user: { id: string }) {
@@ -24,7 +32,16 @@ export class UsersController {
       name: found.name,
       email: found.email,
       phone: found.phone,
+      onboardedAt: found.onboardedAt,
     };
+  }
+
+  @Post('me/onboarding')
+  async onboarding(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(onboardingSchema)) body: OnboardingInput,
+  ) {
+    return this.completeOnboarding.execute(user.id, body);
   }
 
   @Patch('me')

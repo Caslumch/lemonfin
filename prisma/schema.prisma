@@ -14,6 +14,7 @@ model User {
   passwordHash String        @map("password_hash")
   phone        String?       @unique
   avatarUrl    String?       @map("avatar_url")
+  onboardedAt  DateTime?     @map("onboarded_at")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   transactions   Transaction[]
