@@ -7,6 +7,7 @@ import { FamilyContextService } from '../../families/services/family-context.ser
 import { MessageParserService, ParseResult } from './message-parser.service';
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
+import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 
 interface IncomingMessage {
   from: string;
@@ -27,6 +28,7 @@ export class WhatsappService {
     private readonly messageParser: MessageParserService,
     private readonly wmodeClient: WmodeClientService,
     private readonly getForecast: GetForecastUseCase,
+    private readonly recurringRepository: RecurringRepository,
   ) {}
 
   async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
@@ -68,6 +70,9 @@ export class WhatsappService {
         break;
       case 'installment':
         await this.handleInstallment(from, user.id, result);
+        break;
+      case 'recurring':
+        await this.handleRecurring(from, user.id, result);
         break;
       case 'tips':
         await this.wmodeClient.sendMessage({
@@ -166,6 +171,17 @@ export class WhatsappService {
       }
     }
 
+    // Detecta possível duplicata ANTES de criar (para não pegar a própria).
+    const duplicate = await this.transactionsRepository.findPossibleDuplicate(
+      userIds,
+      {
+        amount: data.amount,
+        categoryId: category.id,
+        type: data.type,
+        withinHours: 48,
+      },
+    );
+
     const transaction = await this.transactionsRepository.create({
       amount: data.amount,
       type: data.type,
@@ -185,6 +201,14 @@ export class WhatsappService {
 
     const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
 
+    let duplicateWarning = '';
+    if (duplicate) {
+      const when = this.relativeWhen(duplicate.createdAt);
+      duplicateWarning =
+        `\n\n⚠️ _Você já registrou ${amountFormatted} em ${category.name} ${when}. ` +
+        `Se foi engano, responda *cancela* para remover._`;
+    }
+
     await this.wmodeClient.sendMessage({
       to: from,
       content:
@@ -192,7 +216,8 @@ export class WhatsappService {
         `*Valor:* ${amountFormatted}\n` +
         `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
         `*Descrição:* ${data.description}\n\n` +
-        `_Registrado via WhatsApp_`,
+        `_Registrado via WhatsApp_` +
+        duplicateWarning,
     });
 
     this.logger.log(
@@ -499,6 +524,94 @@ export class WhatsappService {
     this.logger.log(
       `Installment created: ${data.installments}x ${perInstallment} for user ${userId}`,
     );
+  }
+
+  private async handleRecurring(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'recurring' }>,
+  ) {
+    const { data } = result;
+
+    let category = await this.categoriesRepository.findBySlug(
+      data.categorySlug,
+    );
+    if (!category) {
+      category = await this.categoriesRepository.findBySlug('outros');
+      if (!category) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content: 'Erro interno ao processar categoria. Tente novamente.',
+        });
+        return;
+      }
+    }
+
+    // Resolve cartão se mencionado (somente nome específico).
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    let cardId: string | undefined;
+    let cardLabel = '';
+    if (data.cardName && data.cardName !== 'cartao') {
+      const card = await this.cardsRepository.findByName(data.cardName, userIds);
+      if (card) {
+        cardId = card.id;
+        cardLabel = card.name;
+      }
+    }
+
+    const recurring = await this.recurringRepository.create({
+      description: data.description || category.name,
+      amount: data.amount,
+      type: data.type,
+      dayOfMonth: data.dayOfMonth,
+      userId,
+      categoryId: category.id,
+      cardId,
+    });
+
+    const amountFormatted = data.amount.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    const typeLabel = data.type === 'INCOME' ? 'Receita fixa' : 'Conta fixa';
+    const emoji = data.type === 'INCOME' ? '💰' : '🔁';
+    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `${emoji} *${typeLabel} cadastrada!*\n\n` +
+        `*Valor:* ${amountFormatted}\n` +
+        `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
+        `*Descrição:* ${data.description || category.name}\n` +
+        `*Todo dia:* ${data.dayOfMonth}\n\n` +
+        `_Vou lançar automaticamente todo mês. Gerencie em Recorrentes no app._`,
+    });
+
+    this.logger.log(
+      `Recurring created: ${recurring.id} (day ${data.dayOfMonth}) for user ${userId}`,
+    );
+  }
+
+  // "hoje" / "ontem" / "há N dias" a partir de uma data passada.
+  private relativeWhen(date: Date): string {
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const startOfThat = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    );
+    const diffDays = Math.round(
+      (startOfToday.getTime() - startOfThat.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (diffDays <= 0) return 'hoje';
+    if (diffDays === 1) return 'ontem';
+    return `há ${diffDays} dias`;
   }
 
   private normalizePhone(phone: string): string {

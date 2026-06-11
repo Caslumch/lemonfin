@@ -18,12 +18,22 @@ export interface ParsedInstallment {
   cardName?: string;
 }
 
+export interface ParsedRecurring {
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  dayOfMonth: number;
+  description: string;
+  categorySlug: string;
+  cardName?: string;
+}
+
 export type ParseResult =
   | { intent: 'transaction'; data: ParsedTransaction }
   | { intent: 'query'; queryType: 'summary' | 'expenses' | 'income' | 'balance' | 'forecast' }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
   | { intent: 'installment'; data: ParsedInstallment }
+  | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'tips'; message: string }
   | { intent: 'unknown'; message: string };
 
@@ -83,14 +93,24 @@ Responda: {"intent": "installment", "amount": number, "installments": number, "d
 - installments: número de parcelas
 - cardName: nome do cartão se mencionado, senão null
 
-### 6. TIPS — Dicas e orientações financeiras
+### 6. RECURRING — Conta fixa / recorrência mensal
+Quando o usuário descreve um gasto ou receita que se repete TODO MÊS num dia fixo.
+Palavras-chave: "todo mês", "todo dia X", "mensalmente", "fixo", "assinatura", "sempre no dia".
+Exemplos: "todo dia 5 pago 1500 de aluguel", "todo mês recebo 4000 de salário dia 1", "assinatura da Netflix 55 todo dia 10", "fixo 120 de internet dia 8"
+
+Responda: {"intent": "recurring", "amount": number, "type": "INCOME" | "EXPENSE", "dayOfMonth": number, "description": string, "categorySlug": string, "cardName": string | null}
+- dayOfMonth: dia do mês (1 a 31) em que cai a recorrência
+- type: EXPENSE para contas/gastos fixos, INCOME para receitas fixas (salário, etc.)
+- cardName: nome do cartão se mencionado, senão null
+
+### 7. TIPS — Dicas e orientações financeiras
 Quando o usuário pede dicas, ideias, conselhos ou orientações sobre finanças pessoais.
 Exemplos: "me dá uma dica", "como economizar?", "ideias para investir", "como juntar dinheiro?"
 
 Responda: {"intent": "tips", "message": string}
 Escreva a dica de forma curta, prática e amigável (máx 500 caracteres). Use emojis com moderação.
 
-### 7. UNKNOWN — Mensagem não reconhecida
+### 8. UNKNOWN — Mensagem não reconhecida
 Quando a mensagem não se encaixa em nenhuma das intenções acima.
 
 Responda: {"intent": "unknown", "message": string}
@@ -172,6 +192,32 @@ export class MessageParserService {
             data: {
               amount: Number(json.amount),
               installments: Number(json.installments),
+              description: json.description || '',
+              categorySlug: json.categorySlug,
+              cardName: json.cardName || undefined,
+            },
+          };
+
+        case 'recurring':
+          if (
+            !json.amount ||
+            !json.categorySlug ||
+            !json.dayOfMonth ||
+            json.dayOfMonth < 1 ||
+            json.dayOfMonth > 31
+          ) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender a recorrência. Tente algo como "Todo dia 5 pago 1500 de aluguel".',
+            };
+          }
+          return {
+            intent: 'recurring',
+            data: {
+              amount: Number(json.amount),
+              type: json.type === 'INCOME' ? 'INCOME' : 'EXPENSE',
+              dayOfMonth: Number(json.dayOfMonth),
               description: json.description || '',
               categorySlug: json.categorySlug,
               cardName: json.cardName || undefined,

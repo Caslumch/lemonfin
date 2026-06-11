@@ -9,9 +9,17 @@ import { CategoriesModule } from '../categories/categories.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { CardsModule } from '../cards/cards.module';
 import { FamiliesModule } from '../families/families.module';
+import { RecurringModule } from '../recurring/recurring.module';
 
 @Module({
-  imports: [UsersModule, CategoriesModule, TransactionsModule, CardsModule, FamiliesModule],
+  imports: [
+    UsersModule,
+    CategoriesModule,
+    TransactionsModule,
+    CardsModule,
+    FamiliesModule,
+    RecurringModule,
+  ],
   controllers: [WebhookController],
   providers: [
     WmodeClientService,

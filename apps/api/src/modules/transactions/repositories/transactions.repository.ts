@@ -65,6 +65,31 @@ export class TransactionsRepository {
     });
   }
 
+  // Possível duplicata: mesma valor + categoria + tipo dentro da janela (horas).
+  // Usado para alertar registros repetidos acidentais.
+  async findPossibleDuplicate(
+    userIds: string[],
+    params: {
+      amount: number;
+      categoryId: string;
+      type: 'INCOME' | 'EXPENSE';
+      withinHours: number;
+    },
+  ) {
+    const since = new Date(Date.now() - params.withinHours * 60 * 60 * 1000);
+    return this.prisma.transaction.findFirst({
+      where: {
+        userId: { in: userIds },
+        categoryId: params.categoryId,
+        type: params.type,
+        amount: new Prisma.Decimal(params.amount),
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: txInclude,
+    });
+  }
+
   async findMany(options: FindManyOptions) {
     const where: Prisma.TransactionWhereInput = {
       userId: { in: options.userIds },
