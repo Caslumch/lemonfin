@@ -22,8 +22,23 @@ const SUGGESTIONS = [
   "Resumo do mês",
 ];
 
+const STORAGE_KEY = "lemonfin-chat";
+const MAX_STORED = 40; // limita o histórico salvo
+
+function loadStoredMessages(): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Message[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function ChatPanel({ isOpen }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(loadStoredMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -39,6 +54,19 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Persiste o histórico (sem mensagens vazias do streaming em andamento).
+  useEffect(() => {
+    if (isLoading) return;
+    try {
+      const toStore = messages
+        .filter((m) => m.content.trim().length > 0)
+        .slice(-MAX_STORED);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+    } catch {
+      // storage cheio/indisponível — ignora
+    }
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (isOpen) {
@@ -186,7 +214,14 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => setMessages([])}
+            onClick={() => {
+              setMessages([]);
+              try {
+                window.localStorage.removeItem(STORAGE_KEY);
+              } catch {
+                // ignora
+              }
+            }}
             disabled={isLoading}
             className="flex h-8 w-8 items-center justify-center rounded-[12px] text-fg-muted transition-colors hover:text-danger hover:bg-danger-muted disabled:opacity-30 cursor-pointer"
             aria-label="Limpar conversa"

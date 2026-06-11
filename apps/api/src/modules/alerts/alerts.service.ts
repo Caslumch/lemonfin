@@ -172,6 +172,92 @@ export class AlertsService {
     );
   }
 
+  // Run every Wednesday at 19:00 — detect spending out of pattern
+  @Cron('0 19 * * 3')
+  async detectAnomalies() {
+    this.logger.log('Running anomaly detection...');
+
+    const users = await this.usersRepository.findAllWithPhone();
+
+    for (const user of users) {
+      try {
+        await this.detectAnomaliesForUser(user.id, user.phone!);
+      } catch (error) {
+        this.logger.error(
+          `Anomaly detection failed for user ${user.id}: ${error}`,
+        );
+      }
+    }
+  }
+
+  private async detectAnomaliesForUser(userId: string, phone: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const currentStart = new Date(year, month, 1);
+    const currentEnd = new Date(year, month + 1, 0, 23, 59, 59);
+
+    // Janela histórica: 3 meses anteriores (sem o atual).
+    const histStart = new Date(year, month - 3, 1);
+    const histEnd = new Date(year, month, 0, 23, 59, 59);
+
+    const [currentCats, histCats] = await Promise.all([
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        currentStart.toISOString(),
+        currentEnd.toISOString(),
+      ),
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        histStart.toISOString(),
+        histEnd.toISOString(),
+      ),
+    ]);
+
+    // Média mensal histórica por categoria (total dos 3 meses / 3).
+    const histAvg = new Map<string, number>();
+    for (const c of histCats) {
+      histAvg.set(c.categoryId, c.total / 3);
+    }
+
+    const anomalies: string[] = [];
+    for (const cur of currentCats) {
+      const avg = histAvg.get(cur.categoryId);
+      // Precisa de histórico relevante para comparar.
+      if (!avg || avg < 50) continue;
+
+      const ratio = cur.total / avg;
+      const excess = cur.total - avg;
+
+      // Significativamente acima (>= 1.5x) e excedente relevante (>= R$100).
+      if (ratio >= 1.5 && excess >= 100) {
+        const icon = cur.category?.icon ?? '';
+        const name = cur.category?.name ?? 'categoria';
+        anomalies.push(
+          `${icon} *${name}*: ${formatBRL(cur.total)} este mês — ` +
+            `${Math.round((ratio - 1) * 100)}% acima da sua média (${formatBRL(avg)})`,
+        );
+      }
+    }
+
+    if (anomalies.length === 0) return;
+
+    const message = [
+      '🔎 *Gasto fora do padrão*',
+      '',
+      'Percebi gastos bem acima da sua média nestas categorias:',
+      '',
+      ...anomalies,
+      '',
+      'Vale dar uma olhada! 👀',
+    ].join('\n');
+
+    await this.wmodeClient.sendMessage({ to: phone, content: message });
+    this.logger.log(`Sent ${anomalies.length} anomaly alert(s) to ${phone}`);
+  }
+
   private async sendSpendingAlertsForUser(userId: string, phone: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
