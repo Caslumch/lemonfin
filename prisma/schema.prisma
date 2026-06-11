@@ -20,6 +20,7 @@ model User {
   cards          Card[]
   goals          Goal[]
   recurring      RecurringTransaction[]
+  budgets        Budget[]
   ownedFamilies  Family[]       @relation("FamilyOwner")
   familyMembers  FamilyMember[]
 
@@ -175,4 +176,19 @@ model Goal {
 enum GoalPeriod {
   MONTHLY
   WEEKLY
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  month     String // formato 'YYYY-MM'
+  amount    Decimal  @db.Decimal(12, 2)
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month])
+  @@index([userId])
+  @@map("budgets")
 }
