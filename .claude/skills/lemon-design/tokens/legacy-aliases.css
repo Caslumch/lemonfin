@@ -1,0 +1,37 @@
+/* ===========================================================================
+   LemonFin — Legacy alias shim (OPCIONAL, para migração gradual)
+   O design system ANTIGO usava nomes como --color-primary, --color-gray-100…
+   Este arquivo mapeia esses nomes ANTIGOS para os tokens NOVOS, para que seu
+   código existente continue funcionando enquanto você migra aos poucos.
+
+   COMO USAR: importe DEPOIS do styles.css, só durante a migração:
+     <link rel="stylesheet" href="styles.css" />
+     <link rel="stylesheet" href="tokens/legacy-aliases.css" />
+   Quando terminar de trocar tudo pelos tokens novos, REMOVA este arquivo.
+   =========================================================================== */
+
+:root {
+  /* Primárias */
+  --color-primary:        var(--lemon-400);
+  --color-primary-hover:  var(--lemon-hover);
+  --color-primary-muted:  var(--lemon-100);
+
+  /* Neutras */
+  --color-dark:      var(--dark);
+  --color-dark-soft: var(--dark-soft);
+  --color-gray-900:  var(--gray-900);
+  --color-gray-600:  var(--gray-600);
+  --color-gray-400:  var(--gray-400);
+  --color-gray-200:  var(--gray-200);
+  --color-gray-100:  var(--gray-100);
+  --color-gray-50:   var(--gray-50);
+  --color-white:     var(--white);
+
+  /* Semânticas */
+  --color-success:        var(--success);
+  --color-success-muted:  var(--success-muted);
+  --color-danger:         var(--danger);
+  --color-danger-muted:   var(--danger-muted);
+  --color-warning:        var(--warning);
+  --color-warning-muted:  var(--warning-muted);
+}

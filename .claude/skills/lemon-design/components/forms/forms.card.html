@@ -1,0 +1,50 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Forms" subtitle="Input, select, tabs, switch" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-content); font-family: var(--font-body); }
+  .wrap { padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; align-items: center; }
+  .lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px; }
+  .full { grid-column: 1 / -1; }
+  .row { display: flex; align-items: center; gap: 14px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Input, Select, Tabs, Switch } = window.LemonFinDesignSystem_1143b6;
+function App() {
+  const [tab, setTab] = React.useState('todas');
+  const [on, setOn] = React.useState(true);
+  const [on2, setOn2] = React.useState(false);
+  const [cat, setCat] = React.useState('');
+  return (
+    <div className="wrap">
+      <div><div className="lbl">Input · valor</div><Input prefix="R$" placeholder="0,00" /></div>
+      <div><div className="lbl">Input · texto</div><Input placeholder="Descrição da transação" defaultValue="Gasto com Uber" /></div>
+      <div><div className="lbl">Select</div><Select value={cat} onChange={(e)=>setCat(e.target.value)} placeholder="Todas categorias" options={[ 'Transporte','Alimentação','Moradia','Lazer' ]} /></div>
+      <div><div className="lbl">Input · erro</div><Input error defaultValue="abc" /></div>
+      <div className="full"><div className="lbl">Tabs (segmented)</div>
+        <Tabs value={tab} onChange={setTab} tabs={[ {value:'todas',label:'Todas'},{value:'despesas',label:'Despesas'},{value:'receitas',label:'Receitas'} ]} />
+      </div>
+      <div className="full"><div className="lbl">Switch</div>
+        <div className="row">
+          <Switch checked={on} onChange={setOn} /><span style={{fontSize:14,color:'var(--text-secondary)'}}>Ativado</span>
+          <Switch checked={on2} onChange={setOn2} /><span style={{fontSize:14,color:'var(--text-secondary)'}}>Desativado</span>
+          <Switch size="sm" checked disabled /><span style={{fontSize:14,color:'var(--text-tertiary)'}}>Disabled</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

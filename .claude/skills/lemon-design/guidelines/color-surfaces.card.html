@@ -1,0 +1,22 @@
+<!-- @dsCard group="Colors" viewport="700x200" name="Surfaces — the frame" subtitle="Dark shell · light panel · black accent card" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;font-family:var(--font-body)}
+  .shell{background:var(--shell-bg);padding:18px;display:flex;gap:16px;align-items:stretch;min-height:200px;box-sizing:border-box}
+  .panel{flex:1;background:var(--bg-content);border-radius:var(--radius-3xl);padding:18px;display:flex;gap:12px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);box-shadow:var(--shadow-sm);flex:1;padding:14px}
+  .accent{background:var(--surface-dark);color:#fff;border-radius:var(--radius-xl);flex:1;padding:14px;display:flex;flex-direction:column;justify-content:space-between}
+  .lbl{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+  .muted{color:var(--text-tertiary)}
+  .val{font-family:var(--font-display);font-weight:700;font-size:24px;margin-top:8px}
+</style></head>
+<body>
+  <div class="shell">
+    <div class="panel">
+      <div class="card"><div class="lbl muted">surface</div><div class="val" style="color:var(--text-primary)">R$ 3.450</div></div>
+      <div class="accent"><div class="lbl" style="color:var(--text-on-dark-muted)">surface-dark</div><div class="val">R$ 6.556</div></div>
+    </div>
+  </div>
+</body></html>

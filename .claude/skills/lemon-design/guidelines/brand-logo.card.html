@@ -1,0 +1,24 @@
+<!-- @dsCard group="Brand" viewport="700x200" name="Logo lockup" subtitle="Lemon disc + wordmark · on light & dark" -->
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;font-family:var(--font-display);display:flex;min-height:200px}
+  .half{flex:1;display:flex;align-items:center;justify-content:center;gap:14px}
+  .light{background:var(--bg-content)}
+  .dark{background:var(--shell-bg)}
+  .mark{width:44px;height:44px}
+  .word{font-weight:800;font-size:30px;letter-spacing:-.02em}
+  .on-light{color:var(--text-primary)}
+  .on-dark{color:#fff}
+</style></head>
+<body>
+  <div class="half light">
+    <img class="mark" src="../assets/lemonfin-mark.svg" alt="" />
+    <span class="word on-light">LemonFin</span>
+  </div>
+  <div class="half dark">
+    <img class="mark" src="../assets/lemonfin-mark.svg" alt="" />
+    <span class="word on-dark">LemonFin</span>
+  </div>
+</body></html>

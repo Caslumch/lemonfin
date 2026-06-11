@@ -1,0 +1,48 @@
+/* ===========================================================================
+   LemonFin — Spacing & radius & shadow tokens
+   4px base grid. Radii evolved rounder to match the reference language.
+   =========================================================================== */
+
+:root {
+  /* ---- Spacing scale (4px base) ----------------------------------------- */
+  --space-0:  0px;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  32px;
+  --space-8:  40px;
+  --space-9:  48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 96px;
+
+  /* ---- Border radius (rounder than the original system) ----------------- */
+  --radius-xs:   8px;    /* tags, small badges */
+  --radius-sm:   12px;   /* buttons, inputs, nav items */
+  --radius-md:   16px;   /* chips, icon tiles, small cards */
+  --radius-lg:   20px;   /* default cards */
+  --radius-xl:   24px;   /* large cards, dark accent cards */
+  --radius-2xl:  28px;   /* credit card, modals */
+  --radius-3xl:  36px;   /* the framed content panel */
+  --radius-full: 9999px; /* pills, avatars, toggles, FAB */
+
+  /* ---- Elevation — soft, low-contrast (reference uses very subtle depth) - */
+  --shadow-xs: 0 1px 2px rgba(13, 13, 13, 0.04);
+  --shadow-sm: 0 2px 8px rgba(13, 13, 13, 0.05);
+  --shadow-md: 0 6px 20px rgba(13, 13, 13, 0.06);
+  --shadow-lg: 0 16px 40px rgba(13, 13, 13, 0.10);
+  --shadow-xl: 0 24px 60px rgba(13, 13, 13, 0.14);
+
+  /* Colored glows for primary/secondary emphasis */
+  --shadow-lemon: 0 8px 24px rgba(212, 244, 0, 0.40);
+  --shadow-grape: 0 8px 22px rgba(108, 92, 231, 0.40);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --duration-fast: 120ms; /* @kind other */
+  --duration-base: 180ms; /* @kind other */
+  --duration-slow: 280ms; /* @kind other */
+}

@@ -1,0 +1,48 @@
+/* ===========================================================================
+   LemonFin — Typography tokens
+   Outfit (display / big money numbers), DM Sans (UI/body), JetBrains Mono
+   (tabular figures). Carried over from the original system.
+   =========================================================================== */
+
+:root {
+  /* Families */
+  --font-display: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Weights */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-black:    800;
+
+  /* Type scale — size / line-height / weight */
+  --text-display-size: 48px;  --text-display-lh: 1.05;  --text-display-weight: 700;
+  --text-hero-size:    36px;  --text-hero-lh:    1.1;   --text-hero-weight:    700;
+  --text-h1-size:      32px;  --text-h1-lh:      1.15;  --text-h1-weight:      700;
+  --text-h2-size:      24px;  --text-h2-lh:      1.25;  --text-h2-weight:      700;
+  --text-h3-size:      18px;  --text-h3-lh:      1.4;   --text-h3-weight:      600;
+  --text-body-size:    15px;  --text-body-lh:    1.6;   --text-body-weight:    400;
+  --text-sm-size:      13px;  --text-sm-lh:      1.5;   --text-sm-weight:      400;
+  --text-caption-size: 11px;  --text-caption-lh: 1.4;   --text-caption-weight: 600;
+  --text-mono-size:    14px;  --text-mono-lh:    1.5;   --text-mono-weight:    500;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.02em;  /* big display numbers & headings */
+  --tracking-normal:  0;
+  --tracking-wide:    0.06em;  /* uppercase captions / overlines */
+
+  /* Number rendering — tabular figures for money */
+  --num-features: "tnum" 1, "lnum" 1; /* @kind other */
+}
+
+/* Sensible defaults so any consumer page picks up the brand voice */
+html {
+  font-family: var(--font-body);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-lh);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

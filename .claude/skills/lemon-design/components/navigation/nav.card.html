@@ -1,0 +1,50 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Navigation" subtitle="Sidebar items — light pill & dark rail" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-content); font-family: var(--font-body); }
+  .wrap { display: flex; gap: 20px; padding: 22px; }
+  .panel { padding: 14px; border-radius: var(--radius-xl); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { NavItem } = window.LemonFin;
+const ic = (d) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
+const Home = ic(<><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></>);
+const Swap = ic(<><path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/></>);
+const Card = ic(<><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19"/></>);
+const Chart = ic(<><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></>);
+
+function App() {
+  const [a, setA] = React.useState('home');
+  const [b, setB] = React.useState('swap');
+  return (
+    <div className="wrap">
+      <div className="panel" style={{ background: 'var(--surface)', width: 230, display: 'flex', flexDirection: 'column', gap: 4, boxShadow: 'var(--shadow-sm)' }}>
+        <NavItem icon={Home} label="Home" active={a==='home'} onClick={() => setA('home')} />
+        <NavItem icon={Swap} label="Transações" badge="3" active={a==='swap'} onClick={() => setA('swap')} />
+        <NavItem icon={Card} label="Cartões" active={a==='card'} onClick={() => setA('card')} />
+        <NavItem icon={Chart} label="Insights" active={a==='chart'} onClick={() => setA('chart')} />
+      </div>
+      <div className="panel" style={{ background: 'var(--surface-dark)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <NavItem tone="dark" icon={Home} active={b==='home'} onClick={() => setB('home')} />
+        <NavItem tone="dark" icon={Swap} active={b==='swap'} onClick={() => setB('swap')} />
+        <NavItem tone="dark" icon={Card} active={b==='card'} onClick={() => setB('card')} />
+        <NavItem tone="dark" icon={Chart} active={b==='chart'} onClick={() => setB('chart')} />
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
