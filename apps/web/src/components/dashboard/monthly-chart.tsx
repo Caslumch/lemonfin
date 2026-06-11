@@ -41,7 +41,7 @@ interface MonthlyChartProps {
 export function MonthlyChart({ data, loading }: MonthlyChartProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+      <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-40 bg-muted rounded" />
           <div className="h-48 bg-muted rounded" />
@@ -85,15 +85,15 @@ export function MonthlyChart({ data, loading }: MonthlyChartProps) {
               contentStyle={{
                 backgroundColor: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
-                borderRadius: "8px",
+                borderRadius: "12px",
                 fontSize: "13px",
               }}
             />
             <Bar
               dataKey="expense"
-              radius={[4, 4, 0, 0]}
+              radius={[8, 8, 4, 4]}
               fill="var(--color-fg-muted)"
-              activeBar={{ fill: "var(--color-lima)" }}
+              activeBar={{ fill: "var(--color-uva)" }}
             />
           </BarChart>
         </ResponsiveContainer>

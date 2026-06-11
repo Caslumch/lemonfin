@@ -18,7 +18,7 @@ interface CategoryBreakdownProps {
 export function CategoryBreakdown({ data, loading }: CategoryBreakdownProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+      <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-48 bg-muted rounded" />
           {Array.from({ length: 4 }).map((_, i) => (
