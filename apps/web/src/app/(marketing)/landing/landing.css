@@ -1,0 +1,144 @@
+/* Isolated design tokens for the LemonFin marketing landing page.
+   Scoped to .lf-landing so they don't leak into the rest of the app. */
+.lf-landing {
+  /* brand */
+  --lemon-100: #F3FCB8;
+  --lemon-400: #D4F400;
+  --lemon-500: #C2E000;
+  --lemon-hover: #BDD900;
+  --grape-100: #E3DEFB;
+  --grape-400: #8A7BEC;
+  --grape-500: #6C5CE7;
+  --grape-600: #5544D6;
+  --grape-700: #4534AE;
+
+  /* neutrals / surfaces */
+  --dark: #0D0D0D;
+  --shell-bg: #1C1C1E;
+  --white: #FFFFFF;
+  --bg-content: #F4F4F2;
+  --surface: #FFFFFF;
+  --surface-muted: #FAFAF9;
+  --surface-inset: #F1F1EF;
+  --surface-accent: #0D0D0D;
+  --surface-dark: #0D0D0D;
+  --border: rgba(13, 13, 13, 0.07);
+  --border-strong: rgba(13, 13, 13, 0.12);
+  --border-dark: rgba(255, 255, 255, 0.08);
+
+  /* text */
+  --text-primary: #0D0D0D;
+  --text-secondary: #6B6B6B;
+  --text-tertiary: #9E9E9E;
+  --text-on-dark: #FFFFFF;
+  --text-on-dark-muted: rgba(255, 255, 255, 0.58);
+  --text-on-lemon: #0D0D0D;
+  --text-on-grape: #FFFFFF;
+
+  /* semantic */
+  --success: #22C55E;
+  --success-strong: #16A34A;
+  --success-muted: rgba(34, 197, 94, 0.12);
+  --danger: #EF4444;
+  --danger-strong: #DC2626;
+  --danger-muted: rgba(239, 68, 68, 0.10);
+  --warning: #F59E0B;
+  --warning-muted: rgba(245, 158, 11, 0.12);
+
+  /* category palette */
+  --cat-food-bg: #FFF3E0;       --cat-food-fg: #E65100;
+  --cat-transport-bg: #E3F2FD;  --cat-transport-fg: #1565C0;
+  --cat-housing-bg: #F3E5F5;    --cat-housing-fg: #7B1FA2;
+  --cat-leisure-bg: #E8F5E9;    --cat-leisure-fg: #2E7D32;
+  --cat-health-bg: #FBE9E7;     --cat-health-fg: #BF360C;
+  --cat-education-bg: #E0F7FA;  --cat-education-fg: #00838F;
+  --cat-shopping-bg: #FFF8E1;   --cat-shopping-fg: #F57F17;
+  --cat-salary-bg: #E8F5E9;     --cat-salary-fg: #2E7D32;
+  --cat-freelance-bg: #EDE7F6;  --cat-freelance-fg: #4527A0;
+  --cat-other-bg: #F5F5F5;      --cat-other-fg: #6B6B6B;
+
+  /* radii */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+  --radius-3xl: 36px;
+  --radius-full: 9999px;
+
+  /* shadows */
+  --shadow-xs: 0 1px 3px rgba(13, 13, 13, 0.04);
+  --shadow-sm: 0 2px 8px rgba(13, 13, 13, 0.05);
+  --shadow-md: 0 6px 20px rgba(13, 13, 13, 0.06);
+  --shadow-lg: 0 16px 40px rgba(13, 13, 13, 0.10);
+  --shadow-xl: 0 24px 60px rgba(13, 13, 13, 0.14);
+
+  /* type / motion */
+  --tracking-tight: -0.02em;
+  --num-features: "tnum" 1, "lnum" 1;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+
+  background: var(--bg-content);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.lf-landing *,
+.lf-landing *::before,
+.lf-landing *::after {
+  box-sizing: border-box;
+}
+
+@keyframes lf-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ---- responsive (HANDOFF breakpoints: 980px, 600px) ---------------------- */
+@media (max-width: 980px) {
+  .lf-landing .lf-hero-grid,
+  .lf-landing .lf-feat-row,
+  .lf-landing .lf-shared-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .lf-landing .lf-feat-text-flip {
+    order: 1 !important;
+  }
+  .lf-landing .lf-feat-visual-flip {
+    order: 2 !important;
+  }
+  .lf-landing .lf-hero-mock {
+    min-height: 0 !important;
+    margin-top: 24px;
+  }
+  .lf-landing .lf-price-card {
+    grid-template-columns: 1fr !important;
+  }
+  .lf-landing .lf-proof-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .lf-landing .lf-tst-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .lf-landing .lf-foot-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .lf-landing .lf-nav-links {
+    display: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .lf-landing .lf-proof-grid,
+  .lf-landing .lf-tst-grid,
+  .lf-landing .lf-incl-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .lf-landing .lf-nav-login {
+    display: none !important;
+  }
+}

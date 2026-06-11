@@ -9,7 +9,10 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/register");
 
-  if (!session && !isAuthPage) {
+  // Rotas públicas de marketing (landing) — acessíveis sem login.
+  const isPublicPage = request.nextUrl.pathname.startsWith("/landing");
+
+  if (!session && !isAuthPage && !isPublicPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
