@@ -35,4 +35,12 @@ export class UsersRepository {
       select: { id: true, name: true, email: true, phone: true },
     });
   }
+
+  async markOnboarded(id: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { onboardedAt: new Date() },
+      select: { id: true, onboardedAt: true },
+    });
+  }
 }
