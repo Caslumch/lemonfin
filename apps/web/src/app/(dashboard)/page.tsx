@@ -13,6 +13,8 @@ import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
 import { EvolutionChart } from "@/components/dashboard/evolution-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
+import { BudgetCard } from "@/components/dashboard/budget-card";
+import { BudgetModal } from "@/components/dashboard/budget-modal";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 import type {
@@ -26,6 +28,7 @@ import type {
 } from "@/types/transaction";
 import type { Goal } from "@/types/goal";
 import type { Forecast } from "@/types/forecast";
+import type { BudgetStatus } from "@/types/budget";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -71,11 +74,13 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<SpendingAlert[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes] =
+      const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes, budgetRes] =
         await Promise.all([
           fetchApi<TransactionSummary>("/transactions/summary"),
           fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -86,6 +91,7 @@ export default function DashboardPage() {
           fetchApi<InsightsData>("/transactions/insights").catch(() => null),
           fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
           fetchApi<Forecast>("/transactions/forecast").catch(() => null),
+          fetchApi<BudgetStatus>("/budgets").catch(() => null),
         ]);
 
       setSummary(summaryRes);
@@ -95,6 +101,7 @@ export default function DashboardPage() {
       if (insightsRes) setAlerts(insightsRes.alerts);
       setGoals(goalsRes);
       setForecast(forecastRes);
+      setBudget(budgetRes);
     } catch (error) {
       logApiError("load:dashboard", error);
     } finally {
@@ -110,7 +117,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes] =
+        const [summaryRes, monthlyRes, categoryRes, recentRes, insightsRes, goalsRes, forecastRes, budgetRes] =
           await Promise.all([
             fetchApi<TransactionSummary>("/transactions/summary"),
             fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
@@ -121,6 +128,7 @@ export default function DashboardPage() {
             fetchApi<InsightsData>("/transactions/insights").catch(() => null),
             fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
             fetchApi<Forecast>("/transactions/forecast").catch(() => null),
+            fetchApi<BudgetStatus>("/budgets").catch(() => null),
           ]);
         setSummary(summaryRes);
         setMonthly(monthlyRes);
@@ -128,6 +136,7 @@ export default function DashboardPage() {
         setRecent(recentRes.data);
         if (insightsRes) setAlerts(insightsRes.alerts);
         setGoals(goalsRes);
+        setBudget(budgetRes);
         setForecast(forecastRes);
       } catch (error) {
         logApiError("poll:dashboard", error);
@@ -144,6 +153,28 @@ export default function DashboardPage() {
     if (!prevMonthData || previous === 0) return null;
     return ((current - previous) / previous) * 100;
   }
+
+  async function handleSaveBudget(amount: number) {
+    const month =
+      budget?.month ??
+      `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    try {
+      await fetchApi("/budgets", {
+        method: "PUT",
+        body: JSON.stringify({ month, amount }),
+      });
+      toast.success("Orçamento atualizado");
+      fetchDashboard();
+    } catch (error) {
+      logApiError("save:budget", error);
+      toast.error("Erro ao salvar orçamento");
+      throw new Error("save failed");
+    }
+  }
+
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+  }).format(new Date());
 
   const stats = [
     {
@@ -241,6 +272,13 @@ export default function DashboardPage() {
 
         {/* Forecast card */}
         <ForecastCard forecast={forecast} loading={loading} />
+
+        {/* Budget card */}
+        <BudgetCard
+          budget={budget}
+          loading={loading}
+          onEdit={() => setBudgetModalOpen(true)}
+        />
 
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -492,6 +530,14 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      <BudgetModal
+        open={budgetModalOpen}
+        onClose={() => setBudgetModalOpen(false)}
+        onSubmit={handleSaveBudget}
+        currentAmount={budget?.amount ?? null}
+        monthLabel={monthLabel}
+      />
     </>
   );
 }
