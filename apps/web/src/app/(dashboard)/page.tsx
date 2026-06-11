@@ -216,6 +216,7 @@ export default function DashboardPage() {
   }).format(new Date());
 
   const userName = session?.user?.name ?? "Você";
+  const firstName = session?.user?.name?.trim().split(" ")[0] ?? "";
   const savings = Math.max(0, (summary?.income ?? 0) - (summary?.expense ?? 0));
 
   // Receita variation (income, month over month)
@@ -246,7 +247,7 @@ export default function DashboardPage() {
                 </button>
                 <div>
                   <h1 className="font-[family-name:var(--font-display)] text-[28px] md:text-[38px] leading-none font-bold tracking-tight text-fg">
-                    Bem-vindo de volta!
+                    Bem-vindo de volta{firstName ? `, ${firstName}` : ""}!
                   </h1>
                   <p className="mt-1.5 text-sm text-fg-secondary">Painel</p>
                 </div>
