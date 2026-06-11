@@ -6,6 +6,7 @@ import { CardsRepository } from '../../cards/repositories/cards.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import { MessageParserService, ParseResult } from './message-parser.service';
 import { WmodeClientService } from './wmode-client.service';
+import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 
 interface IncomingMessage {
   from: string;
@@ -25,6 +26,7 @@ export class WhatsappService {
     private readonly familyContext: FamilyContextService,
     private readonly messageParser: MessageParserService,
     private readonly wmodeClient: WmodeClientService,
+    private readonly getForecast: GetForecastUseCase,
   ) {}
 
   async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
@@ -203,6 +205,11 @@ export class WhatsappService {
     userId: string,
     result: Extract<ParseResult, { intent: 'query' }>,
   ) {
+    if (result.queryType === 'forecast') {
+      await this.handleForecast(from, userId);
+      return;
+    }
+
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startDate = new Date(
@@ -273,6 +280,54 @@ export class WhatsappService {
     }
 
     await this.wmodeClient.sendMessage({ to: from, content: message });
+  }
+
+  private async handleForecast(from: string, userId: string) {
+    const forecast = await this.getForecast.execute(userId);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const emoji = forecast.projectedBalance >= 0 ? '✅' : '🔴';
+    const daysLabel =
+      forecast.daysRemaining > 0
+        ? `faltam ${forecast.daysRemaining} ${forecast.daysRemaining === 1 ? 'dia' : 'dias'}`
+        : 'último dia do mês';
+
+    const lines = [
+      `${emoji} *Previsão de fim do mês*`,
+      '',
+      `*Saldo hoje:* ${fmt(forecast.currentBalance)}`,
+    ];
+
+    if (forecast.pendingIncome > 0) {
+      lines.push(`💰 *A receber:* ${fmt(forecast.pendingIncome)}`);
+    }
+    if (forecast.pendingExpense > 0) {
+      lines.push(`💸 *A pagar:* ${fmt(forecast.pendingExpense)}`);
+    }
+
+    lines.push(
+      '',
+      `${emoji} *Previsão:* ${fmt(forecast.projectedBalance)}`,
+      `_${daysLabel} no mês_`,
+    );
+
+    if (forecast.pending.length > 0) {
+      lines.push('', '*Contas fixas ainda neste mês:*');
+      for (const p of forecast.pending) {
+        const sign = p.type === 'INCOME' ? '+' : '−';
+        const icon = p.category?.icon ?? '';
+        lines.push(
+          `  ${icon} ${p.description} (dia ${p.dayOfMonth}): ${sign} ${fmt(p.amount)}`,
+        );
+      }
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content: lines.join('\n'),
+    });
   }
 
   private async handleCancel(from: string, userId: string) {

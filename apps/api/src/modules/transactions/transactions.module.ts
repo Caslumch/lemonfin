@@ -29,6 +29,6 @@ import { RecurringModule } from '../recurring/recurring.module';
     GetInsightsUseCase,
     GetForecastUseCase,
   ],
-  exports: [TransactionsRepository],
+  exports: [TransactionsRepository, GetForecastUseCase],
 })
 export class TransactionsModule {}
