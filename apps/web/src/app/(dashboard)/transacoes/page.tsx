@@ -11,6 +11,7 @@ import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { DeleteModal } from "@/components/transactions/delete-modal";
 import { FiltersBar } from "@/components/transactions/filters-bar";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type {
   Transaction,
   TransactionSummary,
@@ -47,8 +48,8 @@ export default function TransacoesPage() {
 
   // Fetch categories and cards once
   useEffect(() => {
-    fetchApi<Category[]>("/categories").then(setCategories).catch(() => {});
-    fetchApi<Card[]>("/cards").then(setCards).catch(() => {});
+    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
+    fetchApi<Card[]>("/cards").then(setCards).catch((error) => logApiError("load:cards", error));
   }, [fetchApi]);
 
   // Build query params (shared between fetch and poll)
@@ -84,7 +85,8 @@ export default function TransacoesPage() {
       );
       setTransactions(res.data);
       setMeta(res.meta);
-    } catch {
+    } catch (error) {
+      logApiError("load:transactions", error);
       setTransactions([]);
     } finally {
       setLoading(false);
@@ -100,7 +102,8 @@ export default function TransacoesPage() {
         `/transactions/summary${qs ? `?${qs}` : ""}`,
       );
       setSummary(res);
-    } catch {
+    } catch (error) {
+      logApiError("load:summary", error);
       setSummary(null);
     } finally {
       setSummaryLoading(false);
@@ -131,8 +134,8 @@ export default function TransacoesPage() {
           `/transactions/summary${qs ? `?${qs}` : ""}`,
         );
         setSummary(summaryRes);
-      } catch {
-        // Silent fail — next poll will retry
+      } catch (error) {
+        logApiError("poll:transactions", error);
       }
     }, 30_000);
 

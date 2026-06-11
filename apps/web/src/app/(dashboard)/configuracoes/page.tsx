@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import { cn } from "@/lib/utils";
 
 interface FamilyMember {
@@ -54,6 +55,7 @@ export default function ConfiguracoesPage() {
   const [profilePhone, setProfilePhone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState(false);
 
   const [family, setFamily] = useState<Family | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,13 +72,16 @@ export default function ConfiguracoesPage() {
   const [leaving, setLeaving] = useState(false);
 
   const fetchProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    setProfileError(false);
     try {
       const data = await fetchApi<UserProfile>("/users/me");
       setProfile(data);
       setProfileName(data.name);
       setProfilePhone(phoneToInternational(data.phone));
-    } catch {
-      // ignore
+    } catch (error) {
+      logApiError("load:profile", error);
+      setProfileError(true);
     } finally {
       setLoadingProfile(false);
     }
@@ -86,7 +91,8 @@ export default function ConfiguracoesPage() {
     try {
       const data = await fetchApi<Family | null>("/families/me");
       setFamily(data);
-    } catch {
+    } catch (error) {
+      logApiError("load:family", error);
       setFamily(null);
     } finally {
       setLoading(false);
@@ -201,6 +207,15 @@ export default function ConfiguracoesPage() {
           {loadingProfile ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : profileError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar seu perfil.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchProfile}>
+                Tentar novamente
+              </Button>
             </div>
           ) : (
             <form onSubmit={handleSaveProfile} className="space-y-4">

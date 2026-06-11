@@ -9,6 +9,7 @@ import { CardModal } from "@/components/cards/card-modal";
 import { DeleteCardModal } from "@/components/cards/delete-card-modal";
 import { InvoiceView } from "@/components/cards/invoice-view";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type { Card } from "@/types/card";
 
 export default function CartoesPage() {
@@ -30,7 +31,8 @@ export default function CartoesPage() {
     try {
       const data = await fetchApi<Card[]>("/cards");
       setCards(data);
-    } catch {
+    } catch (error) {
+      logApiError("load:cards", error);
       setCards([]);
     } finally {
       setLoading(false);

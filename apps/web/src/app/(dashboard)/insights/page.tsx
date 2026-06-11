@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type {
   InsightsData,
   CategoryComparison,
@@ -37,8 +38,8 @@ export default function InsightsPage() {
     try {
       const res = await fetchApi<InsightsData>("/transactions/insights");
       setData(res);
-    } catch {
-      // Silent fail
+    } catch (error) {
+      logApiError("load:insights", error);
     } finally {
       setLoading(false);
     }

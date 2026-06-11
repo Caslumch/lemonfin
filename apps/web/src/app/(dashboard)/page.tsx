@@ -14,6 +14,7 @@ import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
 import { EvolutionChart } from "@/components/dashboard/evolution-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { useApi } from "@/hooks/use-api";
+import { logApiError } from "@/lib/log-error";
 import type {
   Transaction,
   TransactionSummary,
@@ -94,8 +95,8 @@ export default function DashboardPage() {
       if (insightsRes) setAlerts(insightsRes.alerts);
       setGoals(goalsRes);
       setForecast(forecastRes);
-    } catch {
-      // Silent fail
+    } catch (error) {
+      logApiError("load:dashboard", error);
     } finally {
       setLoading(false);
     }
@@ -128,8 +129,8 @@ export default function DashboardPage() {
         if (insightsRes) setAlerts(insightsRes.alerts);
         setGoals(goalsRes);
         setForecast(forecastRes);
-      } catch {
-        // Silent fail
+      } catch (error) {
+        logApiError("poll:dashboard", error);
       }
     }, 60_000);
     return () => clearInterval(interval);
