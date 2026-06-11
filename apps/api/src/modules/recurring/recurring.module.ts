@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { RecurringController } from './controllers/recurring.controller';
 import { RecurringRepository } from './repositories/recurring.repository';
 import { RecurringMaterializerService } from './services/recurring-materializer.service';
@@ -12,7 +12,12 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { FamiliesModule } from '../families/families.module';
 
 @Module({
-  imports: [CategoriesModule, CardsModule, TransactionsModule, FamiliesModule],
+  imports: [
+    CategoriesModule,
+    CardsModule,
+    forwardRef(() => TransactionsModule),
+    FamiliesModule,
+  ],
   controllers: [RecurringController],
   providers: [
     RecurringRepository,

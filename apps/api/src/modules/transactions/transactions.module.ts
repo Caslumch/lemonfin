@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TransactionsController } from './controllers/transactions.controller';
 import { TransactionsRepository } from './repositories/transactions.repository';
 import { CreateTransactionUseCase } from './use-cases/create-transaction.use-case';
@@ -9,11 +9,13 @@ import { GetSummaryUseCase } from './use-cases/get-summary.use-case';
 import { GetMonthlyBreakdownUseCase } from './use-cases/get-monthly-breakdown.use-case';
 import { GetCategoryBreakdownUseCase } from './use-cases/get-category-breakdown.use-case';
 import { GetInsightsUseCase } from './use-cases/get-insights.use-case';
+import { GetForecastUseCase } from './use-cases/get-forecast.use-case';
 import { CategoriesModule } from '../categories/categories.module';
 import { FamiliesModule } from '../families/families.module';
+import { RecurringModule } from '../recurring/recurring.module';
 
 @Module({
-  imports: [CategoriesModule, FamiliesModule],
+  imports: [CategoriesModule, FamiliesModule, forwardRef(() => RecurringModule)],
   controllers: [TransactionsController],
   providers: [
     TransactionsRepository,
@@ -25,6 +27,7 @@ import { FamiliesModule } from '../families/families.module';
     GetMonthlyBreakdownUseCase,
     GetCategoryBreakdownUseCase,
     GetInsightsUseCase,
+    GetForecastUseCase,
   ],
   exports: [TransactionsRepository],
 })

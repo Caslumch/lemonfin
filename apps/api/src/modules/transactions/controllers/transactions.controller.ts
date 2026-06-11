@@ -20,6 +20,7 @@ import { GetSummaryUseCase } from '../use-cases/get-summary.use-case';
 import { GetMonthlyBreakdownUseCase } from '../use-cases/get-monthly-breakdown.use-case';
 import { GetCategoryBreakdownUseCase } from '../use-cases/get-category-breakdown.use-case';
 import { GetInsightsUseCase } from '../use-cases/get-insights.use-case';
+import { GetForecastUseCase } from '../use-cases/get-forecast.use-case';
 import {
   createTransactionSchema,
   updateTransactionSchema,
@@ -43,6 +44,7 @@ export class TransactionsController {
     private readonly getMonthlyBreakdown: GetMonthlyBreakdownUseCase,
     private readonly getCategoryBreakdown: GetCategoryBreakdownUseCase,
     private readonly getInsights: GetInsightsUseCase,
+    private readonly getForecast: GetForecastUseCase,
   ) {}
 
   @Post()
@@ -85,6 +87,11 @@ export class TransactionsController {
   @Get('insights')
   insights(@CurrentUser() user: { id: string }) {
     return this.getInsights.execute(user.id);
+  }
+
+  @Get('forecast')
+  forecast(@CurrentUser() user: { id: string }) {
+    return this.getForecast.execute(user.id);
   }
 
   @Get('by-category')
