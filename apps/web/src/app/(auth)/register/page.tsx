@@ -131,10 +131,10 @@ export default function RegisterPage() {
               defaultCountry="br"
               value={phone}
               onChange={setPhone}
-              inputClassName="!w-full !rounded-lg !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
+              inputClassName="!w-full !rounded-[12px] !border-[1.5px] !border-border !bg-surface !px-3.5 !py-2.5 !text-sm !font-[family-name:var(--font-body)] !text-fg placeholder:!text-fg-muted !transition-colors !duration-150 focus:!border-fg focus:!outline-none"
               countrySelectorStyleProps={{
                 buttonClassName:
-                  "!rounded-l-lg !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
+                  "!rounded-l-[12px] !border-[1.5px] !border-border !bg-surface !px-2 !py-2.5 hover:!bg-muted !transition-colors",
               }}
             />
           </div>

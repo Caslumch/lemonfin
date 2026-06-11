@@ -188,9 +188,9 @@ export default function ConfiguracoesPage() {
     <>
       <ContentHeader title="Configurações" />
 
-      <div className="p-5 md:p-7 space-y-6 max-w-2xl">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-6 max-w-2xl">
         {/* Profile section */}
-        <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
             <User size={18} className="text-lima" />
             <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
@@ -264,7 +264,7 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* Family section */}
-        <div className="rounded-lg border border-border bg-surface p-6 animate-fade-in-up">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-5">
             <Users size={18} className="text-lima" />
             <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
@@ -288,7 +288,7 @@ export default function ConfiguracoesPage() {
               <div>
                 <p className="text-sm text-fg-muted mb-2">Código de convite</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded-md border border-border bg-muted px-4 py-2.5 font-[family-name:var(--font-mono)] text-sm text-fg tracking-widest text-center">
+                  <code className="flex-1 rounded-[12px] border border-border bg-muted px-4 py-2.5 font-[family-name:var(--font-mono)] text-sm text-fg tracking-widest text-center">
                     {family.code}
                   </code>
                   <Button variant="outline" size="icon" onClick={copyCode} title="Copiar código">
@@ -309,7 +309,7 @@ export default function ConfiguracoesPage() {
                   {family.members.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center gap-3 rounded-md border border-border bg-page px-4 py-3"
+                      className="flex items-center gap-3 rounded-[12px] border border-border bg-page px-4 py-3"
                     >
                       <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                         {member.role === "OWNER" ? (

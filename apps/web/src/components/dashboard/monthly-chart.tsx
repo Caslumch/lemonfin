@@ -60,7 +60,7 @@ export function MonthlyChart({ data, loading }: MonthlyChartProps) {
   }));
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 animate-fade-in-up">
+    <div className="rounded-[20px] border border-border bg-surface p-5 shadow-xs animate-fade-in-up">
       <h3 className="font-[family-name:var(--font-display)] text-base font-bold text-fg mb-4">
         Gastos mensais
       </h3>

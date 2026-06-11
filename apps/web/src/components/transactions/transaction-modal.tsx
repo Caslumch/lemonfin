@@ -118,7 +118,7 @@ export function TransactionModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-md bg-surface rounded-[24px] shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">

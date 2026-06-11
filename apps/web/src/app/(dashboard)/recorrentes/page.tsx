@@ -131,16 +131,16 @@ export default function RecorrentesPage() {
         }
       />
 
-      <div className="p-5 md:p-7 space-y-5">
+      <div className="px-5 pb-8 pt-2 md:px-8 space-y-5">
         {!loading && items.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-lg border border-border bg-surface p-5">
+            <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5">
               <p className="text-xs text-fg-muted mb-1">Despesas fixas / mês</p>
               <p className="text-2xl font-bold text-danger font-[family-name:var(--font-mono)]">
                 {formatBRL(monthlyExpense)}
               </p>
             </div>
-            <div className="rounded-lg border border-border bg-surface p-5">
+            <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5">
               <p className="text-xs text-fg-muted mb-1">Receitas fixas / mês</p>
               <p className="text-2xl font-bold text-success font-[family-name:var(--font-mono)]">
                 {formatBRL(monthlyIncome)}
@@ -150,11 +150,11 @@ export default function RecorrentesPage() {
         )}
 
         {loading ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <Repeat size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">
               Nenhuma transação recorrente.
@@ -165,7 +165,7 @@ export default function RecorrentesPage() {
             </p>
           </div>
         ) : (
-          <div className="rounded-lg border border-border bg-surface overflow-hidden">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs overflow-hidden">
             {items.map((item, idx) => (
               <div
                 key={item.id}

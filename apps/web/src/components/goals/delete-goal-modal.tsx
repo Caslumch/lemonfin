@@ -38,7 +38,7 @@ export function DeleteGoalModal({
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-surface rounded-lg shadow-xl">
+        <div className="w-full max-w-sm bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
               Excluir meta

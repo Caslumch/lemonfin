@@ -67,7 +67,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       </div>
 
       {/* Month navigation */}
-      <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="flex items-center justify-between rounded-[20px] border border-border bg-surface shadow-xs px-4 py-3">
         <button
           onClick={() => navigateMonth(-1)}
           className="text-fg-muted hover:text-fg cursor-pointer"
@@ -102,17 +102,17 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
 
       {/* Transactions */}
       {loading ? (
-        <div className="rounded-lg border border-border bg-surface p-8 text-center">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">Carregando...</p>
         </div>
       ) : !invoice || invoice.transactions.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface p-8 text-center">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">
             Nenhuma transação neste período.
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-surface divide-y divide-border">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs divide-y divide-border">
           {invoice.transactions.map((tx) => (
             <div
               key={tx.id}

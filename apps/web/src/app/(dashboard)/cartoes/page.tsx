@@ -102,7 +102,7 @@ export default function CartoesPage() {
     return (
       <>
         <ContentHeader title="Cartões" />
-        <div className="p-5 md:p-7">
+        <div className="px-5 pb-8 pt-2 md:px-8">
           <InvoiceView
             cardId={viewingCard.id}
             cardName={viewingCard.name}
@@ -124,13 +124,13 @@ export default function CartoesPage() {
         }
       />
 
-      <div className="p-5 md:p-7">
+      <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : cards.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface p-12 text-center">
+          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <CreditCard size={40} className="mx-auto text-fg-muted mb-3" />
             <p className="text-fg-muted text-sm">
               Nenhum cartão cadastrado.
@@ -144,7 +144,7 @@ export default function CartoesPage() {
             {cards.map((card) => (
               <div
                 key={card.id}
-                className="rounded-lg border border-border bg-surface p-5 hover:border-fg/20 transition-colors cursor-pointer"
+                className="rounded-[20px] border border-border bg-surface shadow-xs p-5 hover:border-fg/20 transition-colors cursor-pointer"
                 onClick={() => setViewingCard(card)}
               >
                 <div className="flex items-start justify-between mb-3">
