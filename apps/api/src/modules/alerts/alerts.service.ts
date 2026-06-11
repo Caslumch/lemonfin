@@ -5,6 +5,7 @@ import { UsersRepository } from '../users/repositories/users.repository';
 import { FamilyContextService } from '../families/services/family-context.service';
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
 import { GoalsRepository } from '../goals/repositories/goals.repository';
+import { RecurringRepository } from '../recurring/repositories/recurring.repository';
 
 @Injectable()
 export class AlertsService {
@@ -16,6 +17,7 @@ export class AlertsService {
     private readonly familyContext: FamilyContextService,
     private readonly wmodeClient: WmodeClientService,
     private readonly goalsRepository: GoalsRepository,
+    private readonly recurringRepository: RecurringRepository,
   ) {}
 
   // Run daily at 20:00 — check spending alerts
@@ -72,6 +74,102 @@ export class AlertsService {
         );
       }
     }
+  }
+
+  // Run on 3rd of every month at 11:00 — detect possible subscriptions
+  @Cron('0 11 3 * *')
+  async detectSubscriptions() {
+    this.logger.log('Running subscription detection...');
+
+    const users = await this.usersRepository.findAllWithPhone();
+
+    for (const user of users) {
+      try {
+        await this.detectSubscriptionsForUser(user.id, user.phone!);
+      } catch (error) {
+        this.logger.error(
+          `Subscription detection failed for user ${user.id}: ${error}`,
+        );
+      }
+    }
+  }
+
+  private async detectSubscriptionsForUser(userId: string, phone: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+
+    // Janela: últimos 3 meses.
+    const since = new Date();
+    since.setMonth(since.getMonth() - 3);
+    since.setDate(1);
+    since.setHours(0, 0, 0, 0);
+
+    const [expenses, recurrences] = await Promise.all([
+      this.transactionsRepository.findExpensesWithDescriptionSince(
+        userIds,
+        since,
+      ),
+      this.recurringRepository.findMany(userIds, false),
+    ]);
+
+    // Descrições que já são recorrências cadastradas (normalizadas).
+    const knownRecurring = new Set(
+      recurrences.map((r) => normalizeDesc(r.description)),
+    );
+
+    // Agrupa despesas por descrição normalizada → conjunto de meses distintos.
+    interface Candidate {
+      label: string;
+      amount: number;
+      categoryId: string;
+      months: Set<string>;
+    }
+    const groups = new Map<string, Candidate>();
+
+    for (const tx of expenses) {
+      const key = normalizeDesc(tx.description ?? '');
+      if (!key || knownRecurring.has(key)) continue;
+
+      const d = new Date(tx.date);
+      const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+
+      const existing = groups.get(key);
+      if (existing) {
+        existing.months.add(monthKey);
+      } else {
+        groups.set(key, {
+          label: tx.description ?? '',
+          amount: tx.amount.toNumber(),
+          categoryId: tx.categoryId,
+          months: new Set([monthKey]),
+        });
+      }
+    }
+
+    // Candidatas: aparecem em 2+ meses distintos.
+    const subscriptions = Array.from(groups.values())
+      .filter((g) => g.months.size >= 2)
+      .sort((a, b) => b.months.size - a.months.size)
+      .slice(0, 5);
+
+    if (subscriptions.length === 0) return;
+
+    const lines = [
+      '💡 *Possíveis assinaturas detectadas*',
+      '',
+      'Notei gastos que se repetem todo mês e ainda não estão cadastrados como recorrência:',
+      '',
+      ...subscriptions.map(
+        (s) =>
+          `• *${s.label}* (~${formatBRL(s.amount)}) — ${s.months.size} meses`,
+      ),
+      '',
+      'Quer que eu lance automaticamente todo mês? Cadastre em *Recorrentes* no app, ou me diga aqui: _"todo dia X pago Y de Z"_.',
+    ];
+
+    await this.wmodeClient.sendMessage({ to: phone, content: lines.join('\n') });
+    this.logger.log(
+      `Sent ${subscriptions.length} subscription suggestion(s) to ${phone}`,
+    );
   }
 
   private async sendSpendingAlertsForUser(userId: string, phone: string) {
@@ -372,4 +470,15 @@ function formatBRL(value: number): string {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+}
+
+// Normaliza descrição para agrupar variações ("Netflix", "netflix ", "NETFLIX")
+// — minúsculas, sem acento, sem espaços/pontuação nas bordas.
+function normalizeDesc(desc: string): string {
+  return desc
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .trim();
 }

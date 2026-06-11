@@ -65,6 +65,31 @@ export class TransactionsRepository {
     });
   }
 
+  // Possível duplicata: mesma valor + categoria + tipo dentro da janela (horas).
+  // Usado para alertar registros repetidos acidentais.
+  async findPossibleDuplicate(
+    userIds: string[],
+    params: {
+      amount: number;
+      categoryId: string;
+      type: 'INCOME' | 'EXPENSE';
+      withinHours: number;
+    },
+  ) {
+    const since = new Date(Date.now() - params.withinHours * 60 * 60 * 1000);
+    return this.prisma.transaction.findFirst({
+      where: {
+        userId: { in: userIds },
+        categoryId: params.categoryId,
+        type: params.type,
+        amount: new Prisma.Decimal(params.amount),
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: txInclude,
+    });
+  }
+
   async findMany(options: FindManyOptions) {
     const where: Prisma.TransactionWhereInput = {
       userId: { in: options.userIds },
@@ -129,6 +154,21 @@ export class TransactionsRepository {
   async delete(id: string) {
     return this.prisma.transaction.delete({
       where: { id },
+    });
+  }
+
+  // Despesas com descrição num período — usado para detectar assinaturas
+  // (mesma descrição recorrendo em meses distintos).
+  async findExpensesWithDescriptionSince(userIds: string[], since: Date) {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId: { in: userIds },
+        type: 'EXPENSE',
+        date: { gte: since },
+        description: { not: null },
+      },
+      select: { description: true, amount: true, date: true, categoryId: true },
+      orderBy: { date: 'asc' },
     });
   }
 
