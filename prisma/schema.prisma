@@ -192,3 +192,12 @@ model Budget {
   @@index([userId])
   @@map("budgets")
 }
+
+model ConversationState {
+  phone     String   @id
+  pending   Json? // confirmação aguardando (ex: categoria a confirmar)
+  history   Json     @default("[]") // últimas trocas (texto curto)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("conversation_states")
+}

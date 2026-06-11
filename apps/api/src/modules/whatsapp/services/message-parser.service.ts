@@ -6,6 +6,8 @@ export interface ParsedTransaction {
   amount: number;
   type: 'INCOME' | 'EXPENSE';
   categorySlug: string;
+  // Confiança da IA na categoria (0 a 1). Quando baixa, o bot confirma.
+  categoryConfidence: number;
   description: string;
   cardName?: string;
 }
@@ -57,8 +59,9 @@ Categorias disponíveis (use exatamente o slug):
 - freelance: trabalho freelance, projeto, consultoria
 - outros: quando não se encaixa em nenhuma categoria
 
-Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "description": string, "cardName": string | null}
+Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string, "cardName": string | null}
 - cardName: nome específico do cartão se mencionado (ex: "Nubank", "Inter", "Bradesco"), senão null. Se o usuário diz apenas "cartão", "cartão de crédito" ou "crédito" sem nome específico, use "cartao" como valor.
+- categoryConfidence: número de 0 a 1 indicando sua confiança na categoria escolhida. Use ALTO (0.9+) quando o texto deixa claro (ex: "mercado", "uber", "salário"). Use BAIXO (< 0.6) quando é vago e você teve que adivinhar (ex: "gastei 50 ali", "paguei 30", "comprei uma coisa"). Seja honesto na incerteza.
 
 ### 2. QUERY — Consultar finanças
 Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financeiro.
@@ -131,12 +134,25 @@ export class MessageParserService {
     });
   }
 
-  async parse(message: string): Promise<ParseResult> {
+  async parse(
+    message: string,
+    history: { role: 'user' | 'bot'; text: string }[] = [],
+  ): Promise<ParseResult> {
     try {
+      // Histórico curto como contexto (já truncado pelo chamador). Ajuda a IA
+      // a entender referências ("e o mês passado?").
+      const historyMessages = history.map((h) => ({
+        role: (h.role === 'bot' ? 'assistant' : 'user') as
+          | 'assistant'
+          | 'user',
+        content: h.text,
+      }));
+
       const completion = await this.openai.chat.completions.create({
         model: MODEL,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
+          ...historyMessages,
           { role: 'user', content: message },
         ],
         response_format: { type: 'json_object' },
@@ -159,6 +175,10 @@ export class MessageParserService {
               amount: Number(json.amount),
               type: json.type,
               categorySlug: json.categorySlug,
+              categoryConfidence:
+                typeof json.categoryConfidence === 'number'
+                  ? json.categoryConfidence
+                  : 1,
               description: json.description || message,
               cardName: json.cardName || undefined,
             },

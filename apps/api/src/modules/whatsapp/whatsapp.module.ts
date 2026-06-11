@@ -3,6 +3,7 @@ import { WebhookController } from './controllers/webhook.controller';
 import { WmodeClientService } from './services/wmode-client.service';
 import { MessageParserService } from './services/message-parser.service';
 import { WhatsappService } from './services/whatsapp.service';
+import { ConversationRepository } from './repositories/conversation.repository';
 import { WebhookSignatureGuard } from './guards/webhook-signature.guard';
 import { UsersModule } from '../users/users.module';
 import { CategoriesModule } from '../categories/categories.module';
@@ -27,6 +28,7 @@ import { BudgetsModule } from '../budgets/budgets.module';
     WmodeClientService,
     MessageParserService,
     WhatsappService,
+    ConversationRepository,
     WebhookSignatureGuard,
   ],
   exports: [WmodeClientService],

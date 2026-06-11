@@ -9,6 +9,10 @@ import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { GetBudgetUseCase } from '../../budgets/use-cases/get-budget.use-case';
+import {
+  ConversationRepository,
+  PendingConfirmation,
+} from '../repositories/conversation.repository';
 
 interface IncomingMessage {
   from: string;
@@ -31,6 +35,7 @@ export class WhatsappService {
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
     private readonly getBudget: GetBudgetUseCase,
+    private readonly conversation: ConversationRepository,
   ) {}
 
   async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
@@ -55,11 +60,36 @@ export class WhatsappService {
       return;
     }
 
-    const result = await this.messageParser.parse(content);
+    const phoneKey = this.normalizePhone(from);
+
+    // 1) Há uma confirmação pendente? Tenta resolver SEM chamar a IA.
+    const pending = await this.conversation.getPending(phoneKey);
+    if (pending) {
+      const resolved = await this.tryResolvePending(
+        from,
+        phoneKey,
+        user.id,
+        pending,
+        content,
+      );
+      if (resolved) return; // resposta consumida pela confirmação
+      // Se não resolveu (usuário ignorou e mandou outra coisa), limpa o
+      // pendente e processa a nova mensagem normalmente.
+      await this.conversation.clearPending(phoneKey);
+    }
+
+    // 2) Fluxo normal — com histórico de conversa como contexto.
+    const history = await this.conversation.getHistory(phoneKey);
+    const result = await this.messageParser.parse(content, history);
+
+    // Registra a mensagem do usuário no histórico.
+    await this.conversation.appendHistory(phoneKey, [
+      { role: 'user', text: content },
+    ]);
 
     switch (result.intent) {
       case 'transaction':
-        await this.handleTransaction(from, user.id, result);
+        await this.handleTransaction(from, user.id, result, phoneKey);
         break;
       case 'query':
         await this.handleQuery(from, user.id, result);
@@ -95,8 +125,16 @@ export class WhatsappService {
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'transaction' }>,
+    phoneKey?: string,
   ) {
     const { data } = result;
+
+    // Confiança baixa na categoria → confirma com o usuário antes de registrar
+    // (não chuta). Só quando temos a chave da conversa para guardar o pendente.
+    if (phoneKey && data.categoryConfidence < 0.6) {
+      await this.askCategoryConfirmation(from, phoneKey, data);
+      return;
+    }
 
     let category = await this.categoriesRepository.findBySlug(
       data.categorySlug,
@@ -222,9 +260,136 @@ export class WhatsappService {
         duplicateWarning,
     });
 
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        {
+          role: 'bot',
+          text: `Registrado: ${amountFormatted} em ${category.name}`,
+        },
+      ]);
+    }
+
     this.logger.log(
       `Transaction created: ${transaction.id} for user ${userId}`,
     );
+  }
+
+  // Pergunta a categoria quando a IA está incerta; salva o pendente para a
+  // próxima mensagem resolver (sem chamar a IA de novo).
+  private async askCategoryConfirmation(
+    from: string,
+    phoneKey: string,
+    data: Extract<ParseResult, { intent: 'transaction' }>['data'],
+  ) {
+    // Monta opções: a categoria adivinhada primeiro, depois alternativas
+    // comuns, terminando em "Outros". Dedup e no máx 4.
+    const guessed = data.categorySlug;
+    const candidates = [
+      guessed,
+      'alimentacao',
+      'transporte',
+      'compras',
+      'lazer',
+      'outros',
+    ];
+    const seen = new Set<string>();
+    const options: { slug: string; label: string }[] = [];
+    for (const slug of candidates) {
+      if (seen.has(slug)) continue;
+      const cat = await this.categoriesRepository.findBySlug(slug);
+      if (!cat) continue;
+      seen.add(slug);
+      options.push({ slug: cat.slug, label: `${cat.icon ?? ''} ${cat.name}`.trim() });
+      if (options.length >= 4) break;
+    }
+
+    const pending: PendingConfirmation = {
+      type: 'category',
+      amount: data.amount,
+      txType: data.type,
+      description: data.description,
+      cardName: data.cardName,
+      options,
+    };
+    await this.conversation.setPending(phoneKey, pending);
+
+    const amountFormatted = data.amount.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    const optionsText = options
+      .map((o, i) => `${i + 1}. ${o.label}`)
+      .join('\n');
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Anotei ${amountFormatted} — _${data.description}_.\n\n` +
+        `Em qual categoria?\n${optionsText}\n\n` +
+        `_Responda com o número._`,
+    });
+  }
+
+  // Tenta resolver uma confirmação pendente a partir da resposta do usuário,
+  // SEM chamar a IA. Retorna true se consumiu a mensagem.
+  private async tryResolvePending(
+    from: string,
+    phoneKey: string,
+    userId: string,
+    pending: PendingConfirmation,
+    content: string,
+  ): Promise<boolean> {
+    if (pending.type !== 'category') return false;
+
+    const text = content.trim().toLowerCase();
+
+    // Cancelamento explícito.
+    if (['cancela', 'cancelar', 'deixa', 'esquece'].includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Ok, cancelei. Nada foi registrado.',
+      });
+      return true;
+    }
+
+    // Resolve por número (1, 2, ...) ou por nome/slug.
+    let chosen: { slug: string; label: string } | undefined;
+    const num = parseInt(text, 10);
+    if (!Number.isNaN(num) && num >= 1 && num <= pending.options.length) {
+      chosen = pending.options[num - 1];
+    } else {
+      chosen = pending.options.find(
+        (o) =>
+          o.slug === text ||
+          o.label.toLowerCase().includes(text) ||
+          text.includes(o.slug),
+      );
+    }
+
+    if (!chosen) return false; // não entendeu a resposta → reprocessa fora
+
+    await this.conversation.clearPending(phoneKey);
+
+    // Recria a transação com a categoria escolhida (confiança alta → não
+    // re-pergunta). Reusa toda a lógica de cartão/duplicata/mensagem.
+    await this.handleTransaction(
+      from,
+      userId,
+      {
+        intent: 'transaction',
+        data: {
+          amount: pending.amount,
+          type: pending.txType,
+          categorySlug: chosen.slug,
+          categoryConfidence: 1,
+          description: pending.description,
+          cardName: pending.cardName,
+        },
+      },
+      phoneKey,
+    );
+    return true;
   }
 
   private async handleQuery(
