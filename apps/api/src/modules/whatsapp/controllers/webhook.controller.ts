@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, Logger, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Logger,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { WebhookSignatureGuard } from '../guards/webhook-signature.guard';
 import { WhatsappService } from '../services/whatsapp.service';
 
@@ -23,6 +31,7 @@ export class WebhookController {
 
   @Post('webhook')
   @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UseGuards(WebhookSignatureGuard)
   async handleWebhook(@Body() body: WebhookPayload) {
     this.logger.log(`Webhook received: ${body.event}`);

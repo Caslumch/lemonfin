@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UsePipes, Logger } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { SignUpUseCase } from '../use-cases/sign-up.use-case';
 import { SignInUseCase } from '../use-cases/sign-in.use-case';
 import { VerifyTwoFactorUseCase } from '../use-cases/verify-2fa.use-case';
@@ -25,6 +26,8 @@ const verifyTwoFactorSchema = z.object({
   code: z.string().min(1),
 });
 
+// Endpoints de auth são alvo de brute-force: limite apertado (5/min por IP).
+@Throttle({ default: { ttl: 60_000, limit: 5 } })
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);

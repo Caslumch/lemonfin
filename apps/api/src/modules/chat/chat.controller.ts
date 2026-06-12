@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UseGuards, Res, Logger } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,6 +7,9 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ChatCompletionUseCase } from './use-cases/chat-completion.use-case';
 import { chatMessageSchema, type ChatMessageInput } from './dtos/chat.dto';
 
+// Chat IA consome tokens da OpenAI a cada chamada: limita a 10/min para evitar
+// abuso/queima de custo.
+@Throttle({ default: { ttl: 60_000, limit: 10 } })
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatController {

@@ -1,8 +1,14 @@
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
+import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Headers de segurança (CSP, HSTS, etc.) e gzip nas respostas.
+  app.use(helmet());
+  app.use(compression());
 
   // Origens permitidas: a do front em produção (FRONTEND_URL) + dev local.
   const allowedOrigins = [
