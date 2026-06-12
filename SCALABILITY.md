@@ -14,23 +14,23 @@ Implementar quando tiver **~50 usuarios ativos**. Custo: zero ou minimo.
 
 ### Rate Limiting & Seguranca
 
-- [ ] Instalar `@nestjs/throttler` na API
-- [ ] Rate limit global: 100 req/min por IP
-- [ ] Rate limit auth endpoints: 5 req/min (login, registro)
-- [ ] Rate limit WhatsApp webhook: 30 req/min
-- [ ] Rate limit chat IA: 10 req/min por usuario
-- [ ] Adicionar `helmet` (headers de seguranca)
-- [ ] Adicionar `compression` middleware (gzip)
+- [x] Instalar `@nestjs/throttler` na API
+- [x] Rate limit global: 100 req/min por IP
+- [x] Rate limit auth endpoints: 5 req/min (login, registro)
+- [x] Rate limit WhatsApp webhook: 30 req/min
+- [x] Rate limit chat IA: 10 req/min por usuario
+- [x] Adicionar `helmet` (headers de seguranca)
+- [x] Adicionar `compression` middleware (gzip)
 
 ### Conexoes de Banco
 
-- [ ] Aumentar pool do Prisma para 20 conexoes (`connection_limit=20` na DATABASE_URL)
-- [ ] Usar connection string com pooler do Neon (`-pooler` no hostname)
-- [ ] Configurar `pool_timeout=30` no Prisma
+- [x] Aumentar pool do Prisma para 20 conexoes (`connection_limit=20` na DATABASE_URL) — documentado no `.env.example`; aplicar no env de producao
+- [x] Usar connection string com pooler do Neon (`-pooler` no hostname) — documentado no `.env.example`; aplicar no env de producao
+- [x] Configurar `pool_timeout=30` no Prisma — documentado no `.env.example`; aplicar no env de producao
 
 ### Cache Basico
 
-- [ ] Cache de categorias em memoria (muda raramente) — TTL 1h
+- [x] Cache de categorias em memoria (muda raramente) — TTL 1h
 - [ ] Cache de dados do usuario em memoria — TTL 5min
 - [ ] Cache do contexto financeiro do chat — TTL 2min (evita 4 queries/mensagem)
 

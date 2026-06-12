@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { CacheModule } from '@nestjs/cache-manager';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -25,6 +27,12 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    // Rate limit global: 100 req/min por IP. Endpoints sensíveis (auth, chat,
+    // webhook) sobrescrevem com @Throttle no próprio controller.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
+    // Cache em memória (sem infra extra). Hoje só categorias usam, mas fica
+    // global para reuso futuro. Migra para Redis no Nível 2 sem mudar os usos.
+    CacheModule.register({ isGlobal: true, ttl: 60_000 }),
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
@@ -43,6 +51,8 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
   controllers: [HealthController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    // Aplica o rate limit em todas as rotas (respeitando os overrides locais).
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     KeepAliveService,
   ],
 })
