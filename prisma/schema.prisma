@@ -22,6 +22,10 @@ model User {
   // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
   // o app só exibe um banner pedindo confirmação enquanto for null.
   emailVerifiedAt   DateTime?              @map("email_verified_at")
+  // Fim do período de teste grátis (7 dias). Setado no sign-up; explícito (não
+  // derivado de createdAt) para permitir estender. Hoje o pós-trial é SOFT: ao
+  // expirar, só exibe aviso, não bloqueia. O Stripe endurece isso depois.
+  trialEndsAt       DateTime?              @map("trial_ends_at")
   twoFactorEnabled  Boolean                @default(false) @map("two_factor_enabled")
   twoFactorSecret   String?                @map("two_factor_secret") // criptografado
   backupCodes       String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
