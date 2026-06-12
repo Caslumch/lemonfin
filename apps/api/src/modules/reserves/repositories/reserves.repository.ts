@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
-export class SavingsGoalsRepository {
+export class ReservesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: {
@@ -12,7 +12,7 @@ export class SavingsGoalsRepository {
     deadline: Date;
     userId: string;
   }) {
-    return this.prisma.savingsGoal.create({
+    return this.prisma.reserve.create({
       data: {
         name: data.name,
         targetAmount: new Prisma.Decimal(data.targetAmount),
@@ -23,32 +23,32 @@ export class SavingsGoalsRepository {
   }
 
   async findManyActive(userIds: string[]) {
-    return this.prisma.savingsGoal.findMany({
+    return this.prisma.reserve.findMany({
       where: { userId: { in: userIds }, active: true },
       orderBy: { deadline: 'asc' },
     });
   }
 
   async findById(id: string, userIds: string[]) {
-    return this.prisma.savingsGoal.findFirst({
+    return this.prisma.reserve.findFirst({
       where: { id, userId: { in: userIds } },
     });
   }
 
-  // Incrementa savedAmount atomicamente (evita read-modify-write). Quando a meta
-  // é atingida, desativa para sair da lista/seletor de aportes.
+  // Incrementa savedAmount atomicamente (evita read-modify-write). Quando a
+  // reserva atinge o alvo, desativa para sair da lista/seletor de aportes.
   async addContribution(id: string, amount: number) {
-    const goal = await this.prisma.savingsGoal.update({
+    const reserve = await this.prisma.reserve.update({
       where: { id },
       data: { savedAmount: { increment: new Prisma.Decimal(amount) } },
     });
 
-    if (goal.active && goal.savedAmount.gte(goal.targetAmount)) {
-      return this.prisma.savingsGoal.update({
+    if (reserve.active && reserve.savedAmount.gte(reserve.targetAmount)) {
+      return this.prisma.reserve.update({
         where: { id },
         data: { active: false },
       });
     }
-    return goal;
+    return reserve;
   }
 }

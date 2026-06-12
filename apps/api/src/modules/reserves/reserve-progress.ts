@@ -1,19 +1,19 @@
-// Progresso de uma meta de poupança — função pura, reutilizada pelo use-case de
-// listagem (API/web) e pelos handlers do WhatsApp, para garantir que os dois
-// calculem a mesma coisa.
-export interface SavingsProgress {
+// Progresso de uma reserva — função pura, reutilizada pelo use-case de listagem
+// (API/web) e pelos handlers do WhatsApp, para garantir que os dois calculem a
+// mesma coisa.
+export interface ReserveProgress {
   remaining: number; // quanto ainda falta para o alvo (>= 0)
   percentage: number; // 0..999 (clampeado), arredondado
   monthsRemaining: number; // meses inteiros até o prazo (mínimo 1)
   suggestedMonthly: number; // quanto guardar por mês para chegar no prazo
 }
 
-export function computeSavingsProgress(
+export function computeReserveProgress(
   target: number,
   saved: number,
   deadline: Date,
   now: Date = new Date(),
-): SavingsProgress {
+): ReserveProgress {
   const remaining = Math.max(target - saved, 0);
   const percentage =
     target > 0 ? Math.min(Math.round((saved / target) * 100), 999) : 0;

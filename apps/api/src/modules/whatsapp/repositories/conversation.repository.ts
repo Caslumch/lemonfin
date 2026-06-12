@@ -22,10 +22,10 @@ export type PendingConfirmation =
       options: { slug: string; label: string }[];
     }
   | {
-      // Aporte aguardando o usuário escolher EM QUAL meta lançar.
-      type: 'goal-contribution';
+      // Aporte aguardando o usuário escolher EM QUAL reserva lançar.
+      type: 'reserve-contribution';
       amount: number;
-      // Metas ativas oferecidas (id + nome), na ordem dos números.
+      // Reservas ativas oferecidas (id + nome), na ordem dos números.
       options: { id: string; name: string }[];
     };
 

@@ -41,7 +41,7 @@ export function DeleteGoalModal({
         <div className="w-full max-w-sm bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              Excluir limite
+              Excluir meta
             </h2>
             <button
               onClick={onClose}
@@ -53,7 +53,7 @@ export function DeleteGoalModal({
 
           <div className="p-6">
             <p className="text-sm text-fg-secondary mb-6">
-              Tem certeza que deseja excluir o limite{" "}
+              Tem certeza que deseja excluir a meta{" "}
               <strong className="text-fg">{goalName}</strong>? Esta ação não
               pode ser desfeita.
             </p>

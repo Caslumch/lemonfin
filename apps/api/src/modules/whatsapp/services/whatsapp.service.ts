@@ -13,8 +13,8 @@ import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { GetBudgetUseCase } from '../../budgets/use-cases/get-budget.use-case';
-import { SavingsGoalsRepository } from '../../savings-goals/repositories/savings-goals.repository';
-import { computeSavingsProgress } from '../../savings-goals/savings-goal-progress';
+import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
+import { computeReserveProgress } from '../../reserves/reserve-progress';
 import {
   ConversationRepository,
   PendingConfirmation,
@@ -41,7 +41,7 @@ export class WhatsappService {
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
     private readonly getBudget: GetBudgetUseCase,
-    private readonly savingsGoalsRepository: SavingsGoalsRepository,
+    private readonly reservesRepository: ReservesRepository,
     private readonly conversation: ConversationRepository,
   ) {}
 
@@ -113,11 +113,11 @@ export class WhatsappService {
       case 'recurring':
         await this.handleRecurring(from, user.id, result);
         break;
-      case 'savings_goal_create':
-        await this.handleSavingsGoalCreate(from, user.id, result, phoneKey);
+      case 'reserve_create':
+        await this.handleReserveCreate(from, user.id, result, phoneKey);
         break;
-      case 'savings_contribution':
-        await this.handleSavingsContribution(from, user.id, result, phoneKey);
+      case 'reserve_contribution':
+        await this.handleReserveContribution(from, user.id, result, phoneKey);
         break;
       case 'batch':
         await this.handleBatch(from, user.id, result);
@@ -358,8 +358,8 @@ export class WhatsappService {
     pending: PendingConfirmation,
     content: string,
   ): Promise<boolean> {
-    if (pending.type === 'goal-contribution') {
-      return this.resolveGoalContribution(
+    if (pending.type === 'reserve-contribution') {
+      return this.resolveReserveContribution(
         from,
         phoneKey,
         userId,
@@ -435,8 +435,8 @@ export class WhatsappService {
       return;
     }
 
-    if (result.queryType === 'savings') {
-      await this.handleSavingsGoalQuery(from, userId);
+    if (result.queryType === 'reserves') {
+      await this.handleReserveQuery(from, userId);
       return;
     }
 
@@ -852,18 +852,18 @@ export class WhatsappService {
     );
   }
 
-  // --- Metas de poupança ---------------------------------------------------
+  // --- Reservas (objetivos de poupança) ------------------------------------
 
-  private async handleSavingsGoalCreate(
+  private async handleReserveCreate(
     from: string,
     userId: string,
-    result: Extract<ParseResult, { intent: 'savings_goal_create' }>,
+    result: Extract<ParseResult, { intent: 'reserve_create' }>,
     phoneKey?: string,
   ) {
     const { data } = result;
     const deadline = new Date(data.deadline);
 
-    const goal = await this.savingsGoalsRepository.create({
+    const reserve = await this.reservesRepository.create({
       name: data.name,
       targetAmount: data.targetAmount,
       deadline,
@@ -876,7 +876,7 @@ export class WhatsappService {
       month: 'long',
       year: 'numeric',
     });
-    const { suggestedMonthly, monthsRemaining } = computeSavingsProgress(
+    const { suggestedMonthly, monthsRemaining } = computeReserveProgress(
       data.targetAmount,
       0,
       deadline,
@@ -885,7 +885,7 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `🏦 *Meta criada!*\n\n` +
+        `🏦 *Reserva criada!*\n\n` +
         `*Objetivo:* ${data.name}\n` +
         `*Alvo:* ${fmt(data.targetAmount)}\n` +
         `*Prazo:* ${deadlineLabel}\n\n` +
@@ -898,44 +898,44 @@ export class WhatsappService {
       await this.conversation.appendHistory(phoneKey, [
         {
           role: 'bot',
-          text: `Meta criada: ${data.name} (${fmt(data.targetAmount)})`,
+          text: `Reserva criada: ${data.name} (${fmt(data.targetAmount)})`,
         },
       ]);
     }
 
-    this.logger.log(`Savings goal created: ${goal.id} for user ${userId}`);
+    this.logger.log(`Reserve created: ${reserve.id} for user ${userId}`);
   }
 
-  private async handleSavingsGoalQuery(from: string, userId: string) {
+  private async handleReserveQuery(from: string, userId: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const goals = await this.savingsGoalsRepository.findManyActive(userIds);
+    const reserves = await this.reservesRepository.findManyActive(userIds);
 
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    if (goals.length === 0) {
+    if (reserves.length === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `🏦 *Metas de poupança*\n\n` +
-          `Você ainda não tem nenhuma meta.\n\n` +
+          `🏦 *Reservas*\n\n` +
+          `Você ainda não tem nenhuma reserva.\n\n` +
           `_Crie uma assim: "quero juntar 5000 pra viagem até dezembro"._`,
       });
       return;
     }
 
-    const blocks = goals.map((g) => {
-      const target = g.targetAmount.toNumber();
-      const saved = g.savedAmount.toNumber();
+    const blocks = reserves.map((r) => {
+      const target = r.targetAmount.toNumber();
+      const saved = r.savedAmount.toNumber();
       const { remaining, percentage, monthsRemaining, suggestedMonthly } =
-        computeSavingsProgress(target, saved, g.deadline);
+        computeReserveProgress(target, saved, r.deadline);
       const bar = this.progressBar(percentage);
-      const deadlineLabel = g.deadline.toLocaleDateString('pt-BR', {
+      const deadlineLabel = r.deadline.toLocaleDateString('pt-BR', {
         month: 'long',
         year: 'numeric',
       });
       return (
-        `*${g.name}* — ${deadlineLabel}\n` +
+        `*${r.name}* — ${deadlineLabel}\n` +
         `${bar} ${percentage}%\n` +
         `${fmt(saved)} de ${fmt(target)}  •  faltam ${fmt(remaining)}\n` +
         `_Sugestão: ${fmt(suggestedMonthly)}/mês (${monthsRemaining} ${monthsRemaining === 1 ? 'mês' : 'meses'})_`
@@ -944,30 +944,30 @@ export class WhatsappService {
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content: `🏦 *Suas metas de poupança*\n\n` + blocks.join('\n\n'),
+      content: `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
     });
   }
 
-  // SEMPRE pergunta em qual meta lançar (decisão de produto): guarda o aporte
-  // como pendente e lista as metas numeradas. A resposta é resolvida sem IA por
-  // resolveGoalContribution.
-  private async handleSavingsContribution(
+  // SEMPRE pergunta em qual reserva lançar (decisão de produto): guarda o aporte
+  // como pendente e lista as reservas numeradas. A resposta é resolvida sem IA
+  // por resolveReserveContribution.
+  private async handleReserveContribution(
     from: string,
     userId: string,
-    result: Extract<ParseResult, { intent: 'savings_contribution' }>,
+    result: Extract<ParseResult, { intent: 'reserve_contribution' }>,
     phoneKey?: string,
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const goals = await this.savingsGoalsRepository.findManyActive(userIds);
+    const reserves = await this.reservesRepository.findManyActive(userIds);
 
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    if (goals.length === 0) {
+    if (reserves.length === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `Você ainda não tem nenhuma meta pra guardar. ` +
+          `Você ainda não tem nenhuma reserva pra guardar. ` +
           `Crie uma: "quero juntar 5000 pra viagem até dezembro".`,
       });
       return;
@@ -975,9 +975,9 @@ export class WhatsappService {
 
     if (!phoneKey) return; // sem chave de conversa não dá pra pendurar a pergunta
 
-    const options = goals.map((g) => ({ id: g.id, name: g.name }));
+    const options = reserves.map((r) => ({ id: r.id, name: r.name }));
     const pending: PendingConfirmation = {
-      type: 'goal-contribution',
+      type: 'reserve-contribution',
       amount: result.amount,
       options,
     };
@@ -987,18 +987,18 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Vou guardar ${fmt(result.amount)} em qual meta?\n\n${list}\n\n` +
+        `Vou guardar ${fmt(result.amount)} em qual reserva?\n\n${list}\n\n` +
         `_Responda com o número._`,
     });
   }
 
-  // Resolve o aporte pendente (sem IA): identifica a meta por número ou nome,
-  // cria a DESPESA em "poupanca-metas" e incrementa o acumulado da meta.
-  private async resolveGoalContribution(
+  // Resolve o aporte pendente (sem IA): identifica a reserva por número ou nome,
+  // cria a DESPESA em "reservas" e incrementa o acumulado da reserva.
+  private async resolveReserveContribution(
     from: string,
     phoneKey: string,
     userId: string,
-    pending: Extract<PendingConfirmation, { type: 'goal-contribution' }>,
+    pending: Extract<PendingConfirmation, { type: 'reserve-contribution' }>,
     content: string,
   ): Promise<boolean> {
     const text = content.trim().toLowerCase();
@@ -1024,12 +1024,11 @@ export class WhatsappService {
 
     await this.conversation.clearPending(phoneKey);
 
-    const category =
-      await this.categoriesRepository.findBySlug('poupanca-metas');
+    const category = await this.categoriesRepository.findBySlug('reservas');
     if (!category) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Erro interno: categoria de metas não encontrada.',
+        content: 'Erro interno: categoria de reservas não encontrada.',
       });
       return true;
     }
@@ -1044,8 +1043,8 @@ export class WhatsappService {
       categoryId: category.id,
     });
 
-    // 2) Incrementa o acumulado da meta (desativa se completou).
-    const updated = await this.savingsGoalsRepository.addContribution(
+    // 2) Incrementa o acumulado da reserva (desativa se completou).
+    const updated = await this.reservesRepository.addContribution(
       chosen.id,
       pending.amount,
     );
@@ -1054,7 +1053,7 @@ export class WhatsappService {
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const target = updated.targetAmount.toNumber();
     const saved = updated.savedAmount.toNumber();
-    const { percentage, remaining } = computeSavingsProgress(
+    const { percentage, remaining } = computeReserveProgress(
       target,
       saved,
       updated.deadline,
@@ -1062,10 +1061,10 @@ export class WhatsappService {
 
     const done = saved >= target;
     const body = done
-      ? `🎉 *Meta batida!* Você completou *${chosen.name}* — ` +
+      ? `🎉 *Reserva concluída!* Você completou *${chosen.name}* — ` +
         `${fmt(saved)} de ${fmt(target)}. Parabéns! 🥳`
       : `🏦 *Guardado!*\n\n` +
-        `*Meta:* ${chosen.name}\n` +
+        `*Reserva:* ${chosen.name}\n` +
         `Guardei ${fmt(pending.amount)} — agora ${fmt(saved)} de ${fmt(target)} (${percentage}%).\n` +
         `_Faltam ${fmt(remaining)}._`;
 
@@ -1076,7 +1075,7 @@ export class WhatsappService {
     ]);
 
     this.logger.log(
-      `Savings contribution: ${pending.amount} to goal ${chosen.id} by user ${userId}`,
+      `Reserve contribution: ${pending.amount} to reserve ${chosen.id} by user ${userId}`,
     );
     return true;
   }

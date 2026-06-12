@@ -34,7 +34,7 @@ model User {
   transactions      Transaction[]
   cards             Card[]
   goals             Goal[]
-  savingsGoals      SavingsGoal[]
+  reserves          Reserve[]
   recurring         RecurringTransaction[]
   budgets           Budget[]
   ownedFamilies     Family[]               @relation("FamilyOwner")
@@ -244,11 +244,12 @@ model Budget {
   @@map("budgets")
 }
 
-// Meta de poupança: objetivo de juntar dinheiro (valor-alvo + prazo). É outro
-// conceito do model Goal (que é teto de gasto por categoria). Os aportes viram
-// transação de DESPESA na categoria "poupanca-metas" E incrementam savedAmount
-// — savedAmount é a fonte da verdade do progresso (sem relação com Transaction).
-model SavingsGoal {
+// Reserva: objetivo de juntar dinheiro (valor-alvo + prazo). É outro conceito
+// do model Goal (que é teto de gasto por categoria — exibido como "Metas" no
+// app). Os aportes viram transação de DESPESA na categoria "reservas" E
+// incrementam savedAmount — savedAmount é a fonte da verdade do progresso
+// (sem relação com Transaction).
+model Reserve {
   id           String   @id @default(cuid())
   name         String
   targetAmount Decimal  @default(0) @map("target_amount") @db.Decimal(12, 2)
@@ -262,7 +263,7 @@ model SavingsGoal {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@map("savings_goals")
+  @@map("reserves")
 }
 
 model ConversationState {

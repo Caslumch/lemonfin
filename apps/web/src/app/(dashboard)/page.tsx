@@ -467,11 +467,11 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <Target size={16} className="text-lima" />
                     <h3 className="font-[family-name:var(--font-display)] text-sm font-bold text-fg">
-                      Limites do mês
+                      Metas do mês
                     </h3>
                   </div>
                   <Link
-                    href="/limites"
+                    href="/metas"
                     className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 transition-colors"
                   >
                     Ver todas <ArrowRight size={12} />
