@@ -52,6 +52,7 @@ export class UsersController {
       email: found.email,
       phone: found.phone,
       onboardedAt: found.onboardedAt,
+      emailVerifiedAt: found.emailVerifiedAt,
       twoFactorEnabled: found.twoFactorEnabled,
     };
   }

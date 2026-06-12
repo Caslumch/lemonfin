@@ -6,14 +6,22 @@ import { AuthController } from './controllers/auth.controller';
 import { SignUpUseCase } from './use-cases/sign-up.use-case';
 import { SignInUseCase } from './use-cases/sign-in.use-case';
 import { VerifyTwoFactorUseCase } from './use-cases/verify-2fa.use-case';
+import { SendEmailVerificationUseCase } from './use-cases/send-email-verification.use-case';
+import { VerifyEmailUseCase } from './use-cases/verify-email.use-case';
+import { RequestPasswordResetUseCase } from './use-cases/request-password-reset.use-case';
+import { ResetPasswordUseCase } from './use-cases/reset-password.use-case';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { MailModule } from '../mail/mail.module';
+import { VerificationModule } from '../verification/verification.module';
 
 @Module({
   imports: [
     UsersModule,
     WhatsappModule,
+    MailModule,
+    VerificationModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -31,6 +39,10 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
     SignUpUseCase,
     SignInUseCase,
     VerifyTwoFactorUseCase,
+    SendEmailVerificationUseCase,
+    VerifyEmailUseCase,
+    RequestPasswordResetUseCase,
+    ResetPasswordUseCase,
     JwtStrategy,
   ],
 })

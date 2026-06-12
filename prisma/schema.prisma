@@ -12,37 +12,71 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  name         String
-  passwordHash String        @map("password_hash")
-  phone        String?       @unique
-  avatarUrl    String?       @map("avatar_url")
-  onboardedAt  DateTime?     @map("onboarded_at")
-  twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
-  twoFactorSecret  String?   @map("two_factor_secret") // criptografado
-  backupCodes      String[]  @default([]) @map("backup_codes") // hasheados (bcrypt)
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  transactions   Transaction[]
-  cards          Card[]
-  goals          Goal[]
-  recurring      RecurringTransaction[]
-  budgets        Budget[]
-  ownedFamilies  Family[]       @relation("FamilyOwner")
-  familyMembers  FamilyMember[]
+  id                String                 @id @default(cuid())
+  email             String                 @unique
+  name              String
+  passwordHash      String                 @map("password_hash")
+  phone             String?                @unique
+  avatarUrl         String?                @map("avatar_url")
+  onboardedAt       DateTime?              @map("onboarded_at")
+  // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
+  // o app só exibe um banner pedindo confirmação enquanto for null.
+  emailVerifiedAt   DateTime?              @map("email_verified_at")
+  twoFactorEnabled  Boolean                @default(false) @map("two_factor_enabled")
+  twoFactorSecret   String?                @map("two_factor_secret") // criptografado
+  backupCodes       String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  transactions      Transaction[]
+  cards             Card[]
+  goals             Goal[]
+  recurring         RecurringTransaction[]
+  budgets           Budget[]
+  ownedFamilies     Family[]               @relation("FamilyOwner")
+  familyMembers     FamilyMember[]
+  verificationCodes VerificationCode[]
 
   @@map("users")
 }
 
+enum VerificationCodeType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// OTP efêmero para confirmação de email e reset de senha.
+// - codeHash: o código (6 dígitos) é guardado HASHEADO (bcrypt), nunca em texto.
+// - email: redundante com o user, mas permite emitir reset antes de resolver o
+//   userId e serve de índice de busca no fluxo "esqueci a senha".
+// - attempts: tentativas erradas; o use-case invalida após 5.
+// - consumedAt: marca uso único — um código verificado não vale de novo.
+model VerificationCode {
+  id         String               @id @default(cuid())
+  type       VerificationCodeType
+  email      String
+  codeHash   String               @map("code_hash")
+  expiresAt  DateTime             @map("expires_at")
+  attempts   Int                  @default(0)
+  consumedAt DateTime?            @map("consumed_at")
+  userId     String?              @map("user_id")
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Busca o código ativo mais recente por (email, type) nos dois fluxos.
+  @@index([email, type])
+  @@index([userId])
+  @@map("verification_codes")
+}
+
 model Category {
-  id           String        @id @default(cuid())
-  name         String        @unique
-  slug         String        @unique
+  id           String                 @id @default(cuid())
+  name         String                 @unique
+  slug         String                 @unique
   icon         String?
-  colorBg      String        @map("color_bg")
-  colorText    String        @map("color_text")
-  createdAt    DateTime      @default(now()) @map("created_at")
+  colorBg      String                 @map("color_bg")
+  colorText    String                 @map("color_text")
+  createdAt    DateTime               @default(now()) @map("created_at")
   transactions Transaction[]
   goals        Goal[]
   recurring    RecurringTransaction[]

@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import { VerificationService } from '../../verification/services/verification.service';
+import { MailService } from '../../mail/services/mail.service';
 import { SignUpInput } from '../dtos/auth.dto';
 
 @Injectable()
@@ -13,6 +15,8 @@ export class SignUpUseCase {
     private readonly usersRepository: UsersRepository,
     private readonly jwtService: JwtService,
     private readonly wmodeClient: WmodeClientService,
+    private readonly verification: VerificationService,
+    private readonly mail: MailService,
   ) {}
 
   async execute(input: SignUpInput) {
@@ -47,10 +51,29 @@ export class SignUpUseCase {
       );
     }
 
+    // Dispara o OTP de confirmação de email sem bloquear o cadastro: a conta já
+    // entra no app (decisão de produto) e o front exibe o banner de confirmação.
+    this.sendEmailVerification(user.id, user.email, user.name).catch((err) =>
+      this.logger.error(`Failed to send email verification: ${err}`),
+    );
+
     return {
       user: { id: user.id, name: user.name, email: user.email },
       token,
     };
+  }
+
+  private async sendEmailVerification(
+    userId: string,
+    email: string,
+    name: string,
+  ) {
+    const code = await this.verification.issue(
+      email,
+      'EMAIL_VERIFICATION',
+      userId,
+    );
+    await this.mail.sendEmailVerificationCode(email, name, code);
   }
 
   private async sendWelcomeWhatsApp(phone: string, name: string) {

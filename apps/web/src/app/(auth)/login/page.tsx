@@ -245,6 +245,15 @@ export default function LoginPage() {
               required
             />
 
+            <div className="flex justify-end -mt-1">
+              <Link
+                href="/esqueci-senha"
+                className="text-xs text-fg-muted hover:text-fg transition-colors"
+              >
+                Esqueci minha senha
+              </Link>
+            </div>
+
             {error && (
               <p className="text-sm text-danger text-center">{error}</p>
             )}
