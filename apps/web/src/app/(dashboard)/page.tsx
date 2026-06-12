@@ -26,7 +26,7 @@ import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { BudgetCard } from "@/components/dashboard/budget-card";
 import { BudgetModal } from "@/components/dashboard/budget-modal";
-import { CreditCardVisual } from "@/components/dashboard/credit-card-visual";
+import { CardStack } from "@/components/dashboard/card-stack";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 import { sidebarMobileOpenAtom } from "@/store/sidebar";
@@ -549,7 +549,7 @@ export default function DashboardPage() {
               {loading ? (
                 <div className="h-44 animate-pulse rounded-[18px] bg-white/10" />
               ) : cards.length > 0 ? (
-                <CreditCardVisual card={cards[0]} />
+                <CardStack cards={cards} />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-[18px] border border-dashed border-white/15 px-4 py-8 text-center">
                   <CreditCardIcon size={28} className="text-on-dark-muted" />
