@@ -48,6 +48,91 @@ export class CardsRepository {
     });
   }
 
+  /**
+   * Gasto (apenas EXPENSE) do CICLO DE FATURA ABERTO de cada cartão informado,
+   * indexado por cardId. O ciclo vai do dia seguinte ao fechamento do mês
+   * anterior até o fechamento do mês atual — o mesmo critério de getInvoice.
+   *
+   * Como cada cartão tem seu próprio closingDay, não há um intervalo único de
+   * datas; buscamos as transações da janela máxima possível (~últimos ~62 dias,
+   * cobrindo qualquer ciclo aberto) e somamos em memória respeitando o ciclo de
+   * cada cartão. Para a escala de um app pessoal (poucos cartões/transações) é
+   * barato e evita N queries.
+   */
+  async getCurrentCycleSpendByCard(
+    cards: { id: string; closingDay: number }[],
+    userIds: string[],
+    now: Date = new Date(),
+  ): Promise<Record<string, number>> {
+    const result: Record<string, number> = {};
+    if (cards.length === 0) return result;
+
+    // Limite inferior seguro para a busca: início do ciclo mais antigo possível
+    // entre os cartões (o de menor closingDay). Pegamos com folga (2 meses).
+    const windowStart = new Date(
+      now.getFullYear(),
+      now.getMonth() - 2,
+      1,
+      0,
+      0,
+      0,
+    );
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        userId: { in: userIds },
+        cardId: { in: cards.map((c) => c.id) },
+        type: 'EXPENSE',
+        date: { gte: windowStart, lte: now },
+      },
+      select: { cardId: true, amount: true, date: true },
+    });
+
+    for (const card of cards) {
+      const { start, end } = this.currentCycleRange(card.closingDay, now);
+      const spent = transactions
+        .filter(
+          (tx) =>
+            tx.cardId === card.id && tx.date >= start && tx.date <= end,
+        )
+        .reduce((sum, tx) => sum + tx.amount.toNumber(), 0);
+      result[card.id] = spent;
+    }
+
+    return result;
+  }
+
+  /**
+   * Intervalo do ciclo de fatura ABERTO para um closingDay, relativo a `now`.
+   * Se hoje já passou do fechamento deste mês, o ciclo aberto é o próximo
+   * (fecha mês que vem); senão, é o que fecha neste mês.
+   */
+  private currentCycleRange(
+    closingDay: number,
+    now: Date,
+  ): { start: Date; end: Date } {
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
+
+    // Se ainda não fechou neste mês, o ciclo aberto encerra no fechamento deste
+    // mês; caso contrário, encerra no fechamento do mês seguinte.
+    const closesThisMonth = day <= closingDay;
+    const endMonthOffset = closesThisMonth ? 0 : 1;
+
+    const start = new Date(year, month - 1 + endMonthOffset, closingDay + 1);
+    const end = new Date(
+      year,
+      month + endMonthOffset,
+      closingDay,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { start, end };
+  }
+
   async update(
     id: string,
     data: {
