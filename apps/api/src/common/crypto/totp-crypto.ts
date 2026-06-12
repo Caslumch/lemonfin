@@ -4,11 +4,23 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 
 /**
- * Deriva a chave de criptografia (32 bytes) a partir do JWT_SECRET.
- * Usa SHA-256 para garantir o tamanho correto da chave para o AES-256.
+ * Deriva a chave de criptografia (32 bytes) para o AES-256.
+ *
+ * Prefere TOTP_ENCRYPTION_KEY (chave DEDICADA — separa o segredo de cripto em
+ * repouso do segredo de assinatura de sessão; rotacionar o JWT não invalida os
+ * secrets TOTP já gravados). Faz fallback para JWT_SECRET por compatibilidade
+ * com secrets que foram criptografados antes da chave dedicada existir.
+ *
+ * Nunca usa fallback hardcoded: sem nenhum dos dois segredos, lança erro
+ * (melhor falhar do que cifrar dados sensíveis com um valor público).
  */
 function getKey(): Buffer {
-  const secret = process.env.JWT_SECRET ?? 'fallback-secret';
+  const secret = process.env.TOTP_ENCRYPTION_KEY ?? process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      'TOTP_ENCRYPTION_KEY ou JWT_SECRET é obrigatório para cifrar/decifrar o secret TOTP',
+    );
+  }
   return crypto.createHash('sha256').update(secret).digest();
 }
 
@@ -51,10 +63,7 @@ export function decryptSecret(enc: string): string {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  const plain = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
+  const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 
   return plain.toString('utf8');
 }

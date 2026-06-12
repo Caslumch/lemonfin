@@ -19,7 +19,9 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        // getOrThrow: assinatura e verificação compartilham o MESMO segredo
+        // obrigatório. Sem ele, o boot falha (em vez de assinar com undefined).
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: '7d' },
       }),
     }),
