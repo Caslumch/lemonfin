@@ -7,7 +7,12 @@ export async function proxy(request: NextRequest) {
 
   const isAuthPage =
     request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/register");
+    request.nextUrl.pathname.startsWith("/register") ||
+    // Recuperação de senha: o usuário está deslogado, então precisa ser
+    // acessível sem sessão. Tratada como página de auth para que um usuário
+    // já logado seja levado para a home (não faz sentido "esquecer a senha"
+    // estando autenticado).
+    request.nextUrl.pathname.startsWith("/esqueci-senha");
 
   // Rotas públicas de marketing (landing) — acessíveis sem login.
   const isPublicPage = request.nextUrl.pathname.startsWith("/landing");
