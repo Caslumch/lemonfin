@@ -107,6 +107,9 @@ export class WhatsappService {
       case 'correction':
         await this.handleCorrection(from, user.id, result);
         break;
+      case 'correction_card':
+        await this.handleCorrectionCard(from, user.id, result.cardName);
+        break;
       case 'installment':
         await this.handleInstallment(from, user.id, result);
         break;
@@ -440,6 +443,11 @@ export class WhatsappService {
       return;
     }
 
+    if (result.queryType === 'card') {
+      await this.handleCardQuery(from, userId, result.cardName);
+      return;
+    }
+
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startDate = new Date(
@@ -476,6 +484,7 @@ export class WhatsappService {
     switch (result.queryType) {
       case 'expenses':
         message =
+          `Aqui vão suas despesas do mês 👇\n\n` +
           `💸 *Despesas de ${monthName}*\n\n` +
           `*Total:* ${expenseFormatted}\n` +
           `*Transações:* ${summary.expenseCount}\n\n` +
@@ -484,6 +493,7 @@ export class WhatsappService {
 
       case 'income':
         message =
+          `Suas receitas do mês 👇\n\n` +
           `💰 *Receitas de ${monthName}*\n\n` +
           `*Total:* ${incomeFormatted}\n` +
           `*Transações:* ${summary.incomeCount}\n\n` +
@@ -492,6 +502,7 @@ export class WhatsappService {
 
       case 'balance':
         message =
+          `Seu saldo tá assim 👇\n\n` +
           `${balanceEmoji} *Saldo de ${monthName}*\n\n` +
           `*Saldo:* ${balanceFormatted}\n\n` +
           `💰 Receitas: ${incomeFormatted}\n` +
@@ -501,6 +512,7 @@ export class WhatsappService {
       case 'summary':
       default:
         message =
+          `Beleza, aqui está como o mês tá indo 👇\n\n` +
           `📊 *Resumo de ${monthName}*\n\n` +
           `💰 *Receitas:* ${incomeFormatted} (${summary.incomeCount} transações)\n` +
           `💸 *Despesas:* ${expenseFormatted} (${summary.expenseCount} transações)\n` +
@@ -510,6 +522,153 @@ export class WhatsappService {
     }
 
     await this.wmodeClient.sendMessage({ to: from, content: message });
+  }
+
+  // Gastos de um cartão específico no mês. cardName indefinido ou "cartao" =
+  // genérico (tenta resolver se o usuário só tem 1 cartão).
+  private async handleCardQuery(
+    from: string,
+    userId: string,
+    cardName?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    let card: { id: string; name: string } | null = null;
+
+    if (!cardName || cardName.toLowerCase() === 'cartao') {
+      // Genérico: resolve só se houver exatamente 1 cartão.
+      const cards = await this.cardsRepository.findMany(userIds);
+      if (cards.length === 0) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Você ainda não tem nenhum cartão cadastrado. ' +
+            'Cadastre um no app pra eu acompanhar os gastos dele 💳',
+        });
+        return;
+      }
+      if (cards.length > 1) {
+        const names = cards.map((c) => c.name).join(', ');
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            `Você tem mais de um cartão (${names}). ` +
+            `De qual você quer ver os gastos? É só me dizer o nome.`,
+        });
+        return;
+      }
+      card = cards[0];
+    } else {
+      card = await this.cardsRepository.findByName(cardName, userIds);
+      if (!card) {
+        const cards = await this.cardsRepository.findMany(userIds);
+        const tail =
+          cards.length > 0
+            ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}.`
+            : 'Você ainda não tem nenhum cartão cadastrado.';
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
+        });
+        return;
+      }
+    }
+
+    const now = new Date();
+    const startDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    ).toISOString();
+    const endDate = now.toISOString();
+
+    const { total, count } = await this.transactionsRepository.getCardSummary(
+      userIds,
+      card.id,
+      startDate,
+      endDate,
+    );
+    const monthName = now.toLocaleDateString('pt-BR', { month: 'long' });
+
+    if (count === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `Você ainda não tem gastos no *${card.name}* em ${monthName} 👍`,
+      });
+      return;
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Aqui vão seus gastos no *${card.name}* este mês 👇\n\n` +
+        `💳 *${card.name}* — ${monthName}\n` +
+        `*Total:* ${fmt(total)}\n` +
+        `*Transações:* ${count}`,
+    });
+  }
+
+  // Corrige o cartão da última transação. cardName=null remove o vínculo;
+  // string troca para o cartão informado (igual handleCorrection, mas no cartão).
+  private async handleCorrectionCard(
+    from: string,
+    userId: string,
+    cardName: string | null,
+  ) {
+    const last = await this.transactionsRepository.findLastByUser(userId);
+    if (!last) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Não encontrei nenhuma transação recente pra trocar o cartão.',
+      });
+      return;
+    }
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const desc = last.description || '-';
+    const amount = fmt(Number(last.amount));
+
+    // Remover o vínculo de cartão.
+    if (cardName === null) {
+      await this.transactionsRepository.update(last.id, { cardId: null });
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Pronto, tirei o cartão desse lançamento ✅\n\n` +
+          `*${desc}* — ${amount}`,
+      });
+      this.logger.log(`Transaction ${last.id} card removed by user ${userId}`);
+      return;
+    }
+
+    // Trocar para outro cartão.
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const card = await this.cardsRepository.findByName(cardName, userIds);
+    if (!card) {
+      const cards = await this.cardsRepository.findMany(userIds);
+      const tail =
+        cards.length > 0
+          ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}. Pra qual eu troco?`
+          : 'Você ainda não tem nenhum cartão cadastrado.';
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
+      });
+      return;
+    }
+
+    await this.transactionsRepository.update(last.id, { cardId: card.id });
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Pronto, troquei pra *${card.name}* ✅\n\n` + `*${desc}* — ${amount}`,
+    });
+    this.logger.log(
+      `Transaction ${last.id} card changed to ${card.name} by user ${userId}`,
+    );
   }
 
   private async handleForecast(from: string, userId: string) {
@@ -525,6 +684,8 @@ export class WhatsappService {
         : 'último dia do mês';
 
     const lines = [
+      `Te conto como o mês deve fechar 👇`,
+      '',
       `${emoji} *Previsão de fim do mês*`,
       '',
       `*Saldo hoje:* ${fmt(forecast.currentBalance)}`,
@@ -601,6 +762,7 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
+        `Sobre seu orçamento 👇\n\n` +
         `${emoji} *Orçamento do mês*\n\n` +
         `*Limite:* ${fmt(budget.amount)}\n` +
         `*Gasto:* ${fmt(budget.spent)} (${budget.percentage}%)\n` +
@@ -944,7 +1106,10 @@ export class WhatsappService {
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content: `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
+      content:
+        `Olha como suas reservas estão indo 👇\n\n` +
+        `🏦 *Suas reservas*\n\n` +
+        blocks.join('\n\n'),
     });
   }
 
