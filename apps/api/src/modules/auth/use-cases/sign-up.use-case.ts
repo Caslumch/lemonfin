@@ -36,10 +36,13 @@ export class SignUpUseCase {
     }
 
     const passwordHash = await bcrypt.hash(input.password, 10);
+    // Trial grátis de 7 dias a partir do cadastro. Pós-trial é soft (só avisa).
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const user = await this.usersRepository.create({
       name: input.name,
       email: input.email,
       passwordHash,
+      trialEndsAt,
       ...(normalizedPhone && { phone: normalizedPhone }),
     });
 
