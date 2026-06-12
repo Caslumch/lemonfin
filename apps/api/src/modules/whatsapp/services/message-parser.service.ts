@@ -29,7 +29,7 @@ export interface ParsedRecurring {
   cardName?: string;
 }
 
-export interface ParsedSavingsGoal {
+export interface ParsedReserve {
   name: string;
   targetAmount: number;
   deadline: string; // ISO 'YYYY-MM-DD...'; sempre futura (validador garante)
@@ -60,14 +60,14 @@ export type ParseResult =
         | 'balance'
         | 'forecast'
         | 'budget'
-        | 'savings';
+        | 'reserves';
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
   | { intent: 'installment'; data: ParsedInstallment }
   | { intent: 'recurring'; data: ParsedRecurring }
-  | { intent: 'savings_goal_create'; data: ParsedSavingsGoal }
-  | { intent: 'savings_contribution'; amount: number }
+  | { intent: 'reserve_create'; data: ParsedReserve }
+  | { intent: 'reserve_contribution'; amount: number }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
   | { intent: 'tips'; message: string }
   | { intent: 'unknown'; message: string };
@@ -101,17 +101,17 @@ Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financei
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
 Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
 Para orçamento: "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
-Para metas de poupança: "minhas metas", "como tá minha meta?", "minhas metas não tem?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
+Para reservas (objetivos de poupança): "minhas reservas", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?", "minhas metas" (quando se refere a juntar dinheiro)
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "savings"}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves"}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
 - balance: foco no saldo
 - forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
 - budget: situação do ORÇAMENTO do mês (teto de GASTO definido, quanto gastou, quanto pode ainda gastar)
-- savings: situação das METAS DE POUPANÇA / objetivos de juntar dinheiro (quanto já juntou de cada meta, quanto falta)
-IMPORTANTE: orçamento (budget) = teto de gasto do mês. Meta de poupança (savings) = juntar dinheiro para um objetivo. "minha meta"/"minhas metas" é SEMPRE savings, nunca budget.
+- reserves: situação das RESERVAS / objetivos de juntar dinheiro (quanto já juntou de cada reserva, quanto falta)
+IMPORTANTE: orçamento (budget) = teto de gasto do mês. Reserva (reserves) = juntar dinheiro para um objetivo. "minha reserva"/"minhas reservas" e "minhas metas" (no sentido de juntar dinheiro) são reserves, nunca budget.
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
@@ -154,21 +154,21 @@ Responda: {"intent": "batch", "items": [ <objeto transaction|installment|recurri
 - Cada objeto em "items" deve ter seu campo "intent" ("transaction", "installment" ou "recurring") e todos os campos daquela intenção.
 - "skipped": itens que você reconheceu mas não conseguiu transformar em valor único. Pode ser lista vazia.
 
-### 8. SAVINGS_GOAL_CREATE — Criar meta de poupança
+### 8. RESERVE_CREATE — Criar uma reserva (objetivo de poupança)
 Quando o usuário quer JUNTAR/GUARDAR dinheiro para um objetivo, com um valor-alvo (e opcionalmente um prazo).
-Exemplos: "quero juntar 5000 pra viagem até dezembro", "meta de 10 mil pro carro", "quero guardar 2000 até março", "objetivo: 3000 de reserva de emergência".
+Exemplos: "quero juntar 5000 pra viagem até dezembro", "reserva de 10 mil pro carro", "quero guardar 2000 até março", "objetivo: 3000 de reserva de emergência".
 
-Responda: {"intent": "savings_goal_create", "name": string, "targetAmount": number, "deadline": string | null}
+Responda: {"intent": "reserve_create", "name": string, "targetAmount": number, "deadline": string | null}
 - name: objetivo curto (ex: "viagem", "carro", "reserva de emergência").
 - targetAmount: valor-alvo TOTAL a juntar. Se NÃO houver valor claro, responda intent "unknown" (NÃO invente um valor).
 - deadline: data ISO "YYYY-MM-DD". Converta nomes de mês ("dezembro", "até dez", "março") para o ÚLTIMO dia daquele mês. Use SEMPRE o próximo mês futuro: se o mês citado já passou neste ano, use o ano seguinte. Se NÃO houver prazo, retorne null.
 
-### 9. SAVINGS_CONTRIBUTION — Guardar dinheiro numa meta
-Quando o usuário diz que GUARDOU/SEPAROU/DEPOSITOU/JUNTOU um valor para uma meta existente.
+### 9. RESERVE_CONTRIBUTION — Guardar dinheiro numa reserva
+Quando o usuário diz que GUARDOU/SEPAROU/DEPOSITOU/JUNTOU um valor para uma reserva existente.
 Exemplos: "guardei 200 na viagem", "separei 500 pra reserva", "depositei 1000 na poupança", "juntei mais 300 pro carro".
 
-Responda: {"intent": "savings_contribution", "amount": number}
-- amount: valor guardado. IGNORE o nome da meta (o app vai perguntar em qual meta lançar). Se não houver valor, responda "unknown".
+Responda: {"intent": "reserve_contribution", "amount": number}
+- amount: valor guardado. IGNORE o nome da reserva (o app vai perguntar em qual reserva lançar). Se não houver valor, responda "unknown".
 
 ### 10. TIPS — Dicas e orientações financeiras
 Quando o usuário pede dicas, ideias, conselhos ou orientações sobre finanças pessoais.
@@ -181,12 +181,12 @@ Escreva a dica de forma curta, prática e amigável (máx 500 caracteres). Use e
 Quando a mensagem não se encaixa em nenhuma das intenções acima.
 
 Responda: {"intent": "unknown", "message": string}
-Explique brevemente o que você pode fazer — registrar gastos, consultar o resumo, criar metas ("quero juntar 5000 pra viagem") e dar dicas — com exemplos curtos.
+Explique brevemente o que você pode fazer — registrar gastos, consultar o resumo, criar reservas ("quero juntar 5000 pra viagem") e dar dicas — com exemplos curtos.
 
 ## DESAMBIGUAÇÃO (evite confundir):
-- "guardei/separei/juntei/depositei + valor" → savings_contribution (NÃO transaction).
-- "quero juntar/guardar + valor" ou "meta de + valor" → savings_goal_create (NÃO transaction, NÃO recurring).
-- "minhas metas" / "como tá minha meta" → query com queryType "savings" (NÃO budget).`;
+- "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
+- "quero juntar/guardar + valor", "reserva de + valor" ou "objetivo de + valor" → reserve_create (NÃO transaction, NÃO recurring).
+- "minhas reservas" / "como tá minha reserva" / "minhas metas" (no sentido de juntar dinheiro) → query com queryType "reserves" (NÃO budget).`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -296,19 +296,19 @@ export class MessageParserService {
           return item;
         }
 
-        case 'savings_goal_create': {
-          const item = this.parseSavingsGoalItem(json);
+        case 'reserve_create': {
+          const item = this.parseReserveItem(json);
           if (!item) {
             return {
               intent: 'unknown',
               message:
-                'Não consegui entender a meta. Tente algo como "quero juntar 5000 pra viagem até dezembro".',
+                'Não consegui entender a reserva. Tente algo como "quero juntar 5000 pra viagem até dezembro".',
             };
           }
           return item;
         }
 
-        case 'savings_contribution':
+        case 'reserve_contribution':
           if (!json.amount || typeof json.amount !== 'number') {
             return {
               intent: 'unknown',
@@ -317,7 +317,7 @@ export class MessageParserService {
             };
           }
           return {
-            intent: 'savings_contribution',
+            intent: 'reserve_contribution',
             amount: Number(json.amount),
           };
 
@@ -335,7 +335,7 @@ export class MessageParserService {
             intent: 'unknown',
             message:
               json.message ||
-              'Posso te ajudar a registrar gastos, consultar seu resumo, criar metas de poupança ou dar dicas. Tente "Gastei 50 no mercado", "Resumo", "Quero juntar 5000 pra viagem" ou "Me dá uma dica".',
+              'Posso te ajudar a registrar gastos, consultar seu resumo, criar reservas ou dar dicas. Tente "Gastei 50 no mercado", "Resumo", "Quero juntar 5000 pra viagem" ou "Me dá uma dica".',
           };
       }
     } catch (error) {
@@ -409,17 +409,17 @@ export class MessageParserService {
     };
   }
 
-  private parseSavingsGoalItem(
+  private parseReserveItem(
     json: Record<string, unknown>,
-  ): Extract<ParseResult, { intent: 'savings_goal_create' }> | null {
-    // Valor-alvo é obrigatório — sem ele, não dá pra criar a meta (não inventa).
+  ): Extract<ParseResult, { intent: 'reserve_create' }> | null {
+    // Valor-alvo é obrigatório — sem ele, não dá pra criar a reserva (não inventa).
     if (!json.targetAmount || typeof json.targetAmount !== 'number') return null;
-    const name = (json.name as string)?.trim() || 'minha meta';
+    const name = (json.name as string)?.trim() || 'minha reserva';
     const deadline = this.normalizeDeadline(
       json.deadline as string | null | undefined,
     );
     return {
-      intent: 'savings_goal_create',
+      intent: 'reserve_create',
       data: { name, targetAmount: Number(json.targetAmount), deadline },
     };
   }

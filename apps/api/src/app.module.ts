@@ -15,7 +15,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { GoalsModule } from './modules/goals/goals.module';
-import { SavingsGoalsModule } from './modules/savings-goals/savings-goals.module';
+import { ReservesModule } from './modules/reserves/reserves.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { HealthController } from './health.controller';
@@ -46,7 +46,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ChatModule,
     AlertsModule,
     GoalsModule,
-    SavingsGoalsModule,
+    ReservesModule,
     RecurringModule,
     BudgetsModule,
   ],

@@ -145,13 +145,13 @@ describe('MessageParserService', () => {
     });
   });
 
-  describe('metas de poupança', () => {
-    it('parseia criação de meta com prazo futuro', async () => {
+  describe('reservas', () => {
+    it('parseia criação de reserva com prazo futuro', async () => {
       const future = new Date(new Date().getFullYear() + 1, 11, 31)
         .toISOString()
         .slice(0, 10);
       mockResponse({
-        intent: 'savings_goal_create',
+        intent: 'reserve_create',
         name: 'viagem',
         targetAmount: 5000,
         deadline: future,
@@ -159,8 +159,8 @@ describe('MessageParserService', () => {
 
       const result = await service.parse('quero juntar 5000 pra viagem');
 
-      expect(result.intent).toBe('savings_goal_create');
-      if (result.intent === 'savings_goal_create') {
+      expect(result.intent).toBe('reserve_create');
+      if (result.intent === 'reserve_create') {
         expect(result.data.name).toBe('viagem');
         expect(result.data.targetAmount).toBe(5000);
         expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
@@ -169,9 +169,9 @@ describe('MessageParserService', () => {
       }
     });
 
-    it('vira unknown quando a meta não tem valor-alvo', async () => {
+    it('vira unknown quando a reserva não tem valor-alvo', async () => {
       mockResponse({
-        intent: 'savings_goal_create',
+        intent: 'reserve_create',
         name: 'viagem',
         deadline: null,
       });
@@ -183,16 +183,16 @@ describe('MessageParserService', () => {
 
     it('usa default futuro quando deadline é null', async () => {
       mockResponse({
-        intent: 'savings_goal_create',
+        intent: 'reserve_create',
         name: 'carro',
         targetAmount: 10000,
         deadline: null,
       });
 
-      const result = await service.parse('meta de 10 mil pro carro');
+      const result = await service.parse('reserva de 10 mil pro carro');
 
-      expect(result.intent).toBe('savings_goal_create');
-      if (result.intent === 'savings_goal_create') {
+      expect(result.intent).toBe('reserve_create');
+      if (result.intent === 'reserve_create') {
         expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
           Date.now(),
         );
@@ -201,16 +201,16 @@ describe('MessageParserService', () => {
 
     it('cai no default futuro quando deadline está no passado', async () => {
       mockResponse({
-        intent: 'savings_goal_create',
-        name: 'reserva',
+        intent: 'reserve_create',
+        name: 'reserva de emergência',
         targetAmount: 3000,
         deadline: '2020-01-31',
       });
 
       const result = await service.parse('quero juntar 3000 de reserva');
 
-      expect(result.intent).toBe('savings_goal_create');
-      if (result.intent === 'savings_goal_create') {
+      expect(result.intent).toBe('reserve_create');
+      if (result.intent === 'reserve_create') {
         expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
           Date.now(),
         );
@@ -218,27 +218,27 @@ describe('MessageParserService', () => {
     });
 
     it('parseia um aporte com valor', async () => {
-      mockResponse({ intent: 'savings_contribution', amount: 200 });
+      mockResponse({ intent: 'reserve_contribution', amount: 200 });
 
       const result = await service.parse('guardei 200 na viagem');
 
-      expect(result).toEqual({ intent: 'savings_contribution', amount: 200 });
+      expect(result).toEqual({ intent: 'reserve_contribution', amount: 200 });
     });
 
     it('vira unknown quando o aporte não tem valor', async () => {
-      mockResponse({ intent: 'savings_contribution' });
+      mockResponse({ intent: 'reserve_contribution' });
 
       const result = await service.parse('guardei na viagem');
 
       expect(result.intent).toBe('unknown');
     });
 
-    it('repassa query savings', async () => {
-      mockResponse({ intent: 'query', queryType: 'savings' });
+    it('repassa query reserves', async () => {
+      mockResponse({ intent: 'query', queryType: 'reserves' });
 
-      expect(await service.parse('minhas metas')).toEqual({
+      expect(await service.parse('minhas reservas')).toEqual({
         intent: 'query',
-        queryType: 'savings',
+        queryType: 'reserves',
       });
     });
   });

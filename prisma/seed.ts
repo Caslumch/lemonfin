@@ -12,7 +12,7 @@ const categories = [
   { name: 'Compras', slug: 'compras', icon: '🛍️', colorBg: '#FFF8E1', colorText: '#F57F17' },
   { name: 'Salário', slug: 'salario', icon: '💰', colorBg: '#E8F5E9', colorText: '#2E7D32' },
   { name: 'Freelance', slug: 'freelance', icon: '💻', colorBg: '#EDE7F6', colorText: '#4527A0' },
-  { name: 'Poupança/Metas', slug: 'poupanca-metas', icon: '🏦', colorBg: '#E0F2F1', colorText: '#00695C' },
+  { name: 'Reservas', slug: 'reservas', icon: '🏦', colorBg: '#E0F2F1', colorText: '#00695C' },
   { name: 'Outros', slug: 'outros', icon: '📌', colorBg: '#F5F5F5', colorText: '#6B6B6B' },
 ]
 
