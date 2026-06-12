@@ -13,9 +13,15 @@ import { GetForecastUseCase } from './use-cases/get-forecast.use-case';
 import { CategoriesModule } from '../categories/categories.module';
 import { FamiliesModule } from '../families/families.module';
 import { RecurringModule } from '../recurring/recurring.module';
+import { CardsModule } from '../cards/cards.module';
 
 @Module({
-  imports: [CategoriesModule, FamiliesModule, forwardRef(() => RecurringModule)],
+  imports: [
+    CategoriesModule,
+    FamiliesModule,
+    CardsModule,
+    forwardRef(() => RecurringModule),
+  ],
   controllers: [TransactionsController],
   providers: [
     TransactionsRepository,
