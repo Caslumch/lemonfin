@@ -31,8 +31,8 @@ Implementar quando tiver **~50 usuarios ativos**. Custo: zero ou minimo.
 ### Cache Basico
 
 - [x] Cache de categorias em memoria (muda raramente) — TTL 1h
-- [ ] Cache de dados do usuario em memoria — TTL 5min
-- [ ] Cache do contexto financeiro do chat — TTL 2min (evita 4 queries/mensagem)
+- [x] Cache de dados do usuario em memoria — TTL 5min (findById, com invalidacao nas mutacoes)
+- [x] Cache do contexto financeiro do chat — TTL 2min (evita 4 queries/mensagem)
 
 ### Indices no Banco
 
