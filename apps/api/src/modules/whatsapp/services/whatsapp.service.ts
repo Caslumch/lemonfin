@@ -4,7 +4,11 @@ import { CategoriesRepository } from '../../categories/repositories/categories.r
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
-import { MessageParserService, ParseResult } from './message-parser.service';
+import {
+  MessageParserService,
+  ParseResult,
+  BatchItem,
+} from './message-parser.service';
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
@@ -105,6 +109,9 @@ export class WhatsappService {
         break;
       case 'recurring':
         await this.handleRecurring(from, user.id, result);
+        break;
+      case 'batch':
+        await this.handleBatch(from, user.id, result);
         break;
       case 'tips':
         await this.wmodeClient.sendMessage({
@@ -299,7 +306,10 @@ export class WhatsappService {
       const cat = await this.categoriesRepository.findBySlug(slug);
       if (!cat) continue;
       seen.add(slug);
-      options.push({ slug: cat.slug, label: `${cat.icon ?? ''} ${cat.name}`.trim() });
+      options.push({
+        slug: cat.slug,
+        label: `${cat.icon ?? ''} ${cat.name}`.trim(),
+      });
       if (options.length >= 4) break;
     }
 
@@ -544,7 +554,11 @@ export class WhatsappService {
       return;
     }
 
-    const emoji = budget.exceeded ? '🔴' : budget.percentage >= 80 ? '⚠️' : '✅';
+    const emoji = budget.exceeded
+      ? '🔴'
+      : budget.percentage >= 80
+        ? '⚠️'
+        : '✅';
     const paceLabel =
       budget.pace === 'over'
         ? '📈 acima do previsto — no ritmo atual você estoura o limite'
@@ -771,7 +785,10 @@ export class WhatsappService {
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName && data.cardName !== 'cartao') {
-      const card = await this.cardsRepository.findByName(data.cardName, userIds);
+      const card = await this.cardsRepository.findByName(
+        data.cardName,
+        userIds,
+      );
       if (card) {
         cardId = card.id;
         cardLabel = card.name;
@@ -810,6 +827,139 @@ export class WhatsappService {
     this.logger.log(
       `Recurring created: ${recurring.id} (day ${data.dayOfMonth}) for user ${userId}`,
     );
+  }
+
+  // Vários itens numa só mensagem. Persiste cada item reaproveitando os mesmos
+  // repositórios dos handlers individuais, mas envia UMA mensagem-resumo (e não
+  // uma por item). Itens que não puderam ser estruturados (skipped) entram no
+  // resumo como aviso — nunca são registrados com dados inventados.
+  private async handleBatch(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'batch' }>,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const lines: string[] = [];
+
+    for (const item of result.items) {
+      try {
+        const line = await this.persistBatchItem(userId, userIds, item);
+        lines.push(line);
+      } catch (error) {
+        this.logger.error(`Batch item failed: ${error}`);
+        lines.push('⚠️ um item falhou ao registrar');
+      }
+    }
+
+    const parts: string[] = [];
+    if (lines.length > 0) {
+      parts.push(
+        `✅ *${lines.length} ${lines.length === 1 ? 'item registrado' : 'itens registrados'}!*\n\n` +
+          lines.map((l) => `• ${l}`).join('\n'),
+      );
+    }
+    if (result.skipped.length > 0) {
+      parts.push(
+        `⚠️ *Não registrei ${result.skipped.length}:*\n` +
+          result.skipped
+            .map((s) => `• ${s.description} — ${s.reason}`)
+            .join('\n') +
+          `\n\n_Mande esses separadamente com um valor fixo._`,
+      );
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content: parts.join('\n\n'),
+    });
+
+    this.logger.log(
+      `Batch processed: ${lines.length} registered, ${result.skipped.length} skipped for user ${userId}`,
+    );
+  }
+
+  // Persiste um único item de lote e devolve uma linha curta para o resumo.
+  // Resolve categoria (com fallback "outros") e cartão por nome, como nos
+  // handlers individuais.
+  private async persistBatchItem(
+    userId: string,
+    userIds: string[],
+    item: BatchItem,
+  ): Promise<string> {
+    const category =
+      (await this.categoriesRepository.findBySlug(item.data.categorySlug)) ??
+      (await this.categoriesRepository.findBySlug('outros'));
+    if (!category) {
+      throw new Error('categoria indisponível');
+    }
+
+    // Cartão só por nome específico (ignora "cartao" genérico no lote para não
+    // depender de quantos cartões o usuário tem).
+    let cardId: string | undefined;
+    if (item.data.cardName && item.data.cardName !== 'cartao') {
+      const card = await this.cardsRepository.findByName(
+        item.data.cardName,
+        userIds,
+      );
+      if (card) cardId = card.id;
+    }
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (item.intent === 'installment') {
+      const { data } = item;
+      const perInstallment =
+        Math.round((data.amount / data.installments) * 100) / 100;
+      const now = new Date();
+      for (let i = 0; i < data.installments; i++) {
+        const date = new Date(
+          now.getFullYear(),
+          now.getMonth() + i,
+          now.getDate(),
+        );
+        await this.transactionsRepository.create({
+          amount: perInstallment,
+          type: 'EXPENSE',
+          description: `${data.description} (${i + 1}/${data.installments})`,
+          date: date.toISOString(),
+          source: 'WHATSAPP',
+          userId,
+          categoryId: category.id,
+          cardId,
+        });
+      }
+      return `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`;
+    }
+
+    if (item.intent === 'recurring') {
+      const { data } = item;
+      await this.recurringRepository.create({
+        description: data.description || category.name,
+        amount: data.amount,
+        type: data.type,
+        dayOfMonth: data.dayOfMonth,
+        userId,
+        categoryId: category.id,
+        cardId,
+      });
+      const emoji = data.type === 'INCOME' ? '💰' : '🔁';
+      return `${emoji} ${data.description || category.name}: ${fmt(data.amount)} (todo dia ${data.dayOfMonth})`;
+    }
+
+    // transaction
+    const { data } = item;
+    await this.transactionsRepository.create({
+      amount: data.amount,
+      type: data.type,
+      description: data.description,
+      source: 'WHATSAPP',
+      userId,
+      categoryId: category.id,
+      cardId,
+    });
+    const emoji = data.type === 'EXPENSE' ? '💸' : '💰';
+    return `${emoji} ${data.description}: ${fmt(data.amount)}`;
   }
 
   // "hoje" / "ontem" / "há N dias" a partir de uma data passada.
