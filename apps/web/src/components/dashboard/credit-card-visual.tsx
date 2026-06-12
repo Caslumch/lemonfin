@@ -61,10 +61,35 @@ function maskedNumber(id: string): string {
   return `**** **** **** ${last4}`;
 }
 
+function formatBRL(value: number, fractionDigits = 0): string {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+// Cor da barra conforme a fração do limite consumida: tranquilo < 75% <=
+// atenção < 90% <= estourando. >= 90% vira vermelho.
+function usageBarColor(ratio: number): string {
+  if (ratio >= 0.9) return "bg-red-400";
+  if (ratio >= 0.75) return "bg-amber-400";
+  return "bg-lima";
+}
+
 export function CreditCardVisual({ card }: CreditCardVisualProps) {
   const brand = (card.brand || "").trim();
   const brandLabel = brand ? brand.toUpperCase() : "CARTÃO";
   const theme = themeFor(brand);
+
+  const spent = card.currentSpend ?? 0;
+  const limit = card.limit ? Number(card.limit) : null;
+  // Fração 0–1 do limite usada (limitada a 1 para a largura da barra; o número
+  // real ainda é exibido, podendo passar de 100%).
+  const ratio = limit && limit > 0 ? spent / limit : 0;
+  const barWidth = Math.min(ratio, 1) * 100;
+  const pctLabel = limit && limit > 0 ? Math.round(ratio * 100) : null;
 
   return (
     <div
@@ -99,21 +124,48 @@ export function CreditCardVisual({ card }: CreditCardVisualProps) {
             dia {card.closingDay}
           </p>
         </div>
-        {card.limit && (
+        {limit !== null ? (
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wide text-white/50">
               Limite
             </p>
             <p className="font-[family-name:var(--font-mono)] text-sm">
-              {Number(card.limit).toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-                minimumFractionDigits: 0,
-              })}
+              {formatBRL(limit)}
+            </p>
+          </div>
+        ) : (
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wide text-white/50">
+              Fatura atual
+            </p>
+            <p className="font-[family-name:var(--font-mono)] text-sm">
+              {formatBRL(spent)}
             </p>
           </div>
         )}
       </div>
+
+      {/* Barra de uso do limite — só quando há limite definido. */}
+      {limit !== null && limit > 0 && (
+        <div className="relative mt-4">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="font-[family-name:var(--font-mono)] text-xs text-white/85">
+              {formatBRL(spent)}
+            </span>
+            <span className="text-[10px] font-medium text-white/55">
+              {pctLabel}% usado
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+            <div
+              className={`h-full rounded-full transition-[width] duration-500 ${usageBarColor(
+                ratio,
+              )}`}
+              style={{ width: `${barWidth}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

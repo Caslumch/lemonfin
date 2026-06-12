@@ -10,6 +10,9 @@ export interface Card {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  // Gasto do ciclo de fatura aberto (presente em GET /cards). Base da barra de
+  // uso do limite. Ausente em respostas que não o calculam.
+  currentSpend?: number;
 }
 
 export interface CardInvoice {
