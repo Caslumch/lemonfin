@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 
 @Injectable()
@@ -15,14 +15,13 @@ export class WebhookSignatureGuard implements CanActivate {
   private readonly secret: string;
 
   constructor(private readonly config: ConfigService) {
-    this.secret = this.config.get<string>('WMODE_WEBHOOK_SECRET') ?? '';
+    // getOrThrow: o webhook identifica o usuário pelo telefone do payload, então
+    // SEM segredo configurado qualquer um forjaria mensagens em nome de qualquer
+    // conta. Falhar no boot é preferível a subir com o webhook aberto.
+    this.secret = this.config.getOrThrow<string>('WMODE_WEBHOOK_SECRET');
   }
 
   canActivate(context: ExecutionContext): boolean {
-    if (!this.secret) {
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<Request>();
     const signature = request.headers['x-webhook-signature'] as string;
 
@@ -37,11 +36,23 @@ export class WebhookSignatureGuard implements CanActivate {
 
     const expected = `sha256=${expectedHash}`;
 
-    if (signature !== expected) {
+    if (!this.safeEqual(signature, expected)) {
       this.logger.warn('Invalid webhook signature');
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     return true;
+  }
+
+  // Comparação em tempo constante para não vazar a assinatura esperada via
+  // timing. timingSafeEqual exige buffers de mesmo tamanho; comprimentos
+  // diferentes já significam assinatura inválida.
+  private safeEqual(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) {
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
   }
 }
