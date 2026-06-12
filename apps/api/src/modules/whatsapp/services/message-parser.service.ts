@@ -60,10 +60,15 @@ export type ParseResult =
         | 'balance'
         | 'forecast'
         | 'budget'
-        | 'reserves';
+        | 'reserves'
+        | 'card';
+      // Só presente quando queryType === 'card'. "cartao" = genérico (sem nome).
+      cardName?: string;
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
+  // Corrige o cartão da última transação. null = remover vínculo; string = trocar.
+  | { intent: 'correction_card'; cardName: string | null }
   | { intent: 'installment'; data: ParsedInstallment }
   | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'reserve_create'; data: ParsedReserve }
@@ -101,9 +106,10 @@ Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financei
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
 Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
 Para orçamento: "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
-Para reservas (objetivos de poupança): "minhas reservas", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?", "minhas metas" (quando se refere a juntar dinheiro)
+Para reservas/metas: "minhas reservas", "quais são minhas metas", "minhas metas", "que metas eu tenho", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
+Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nubank", "quanto gastei no Inter?", "meu cartão X", "fatura do Bradesco", "o que gastei no <cartão>?"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves"}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "card", "cardName": string | null}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
@@ -111,7 +117,9 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
 - budget: situação do ORÇAMENTO do mês (teto de GASTO definido, quanto gastou, quanto pode ainda gastar)
 - reserves: situação das RESERVAS / objetivos de juntar dinheiro (quanto já juntou de cada reserva, quanto falta)
-IMPORTANTE: orçamento (budget) = teto de gasto do mês. Reserva (reserves) = juntar dinheiro para um objetivo. "minha reserva"/"minhas reservas" e "minhas metas" (no sentido de juntar dinheiro) são reserves, nunca budget.
+- card: gastos de um CARTÃO específico
+- cardName: SÓ quando queryType="card". Nome do cartão mencionado (ex: "Bradesco", "Nubank"), ou "cartao" se disser só "meu cartão" sem nome. Nos outros queryTypes, null.
+IMPORTANTE: orçamento (budget) = teto de gasto do mês. Reserva (reserves) = juntar dinheiro para um objetivo. "minha reserva"/"minhas reservas" e "minhas metas" são reserves, NUNCA budget e NUNCA saudação. "como está meu cartão X" / "gastos no X" é queryType "card", NUNCA o resumo geral.
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
@@ -177,7 +185,17 @@ Exemplos: "me dá uma dica", "como economizar?", "ideias para investir".
 Responda: {"intent": "tips", "message": string}
 Escreva a dica de forma curta, prática e amigável (máx 500 caracteres). Use emojis com moderação.
 
-### 11. UNKNOWN — Mensagem não reconhecida
+### 11. CORRECTION_CARD — Corrigir/remover o cartão da última transação
+Quando o usuário corrige em QUAL cartão a ÚLTIMA transação registrada caiu, OU diz que não foi em cartão nenhum. É SEMPRE sobre algo JÁ REGISTRADO (referência ao passado), não um gasto novo.
+Trocar de cartão: "não foi no Bradesco, foi no Nubank", "troca pro Nubank", "foi no Nubank", "muda pro Inter".
+Remover o cartão: "não foi no Bradesco", "não foi em cartão nenhum", "tira o cartão", "não era no cartão", "foi no débito", "foi no dinheiro".
+
+Responda: {"intent": "correction_card", "cardName": string | null}
+- cardName: nome do cartão NOVO quando o usuário troca de cartão.
+- cardName: null quando o usuário REMOVE o vínculo (não foi em cartão nenhum / tira o cartão / "não foi no X" sem indicar outro cartão).
+IMPORTANTE: só use correction_card quando NÃO há um gasto NOVO com valor na mensagem. Se a mensagem descreve um gasto novo com valor (ex: "gastei 50 no Nubank"), use transaction.
+
+### 12. UNKNOWN — Mensagem não reconhecida
 Quando a mensagem não se encaixa em nenhuma das intenções acima.
 
 Responda: {"intent": "unknown", "message": string}
@@ -186,7 +204,12 @@ Explique brevemente o que você pode fazer — registrar gastos, consultar o res
 ## DESAMBIGUAÇÃO (evite confundir):
 - "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
 - "quero juntar/guardar + valor", "reserva de + valor" ou "objetivo de + valor" → reserve_create (NÃO transaction, NÃO recurring).
-- "minhas reservas" / "como tá minha reserva" / "minhas metas" (no sentido de juntar dinheiro) → query com queryType "reserves" (NÃO budget).`;
+- "minhas reservas" / "como tá minha reserva" / "minhas metas" → query com queryType "reserves" (NÃO budget, NÃO saudação).
+- "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
+- "como está meu cartão X" / "gastos no X" / "quanto gastei no X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
+
+## CARTÃO — regra crítica:
+SÓ defina cardName quando o cartão estiver na MENSAGEM ATUAL. NUNCA herde o nome de um cartão que apareceu no histórico de mensagens anteriores. Se a mensagem atual não cita cartão, cardName é null — mesmo que uma mensagem anterior tenha citado um cartão.`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -221,9 +244,11 @@ export class MessageParserService {
         userTurns.push({
           role: 'user',
           content:
-            'CONTEXTO (apenas para entender referências; NÃO registre nem ' +
-            'reaproveite valores/categorias daqui — classifique somente a ' +
-            `mensagem atual):\n${transcript}`,
+            'CONTEXTO (apenas para entender referências como "e o mês passado?". ' +
+            'NÃO registre nada daqui e NÃO reaproveite NENHUM dado deste histórico ' +
+            '— valor, categoria, descrição e principalmente CARTÃO. Se a mensagem ' +
+            'atual não cita um cartão, NÃO use um cartão que apareceu aqui. ' +
+            `Classifique SOMENTE a mensagem atual):\n${transcript}`,
         });
       }
 
@@ -253,11 +278,18 @@ export class MessageParserService {
           return item;
         }
 
-        case 'query':
-          return {
-            intent: 'query',
-            queryType: json.queryType || 'summary',
-          };
+        case 'query': {
+          const queryType = json.queryType || 'summary';
+          // cardName só entra no objeto quando presente (mantém o shape antigo
+          // dos outros queryTypes — evita quebrar comparações estritas).
+          const cardName =
+            typeof json.cardName === 'string' && json.cardName.trim()
+              ? json.cardName.trim()
+              : undefined;
+          return cardName
+            ? { intent: 'query', queryType, cardName }
+            : { intent: 'query', queryType };
+        }
 
         case 'cancel':
           return { intent: 'cancel' };
@@ -271,6 +303,9 @@ export class MessageParserService {
             };
           }
           return { intent: 'correction', newAmount: Number(json.newAmount) };
+
+        case 'correction_card':
+          return this.parseCorrectionCard(json);
 
         case 'installment': {
           const item = this.parseInstallmentItem(json);
@@ -407,6 +442,18 @@ export class MessageParserService {
         cardName: (json.cardName as string) || undefined,
       },
     };
+  }
+
+  // Correção de cartão da última transação. cardName string (≠ "cartao") =
+  // trocar; null/vazio/"cartao" = remover o vínculo. Nunca vira "unknown" —
+  // ambos os desfechos são válidos.
+  private parseCorrectionCard(
+    json: Record<string, unknown>,
+  ): Extract<ParseResult, { intent: 'correction_card' }> {
+    const raw =
+      typeof json.cardName === 'string' ? json.cardName.trim() : '';
+    const cardName = raw && raw.toLowerCase() !== 'cartao' ? raw : null;
+    return { intent: 'correction_card', cardName };
   }
 
   private parseReserveItem(

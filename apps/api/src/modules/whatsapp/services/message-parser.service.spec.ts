@@ -134,6 +134,30 @@ describe('MessageParserService', () => {
       });
     });
 
+    it('parseia query de cartão com cardName', async () => {
+      mockResponse({ intent: 'query', queryType: 'card', cardName: 'Bradesco' });
+
+      const result = await service.parse('como está meu cartão Bradesco?');
+
+      expect(result).toEqual({
+        intent: 'query',
+        queryType: 'card',
+        cardName: 'Bradesco',
+      });
+    });
+
+    it('parseia query de cartão genérico sem nome', async () => {
+      mockResponse({ intent: 'query', queryType: 'card', cardName: 'cartao' });
+
+      const result = await service.parse('como está meu cartão?');
+
+      expect(result).toEqual({
+        intent: 'query',
+        queryType: 'card',
+        cardName: 'cartao',
+      });
+    });
+
     it('vira unknown quando o JSON da OpenAI é inválido', async () => {
       createMock.mockResolvedValueOnce({
         choices: [{ message: { content: 'isto não é json' } }],
@@ -142,6 +166,43 @@ describe('MessageParserService', () => {
       const result = await service.parse('qualquer coisa');
 
       expect(result.intent).toBe('unknown');
+    });
+  });
+
+  describe('correção de cartão', () => {
+    it('troca o cartão da última transação', async () => {
+      mockResponse({ intent: 'correction_card', cardName: 'Nubank' });
+
+      const result = await service.parse('na verdade foi no Nubank');
+
+      expect(result).toEqual({
+        intent: 'correction_card',
+        cardName: 'Nubank',
+      });
+    });
+
+    it('remove o cartão quando cardName é null', async () => {
+      mockResponse({ intent: 'correction_card', cardName: null });
+
+      const result = await service.parse('não foi no Bradesco');
+
+      expect(result).toEqual({ intent: 'correction_card', cardName: null });
+    });
+
+    it('remove o cartão quando cardName vem ausente', async () => {
+      mockResponse({ intent: 'correction_card' });
+
+      const result = await service.parse('tira o cartão');
+
+      expect(result).toEqual({ intent: 'correction_card', cardName: null });
+    });
+
+    it('trata "cartao" genérico como remoção', async () => {
+      mockResponse({ intent: 'correction_card', cardName: 'cartao' });
+
+      const result = await service.parse('não foi no cartão');
+
+      expect(result).toEqual({ intent: 'correction_card', cardName: null });
     });
   });
 
@@ -241,6 +302,15 @@ describe('MessageParserService', () => {
         queryType: 'reserves',
       });
     });
+
+    it('roteia "quais são minhas metas" para reserves', async () => {
+      mockResponse({ intent: 'query', queryType: 'reserves' });
+
+      expect(await service.parse('quais são minhas metas')).toEqual({
+        intent: 'query',
+        queryType: 'reserves',
+      });
+    });
   });
 
   // Bug 2: o histórico não pode entrar como turns reais (o modelo passava a
@@ -262,13 +332,14 @@ describe('MessageParserService', () => {
       // Nenhum turn assistant (era isso que contaminava a classificação).
       expect(sentMessages.some((m) => m.role === 'assistant')).toBe(false);
 
-      // Exatamente um bloco de contexto, marcado e separado da mensagem atual.
+      // Exatamente um bloco de contexto (o que carrega o transcript do
+      // histórico), marcado e separado da mensagem atual. Identificado pelo
+      // transcript — não por uma palavra solta que pode aparecer no prompt.
       const contextBlocks = sentMessages.filter((m) =>
-        m.content.includes('CONTEXTO'),
+        m.content.includes('inglês da dani'),
       );
       expect(contextBlocks).toHaveLength(1);
       expect(contextBlocks[0].content).toContain('NÃO registre');
-      expect(contextBlocks[0].content).toContain('inglês da dani');
 
       // A mensagem atual vai isolada e claramente rotulada.
       const current = sentMessages[sentMessages.length - 1];
@@ -284,9 +355,11 @@ describe('MessageParserService', () => {
       const sentMessages = createMock.mock.calls[0][0].messages as {
         content: string;
       }[];
-      expect(sentMessages.some((m) => m.content.includes('CONTEXTO'))).toBe(
-        false,
-      );
+      // Sem histórico → só system + a mensagem atual (nenhum bloco de contexto).
+      expect(sentMessages).toHaveLength(2);
+      expect(
+        sentMessages.some((m) => m.content.startsWith('CONTEXTO')),
+      ).toBe(false);
     });
   });
 

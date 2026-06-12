@@ -288,4 +288,32 @@ export class TransactionsRepository {
       expenseCount: expenseNoCard._count + expenseCard._count,
     };
   }
+
+  // Gasto (DESPESA) num cartão específico, no período. Método focado — não
+  // reusa getSummary porque lá o balance/expense separam cartão de não-cartão;
+  // aqui é só o total daquele cartão.
+  async getCardSummary(
+    userIds: string[],
+    cardId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{ total: number; count: number }> {
+    const where: Prisma.TransactionWhereInput = {
+      userId: { in: userIds },
+      cardId,
+      type: 'EXPENSE',
+    };
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
+    }
+
+    const agg = await this.prisma.transaction.aggregate({
+      where,
+      _sum: { amount: true },
+      _count: true,
+    });
+    return { total: agg._sum.amount?.toNumber() ?? 0, count: agg._count };
+  }
 }
