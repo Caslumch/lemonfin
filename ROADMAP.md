@@ -265,6 +265,38 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 
 ---
 
+## Painel Admin / Owner (interno)
+
+Area restrita ao dono da plataforma (super-admin) para acompanhar uso, saude e
+custos. NAO confundir com o papel ADMIN de familia (escopo de um grupo). Nada
+disso existe hoje.
+
+**Acesso (fundacao — habilita o resto):**
+
+| # | Tarefa | Detalhe | Esforco |
+|---|--------|---------|---------|
+| A.1 | Flag de super-admin | Campo no User (ex: `isSuperAdmin`) setado manualmente no banco | Baixo |
+| A.2 | SuperAdminGuard (API) | Protege todos os endpoints `/admin/*`; 403 sem a flag | Baixo |
+| A.3 | Rota `/admin` (web) | Pagina protegida; liberada no `proxy.ts` so para super-admin | Baixo |
+
+**Paineis (dependem da fundacao):**
+
+| # | Painel | Conteudo | Esforco | Observacao |
+|---|--------|----------|---------|------------|
+| A.4 | Usuarios | Total, novos/dia, ativos, trials ativos vs. expirados, grafico de crescimento | Baixo | Dados ja existem (users.createdAt, trialEndsAt) |
+| A.5 | Atividade | Transacoes criadas, msgs WhatsApp processadas, cartoes — volume por dia | Baixo | Dados ja existem |
+| A.6 | Uso de IA / tokens | Tokens gastos por dia e por usuario, custo estimado | **Alto** | EXIGE instrumentar cada chamada de IA e gravar consumo numa tabela nova — nao ha rastreamento hoje. Pre-requisito antes do grafico |
+| A.7 | Saude / custos | Status dos servicos (API, WhatsApp), erros recentes, custo estimado (IA + infra) | Medio | "Erros" idealmente via Sentry (item 10.7); custo de infra costuma ser estimativa manual |
+
+**Ordem sugerida:** A.1–A.3 (fundacao) → A.4+A.5 (entrega rapida, dados prontos)
+→ A.6 (instrumentar tokens antes) → A.7 (incremental).
+
+**Conexao com monetizacao:** quando o Stripe existir, o painel ganha metricas de
+receita (pagantes, MRR, conversao de trial) — por isso faz sentido o Stripe vir
+antes ou junto, para o admin ja nascer com a metrica mais importante de um SaaS.
+
+---
+
 ## Stack Tecnica Completa
 
 | Camada | Tecnologia |

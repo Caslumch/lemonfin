@@ -533,6 +533,48 @@
 
 ---
 
+## Painel Admin / Owner (interno)
+
+Area restrita ao dono da plataforma (super-admin). NAO e o papel ADMIN de
+familia. Nada implementado ainda. Ordem: fundacao → usuarios/atividade →
+tokens → saude.
+
+**Fundacao (habilita o resto)**
+
+- [ ] Campo `isSuperAdmin` no User (setado manualmente no banco)
+- [ ] `SuperAdminGuard` na API — protege `/admin/*` (403 sem a flag)
+- [ ] Rota `/admin` no web, liberada no `proxy.ts` so para super-admin
+
+**Painel: Usuarios** (dados ja existem — esforco baixo)
+
+- [ ] Endpoint admin: agregados de usuarios (total, novos/dia, ativos)
+- [ ] Trials ativos vs. expirados
+- [ ] Grafico de crescimento de usuarios
+
+**Painel: Atividade** (dados ja existem — esforco baixo)
+
+- [ ] Transacoes criadas por dia
+- [ ] Mensagens de WhatsApp processadas por dia
+- [ ] Cartoes / volume de uso geral
+
+**Painel: Uso de IA / tokens** (esforco ALTO — exige instrumentacao previa)
+
+- [ ] Tabela de consumo de IA (por chamada: tokens, modelo, custo, userId)
+- [ ] Instrumentar as chamadas de IA (chat/parsing) para gravar consumo
+- [ ] Painel: tokens por dia, por usuario, custo estimado
+
+**Painel: Saude / custos**
+
+- [ ] Status dos servicos (API, WhatsApp)
+- [ ] Erros recentes (idealmente via Sentry — ver Monitoramento)
+- [ ] Estimativa de custo (IA + infra)
+
+**Pos-Stripe (quando houver monetizacao)**
+
+- [ ] Metricas de receita no painel (pagantes, MRR, conversao de trial)
+
+---
+
 ## Backlog Futuro
 
 - [ ] Open Finance (integracao bancaria direta)
