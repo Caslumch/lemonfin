@@ -145,6 +145,104 @@ describe('MessageParserService', () => {
     });
   });
 
+  describe('metas de poupança', () => {
+    it('parseia criação de meta com prazo futuro', async () => {
+      const future = new Date(new Date().getFullYear() + 1, 11, 31)
+        .toISOString()
+        .slice(0, 10);
+      mockResponse({
+        intent: 'savings_goal_create',
+        name: 'viagem',
+        targetAmount: 5000,
+        deadline: future,
+      });
+
+      const result = await service.parse('quero juntar 5000 pra viagem');
+
+      expect(result.intent).toBe('savings_goal_create');
+      if (result.intent === 'savings_goal_create') {
+        expect(result.data.name).toBe('viagem');
+        expect(result.data.targetAmount).toBe(5000);
+        expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
+          Date.now(),
+        );
+      }
+    });
+
+    it('vira unknown quando a meta não tem valor-alvo', async () => {
+      mockResponse({
+        intent: 'savings_goal_create',
+        name: 'viagem',
+        deadline: null,
+      });
+
+      const result = await service.parse('quero juntar pra viagem');
+
+      expect(result.intent).toBe('unknown');
+    });
+
+    it('usa default futuro quando deadline é null', async () => {
+      mockResponse({
+        intent: 'savings_goal_create',
+        name: 'carro',
+        targetAmount: 10000,
+        deadline: null,
+      });
+
+      const result = await service.parse('meta de 10 mil pro carro');
+
+      expect(result.intent).toBe('savings_goal_create');
+      if (result.intent === 'savings_goal_create') {
+        expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
+          Date.now(),
+        );
+      }
+    });
+
+    it('cai no default futuro quando deadline está no passado', async () => {
+      mockResponse({
+        intent: 'savings_goal_create',
+        name: 'reserva',
+        targetAmount: 3000,
+        deadline: '2020-01-31',
+      });
+
+      const result = await service.parse('quero juntar 3000 de reserva');
+
+      expect(result.intent).toBe('savings_goal_create');
+      if (result.intent === 'savings_goal_create') {
+        expect(new Date(result.data.deadline).getTime()).toBeGreaterThan(
+          Date.now(),
+        );
+      }
+    });
+
+    it('parseia um aporte com valor', async () => {
+      mockResponse({ intent: 'savings_contribution', amount: 200 });
+
+      const result = await service.parse('guardei 200 na viagem');
+
+      expect(result).toEqual({ intent: 'savings_contribution', amount: 200 });
+    });
+
+    it('vira unknown quando o aporte não tem valor', async () => {
+      mockResponse({ intent: 'savings_contribution' });
+
+      const result = await service.parse('guardei na viagem');
+
+      expect(result.intent).toBe('unknown');
+    });
+
+    it('repassa query savings', async () => {
+      mockResponse({ intent: 'query', queryType: 'savings' });
+
+      expect(await service.parse('minhas metas')).toEqual({
+        intent: 'query',
+        queryType: 'savings',
+      });
+    });
+  });
+
   // Bug 2: o histórico não pode entrar como turns reais (o modelo passava a
   // imitar a resposta anterior). Deve ir como UM bloco de contexto marcado.
   describe('isolamento do histórico (regressão do bug de contexto)', () => {

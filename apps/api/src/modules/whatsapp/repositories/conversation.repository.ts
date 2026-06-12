@@ -8,17 +8,26 @@ export interface HistoryEntry {
   text: string;
 }
 
-// Confirmação aguardando resposta do usuário.
-export interface PendingConfirmation {
-  type: 'category';
-  // Dados da transação a confirmar (já parseados).
-  amount: number;
-  txType: 'INCOME' | 'EXPENSE';
-  description: string;
-  cardName?: string;
-  // Opções de categoria oferecidas (slug + label), na ordem dos números.
-  options: { slug: string; label: string }[];
-}
+// Confirmação aguardando resposta do usuário. União discriminada por `type`:
+// só o WhatsappService lê isso (o repositório trata como JSON opaco).
+export type PendingConfirmation =
+  | {
+      type: 'category';
+      // Dados da transação a confirmar (já parseados).
+      amount: number;
+      txType: 'INCOME' | 'EXPENSE';
+      description: string;
+      cardName?: string;
+      // Opções de categoria oferecidas (slug + label), na ordem dos números.
+      options: { slug: string; label: string }[];
+    }
+  | {
+      // Aporte aguardando o usuário escolher EM QUAL meta lançar.
+      type: 'goal-contribution';
+      amount: number;
+      // Metas ativas oferecidas (id + nome), na ordem dos números.
+      options: { id: string; name: string }[];
+    };
 
 const MAX_HISTORY = 4; // últimas 4 trocas
 const MAX_TEXT = 160; // trunca cada texto

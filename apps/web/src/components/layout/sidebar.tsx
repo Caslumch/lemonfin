@@ -31,7 +31,7 @@ const navItems = [
   { href: "/transacoes", label: "Transações", icon: ArrowUpDown },
   { href: "/categorias", label: "Categorias", icon: Layers },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
-  { href: "/metas", label: "Metas", icon: Target },
+  { href: "/limites", label: "Limites", icon: Target },
   { href: "/recorrentes", label: "Recorrentes", icon: Repeat },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
