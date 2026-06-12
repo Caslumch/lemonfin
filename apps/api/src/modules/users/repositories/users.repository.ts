@@ -82,6 +82,16 @@ export class UsersRepository {
     return user;
   }
 
+  async markEmailVerified(id: string) {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { emailVerifiedAt: new Date() },
+      select: { id: true, emailVerifiedAt: true },
+    });
+    await this.cache.del(byIdKey(id));
+    return user;
+  }
+
   async updateTwoFactor(
     id: string,
     data: {
