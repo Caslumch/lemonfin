@@ -13,6 +13,8 @@ import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { GetBudgetUseCase } from '../../budgets/use-cases/get-budget.use-case';
+import { SavingsGoalsRepository } from '../../savings-goals/repositories/savings-goals.repository';
+import { computeSavingsProgress } from '../../savings-goals/savings-goal-progress';
 import {
   ConversationRepository,
   PendingConfirmation,
@@ -39,6 +41,7 @@ export class WhatsappService {
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
     private readonly getBudget: GetBudgetUseCase,
+    private readonly savingsGoalsRepository: SavingsGoalsRepository,
     private readonly conversation: ConversationRepository,
   ) {}
 
@@ -109,6 +112,12 @@ export class WhatsappService {
         break;
       case 'recurring':
         await this.handleRecurring(from, user.id, result);
+        break;
+      case 'savings_goal_create':
+        await this.handleSavingsGoalCreate(from, user.id, result, phoneKey);
+        break;
+      case 'savings_contribution':
+        await this.handleSavingsContribution(from, user.id, result, phoneKey);
         break;
       case 'batch':
         await this.handleBatch(from, user.id, result);
@@ -349,6 +358,15 @@ export class WhatsappService {
     pending: PendingConfirmation,
     content: string,
   ): Promise<boolean> {
+    if (pending.type === 'goal-contribution') {
+      return this.resolveGoalContribution(
+        from,
+        phoneKey,
+        userId,
+        pending,
+        content,
+      );
+    }
     if (pending.type !== 'category') return false;
 
     const text = content.trim().toLowerCase();
@@ -414,6 +432,11 @@ export class WhatsappService {
 
     if (result.queryType === 'budget') {
       await this.handleBudget(from, userId);
+      return;
+    }
+
+    if (result.queryType === 'savings') {
+      await this.handleSavingsGoalQuery(from, userId);
       return;
     }
 
@@ -827,6 +850,244 @@ export class WhatsappService {
     this.logger.log(
       `Recurring created: ${recurring.id} (day ${data.dayOfMonth}) for user ${userId}`,
     );
+  }
+
+  // --- Metas de poupança ---------------------------------------------------
+
+  private async handleSavingsGoalCreate(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'savings_goal_create' }>,
+    phoneKey?: string,
+  ) {
+    const { data } = result;
+    const deadline = new Date(data.deadline);
+
+    const goal = await this.savingsGoalsRepository.create({
+      name: data.name,
+      targetAmount: data.targetAmount,
+      deadline,
+      userId,
+    });
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const deadlineLabel = deadline.toLocaleDateString('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const { suggestedMonthly, monthsRemaining } = computeSavingsProgress(
+      data.targetAmount,
+      0,
+      deadline,
+    );
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `🏦 *Meta criada!*\n\n` +
+        `*Objetivo:* ${data.name}\n` +
+        `*Alvo:* ${fmt(data.targetAmount)}\n` +
+        `*Prazo:* ${deadlineLabel}\n\n` +
+        `Pra chegar lá, guarde cerca de *${fmt(suggestedMonthly)}/mês* ` +
+        `(${monthsRemaining} ${monthsRemaining === 1 ? 'mês' : 'meses'}).\n` +
+        `_Quando guardar, me diga: "guardei 200 na ${data.name}"._`,
+    });
+
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        {
+          role: 'bot',
+          text: `Meta criada: ${data.name} (${fmt(data.targetAmount)})`,
+        },
+      ]);
+    }
+
+    this.logger.log(`Savings goal created: ${goal.id} for user ${userId}`);
+  }
+
+  private async handleSavingsGoalQuery(from: string, userId: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const goals = await this.savingsGoalsRepository.findManyActive(userIds);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (goals.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `🏦 *Metas de poupança*\n\n` +
+          `Você ainda não tem nenhuma meta.\n\n` +
+          `_Crie uma assim: "quero juntar 5000 pra viagem até dezembro"._`,
+      });
+      return;
+    }
+
+    const blocks = goals.map((g) => {
+      const target = g.targetAmount.toNumber();
+      const saved = g.savedAmount.toNumber();
+      const { remaining, percentage, monthsRemaining, suggestedMonthly } =
+        computeSavingsProgress(target, saved, g.deadline);
+      const bar = this.progressBar(percentage);
+      const deadlineLabel = g.deadline.toLocaleDateString('pt-BR', {
+        month: 'long',
+        year: 'numeric',
+      });
+      return (
+        `*${g.name}* — ${deadlineLabel}\n` +
+        `${bar} ${percentage}%\n` +
+        `${fmt(saved)} de ${fmt(target)}  •  faltam ${fmt(remaining)}\n` +
+        `_Sugestão: ${fmt(suggestedMonthly)}/mês (${monthsRemaining} ${monthsRemaining === 1 ? 'mês' : 'meses'})_`
+      );
+    });
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content: `🏦 *Suas metas de poupança*\n\n` + blocks.join('\n\n'),
+    });
+  }
+
+  // SEMPRE pergunta em qual meta lançar (decisão de produto): guarda o aporte
+  // como pendente e lista as metas numeradas. A resposta é resolvida sem IA por
+  // resolveGoalContribution.
+  private async handleSavingsContribution(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'savings_contribution' }>,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const goals = await this.savingsGoalsRepository.findManyActive(userIds);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (goals.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Você ainda não tem nenhuma meta pra guardar. ` +
+          `Crie uma: "quero juntar 5000 pra viagem até dezembro".`,
+      });
+      return;
+    }
+
+    if (!phoneKey) return; // sem chave de conversa não dá pra pendurar a pergunta
+
+    const options = goals.map((g) => ({ id: g.id, name: g.name }));
+    const pending: PendingConfirmation = {
+      type: 'goal-contribution',
+      amount: result.amount,
+      options,
+    };
+    await this.conversation.setPending(phoneKey, pending);
+
+    const list = options.map((o, i) => `${i + 1}. ${o.name}`).join('\n');
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Vou guardar ${fmt(result.amount)} em qual meta?\n\n${list}\n\n` +
+        `_Responda com o número._`,
+    });
+  }
+
+  // Resolve o aporte pendente (sem IA): identifica a meta por número ou nome,
+  // cria a DESPESA em "poupanca-metas" e incrementa o acumulado da meta.
+  private async resolveGoalContribution(
+    from: string,
+    phoneKey: string,
+    userId: string,
+    pending: Extract<PendingConfirmation, { type: 'goal-contribution' }>,
+    content: string,
+  ): Promise<boolean> {
+    const text = content.trim().toLowerCase();
+
+    if (['cancela', 'cancelar', 'deixa', 'esquece'].includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Ok, cancelei. Nada foi guardado.',
+      });
+      return true;
+    }
+
+    let chosen: { id: string; name: string } | undefined;
+    const num = parseInt(text, 10);
+    if (!Number.isNaN(num) && num >= 1 && num <= pending.options.length) {
+      chosen = pending.options[num - 1];
+    } else {
+      chosen = pending.options.find((o) => o.name.toLowerCase().includes(text));
+    }
+
+    if (!chosen) return false; // não entendeu → reprocessa a mensagem fora
+
+    await this.conversation.clearPending(phoneKey);
+
+    const category =
+      await this.categoriesRepository.findBySlug('poupanca-metas');
+    if (!category) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Erro interno: categoria de metas não encontrada.',
+      });
+      return true;
+    }
+
+    // 1) Aporte vira DESPESA (saiu do disponível do mês).
+    await this.transactionsRepository.create({
+      amount: pending.amount,
+      type: 'EXPENSE',
+      description: `Guardado: ${chosen.name}`,
+      source: 'WHATSAPP',
+      userId,
+      categoryId: category.id,
+    });
+
+    // 2) Incrementa o acumulado da meta (desativa se completou).
+    const updated = await this.savingsGoalsRepository.addContribution(
+      chosen.id,
+      pending.amount,
+    );
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const target = updated.targetAmount.toNumber();
+    const saved = updated.savedAmount.toNumber();
+    const { percentage, remaining } = computeSavingsProgress(
+      target,
+      saved,
+      updated.deadline,
+    );
+
+    const done = saved >= target;
+    const body = done
+      ? `🎉 *Meta batida!* Você completou *${chosen.name}* — ` +
+        `${fmt(saved)} de ${fmt(target)}. Parabéns! 🥳`
+      : `🏦 *Guardado!*\n\n` +
+        `*Meta:* ${chosen.name}\n` +
+        `Guardei ${fmt(pending.amount)} — agora ${fmt(saved)} de ${fmt(target)} (${percentage}%).\n` +
+        `_Faltam ${fmt(remaining)}._`;
+
+    await this.wmodeClient.sendMessage({ to: from, content: body });
+
+    await this.conversation.appendHistory(phoneKey, [
+      { role: 'bot', text: `Guardado ${fmt(pending.amount)} em ${chosen.name}` },
+    ]);
+
+    this.logger.log(
+      `Savings contribution: ${pending.amount} to goal ${chosen.id} by user ${userId}`,
+    );
+    return true;
+  }
+
+  // Barra de progresso textual (10 blocos): ████░░░░░░
+  private progressBar(percentage: number): string {
+    const filled = Math.max(
+      0,
+      Math.min(10, Math.round(Math.min(percentage, 100) / 10)),
+    );
+    return '█'.repeat(filled) + '░'.repeat(10 - filled);
   }
 
   // Vários itens numa só mensagem. Persiste cada item reaproveitando os mesmos

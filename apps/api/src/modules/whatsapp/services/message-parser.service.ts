@@ -29,6 +29,12 @@ export interface ParsedRecurring {
   cardName?: string;
 }
 
+export interface ParsedSavingsGoal {
+  name: string;
+  targetAmount: number;
+  deadline: string; // ISO 'YYYY-MM-DD...'; sempre futura (validador garante)
+}
+
 // Um item de um lote (várias transações/contas numa só mensagem). Cada item é
 // processado individualmente pelos mesmos handlers do fluxo de item único.
 export type BatchItem =
@@ -53,12 +59,15 @@ export type ParseResult =
         | 'income'
         | 'balance'
         | 'forecast'
-        | 'budget';
+        | 'budget'
+        | 'savings';
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
   | { intent: 'installment'; data: ParsedInstallment }
   | { intent: 'recurring'; data: ParsedRecurring }
+  | { intent: 'savings_goal_create'; data: ParsedSavingsGoal }
+  | { intent: 'savings_contribution'; amount: number }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
   | { intent: 'tips'; message: string }
   | { intent: 'unknown'; message: string };
@@ -92,14 +101,17 @@ Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financei
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
 Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
 Para orçamento: "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
+Para metas de poupança: "minhas metas", "como tá minha meta?", "minhas metas não tem?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget"}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "savings"}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
 - balance: foco no saldo
 - forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
-- budget: situação do ORÇAMENTO do mês (teto definido, quanto gastou, quanto pode ainda gastar)
+- budget: situação do ORÇAMENTO do mês (teto de GASTO definido, quanto gastou, quanto pode ainda gastar)
+- savings: situação das METAS DE POUPANÇA / objetivos de juntar dinheiro (quanto já juntou de cada meta, quanto falta)
+IMPORTANTE: orçamento (budget) = teto de gasto do mês. Meta de poupança (savings) = juntar dinheiro para um objetivo. "minha meta"/"minhas metas" é SEMPRE savings, nunca budget.
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
@@ -142,18 +154,39 @@ Responda: {"intent": "batch", "items": [ <objeto transaction|installment|recurri
 - Cada objeto em "items" deve ter seu campo "intent" ("transaction", "installment" ou "recurring") e todos os campos daquela intenção.
 - "skipped": itens que você reconheceu mas não conseguiu transformar em valor único. Pode ser lista vazia.
 
-### 8. TIPS — Dicas e orientações financeiras
+### 8. SAVINGS_GOAL_CREATE — Criar meta de poupança
+Quando o usuário quer JUNTAR/GUARDAR dinheiro para um objetivo, com um valor-alvo (e opcionalmente um prazo).
+Exemplos: "quero juntar 5000 pra viagem até dezembro", "meta de 10 mil pro carro", "quero guardar 2000 até março", "objetivo: 3000 de reserva de emergência".
+
+Responda: {"intent": "savings_goal_create", "name": string, "targetAmount": number, "deadline": string | null}
+- name: objetivo curto (ex: "viagem", "carro", "reserva de emergência").
+- targetAmount: valor-alvo TOTAL a juntar. Se NÃO houver valor claro, responda intent "unknown" (NÃO invente um valor).
+- deadline: data ISO "YYYY-MM-DD". Converta nomes de mês ("dezembro", "até dez", "março") para o ÚLTIMO dia daquele mês. Use SEMPRE o próximo mês futuro: se o mês citado já passou neste ano, use o ano seguinte. Se NÃO houver prazo, retorne null.
+
+### 9. SAVINGS_CONTRIBUTION — Guardar dinheiro numa meta
+Quando o usuário diz que GUARDOU/SEPAROU/DEPOSITOU/JUNTOU um valor para uma meta existente.
+Exemplos: "guardei 200 na viagem", "separei 500 pra reserva", "depositei 1000 na poupança", "juntei mais 300 pro carro".
+
+Responda: {"intent": "savings_contribution", "amount": number}
+- amount: valor guardado. IGNORE o nome da meta (o app vai perguntar em qual meta lançar). Se não houver valor, responda "unknown".
+
+### 10. TIPS — Dicas e orientações financeiras
 Quando o usuário pede dicas, ideias, conselhos ou orientações sobre finanças pessoais.
-Exemplos: "me dá uma dica", "como economizar?", "ideias para investir", "como juntar dinheiro?"
+Exemplos: "me dá uma dica", "como economizar?", "ideias para investir".
 
 Responda: {"intent": "tips", "message": string}
 Escreva a dica de forma curta, prática e amigável (máx 500 caracteres). Use emojis com moderação.
 
-### 9. UNKNOWN — Mensagem não reconhecida
+### 11. UNKNOWN — Mensagem não reconhecida
 Quando a mensagem não se encaixa em nenhuma das intenções acima.
 
 Responda: {"intent": "unknown", "message": string}
-Explique brevemente o que você pode fazer e dê exemplos.`;
+Explique brevemente o que você pode fazer — registrar gastos, consultar o resumo, criar metas ("quero juntar 5000 pra viagem") e dar dicas — com exemplos curtos.
+
+## DESAMBIGUAÇÃO (evite confundir):
+- "guardei/separei/juntei/depositei + valor" → savings_contribution (NÃO transaction).
+- "quero juntar/guardar + valor" ou "meta de + valor" → savings_goal_create (NÃO transaction, NÃO recurring).
+- "minhas metas" / "como tá minha meta" → query com queryType "savings" (NÃO budget).`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -263,6 +296,31 @@ export class MessageParserService {
           return item;
         }
 
+        case 'savings_goal_create': {
+          const item = this.parseSavingsGoalItem(json);
+          if (!item) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender a meta. Tente algo como "quero juntar 5000 pra viagem até dezembro".',
+            };
+          }
+          return item;
+        }
+
+        case 'savings_contribution':
+          if (!json.amount || typeof json.amount !== 'number') {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender o valor guardado. Tente algo como "guardei 200 na viagem".',
+            };
+          }
+          return {
+            intent: 'savings_contribution',
+            amount: Number(json.amount),
+          };
+
         case 'batch':
           return this.parseBatch(json, message);
 
@@ -277,7 +335,7 @@ export class MessageParserService {
             intent: 'unknown',
             message:
               json.message ||
-              'Posso te ajudar a registrar gastos, consultar seu resumo financeiro ou dar dicas. Tente "Gastei 50 no mercado", "Resumo" ou "Me dá uma dica".',
+              'Posso te ajudar a registrar gastos, consultar seu resumo, criar metas de poupança ou dar dicas. Tente "Gastei 50 no mercado", "Resumo", "Quero juntar 5000 pra viagem" ou "Me dá uma dica".',
           };
       }
     } catch (error) {
@@ -349,6 +407,38 @@ export class MessageParserService {
         cardName: (json.cardName as string) || undefined,
       },
     };
+  }
+
+  private parseSavingsGoalItem(
+    json: Record<string, unknown>,
+  ): Extract<ParseResult, { intent: 'savings_goal_create' }> | null {
+    // Valor-alvo é obrigatório — sem ele, não dá pra criar a meta (não inventa).
+    if (!json.targetAmount || typeof json.targetAmount !== 'number') return null;
+    const name = (json.name as string)?.trim() || 'minha meta';
+    const deadline = this.normalizeDeadline(
+      json.deadline as string | null | undefined,
+    );
+    return {
+      intent: 'savings_goal_create',
+      data: { name, targetAmount: Number(json.targetAmount), deadline },
+    };
+  }
+
+  // Normaliza o prazo: aceita o ISO do modelo se for futuro; null/inválido/
+  // passado caem num default de 12 meses à frente (último dia do mês). O ano
+  // dos meses nomeados é resolvido pelo prompt; este é o backstop determinístico.
+  private normalizeDeadline(raw: string | null | undefined): string {
+    const fallback = () => {
+      const d = new Date();
+      // dia 0 do mês +13 = último dia do mês +12.
+      return new Date(d.getFullYear(), d.getMonth() + 13, 0).toISOString();
+    };
+    if (!raw) return fallback();
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      return fallback();
+    }
+    return parsed.toISOString();
   }
 
   // Lote: valida cada item; os que não passam viram "skipped" (com motivo) em

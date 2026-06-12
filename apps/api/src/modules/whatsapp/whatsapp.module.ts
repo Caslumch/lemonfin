@@ -12,6 +12,7 @@ import { CardsModule } from '../cards/cards.module';
 import { FamiliesModule } from '../families/families.module';
 import { RecurringModule } from '../recurring/recurring.module';
 import { BudgetsModule } from '../budgets/budgets.module';
+import { SavingsGoalsModule } from '../savings-goals/savings-goals.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BudgetsModule } from '../budgets/budgets.module';
     FamiliesModule,
     RecurringModule,
     BudgetsModule,
+    SavingsGoalsModule,
   ],
   controllers: [WebhookController],
   providers: [

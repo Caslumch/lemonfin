@@ -44,7 +44,7 @@ function ProgressBar({
   );
 }
 
-export default function MetasPage() {
+export default function LimitesPage() {
   const { fetchApi } = useApi();
 
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -84,10 +84,10 @@ export default function MetasPage() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Meta criada com sucesso");
+      toast.success("Limite criado com sucesso");
       fetchGoals();
     } catch {
-      toast.error("Erro ao criar meta");
+      toast.error("Erro ao criar limite");
       throw new Error("create failed");
     }
   }
@@ -109,10 +109,10 @@ export default function MetasPage() {
         }),
       });
       setEditingGoal(null);
-      toast.success("Meta atualizada");
+      toast.success("Limite atualizado");
       fetchGoals();
     } catch {
-      toast.error("Erro ao atualizar meta");
+      toast.error("Erro ao atualizar limite");
       throw new Error("update failed");
     }
   }
@@ -122,10 +122,10 @@ export default function MetasPage() {
     try {
       await fetchApi(`/goals/${deletingGoal.id}`, { method: "DELETE" });
       setDeletingGoal(null);
-      toast.success("Meta removida");
+      toast.success("Limite removido");
       fetchGoals();
     } catch {
-      toast.error("Erro ao remover meta");
+      toast.error("Erro ao remover limite");
     }
   }
 
@@ -134,10 +134,10 @@ export default function MetasPage() {
   return (
     <>
       <ContentHeader
-        title="Metas"
+        title="Limites"
         actions={
           <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova meta
+            + Novo limite
           </Button>
         }
       />
@@ -150,9 +150,9 @@ export default function MetasPage() {
         ) : goals.length === 0 ? (
           <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <Target size={40} className="mx-auto text-fg-muted mb-3" />
-            <p className="text-fg-muted text-sm">Nenhuma meta definida.</p>
+            <p className="text-fg-muted text-sm">Nenhum limite definido.</p>
             <p className="text-fg-muted text-xs mt-1">
-              Crie metas para controlar seus gastos por categoria.
+              Crie limites para controlar seus gastos por categoria.
             </p>
           </div>
         ) : (

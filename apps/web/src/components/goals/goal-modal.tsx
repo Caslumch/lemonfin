@@ -102,7 +102,7 @@ export function GoalModal({
         <div className="w-full max-w-md bg-surface rounded-[24px] shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
-              {isEditing ? "Editar meta" : "Nova meta"}
+              {isEditing ? "Editar limite" : "Novo limite"}
             </h2>
             <button
               onClick={onClose}
@@ -115,7 +115,7 @@ export function GoalModal({
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <Input
               id="name"
-              label="Nome da meta"
+              label="Nome do limite"
               type="text"
               placeholder="Ex: Limite de alimentação"
               value={name}
@@ -197,7 +197,7 @@ export function GoalModal({
                   ? "Salvando..."
                   : isEditing
                     ? "Salvar"
-                    : "Criar meta"}
+                    : "Criar limite"}
               </Button>
             </div>
           </form>
