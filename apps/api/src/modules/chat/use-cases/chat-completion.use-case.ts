@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import type {
@@ -8,6 +10,11 @@ import type {
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
+
+// O contexto financeiro (resumo do mês, breakdown, evolução, últimas
+// transações) custa 4 queries e é reconstruído a cada mensagem do chat. Cache
+// curto (2min) evita refazer isso em conversas com várias mensagens seguidas.
+const CONTEXT_CACHE_TTL = 2 * 60 * 1000; // 2min
 
 const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e amigavel. Voce ajuda o usuario a entender seus gastos, identificar padroes e tomar melhores decisoes financeiras.
 
@@ -55,7 +62,8 @@ const tools: ChatCompletionTool[] = [
           },
           type: {
             type: 'string',
-            description: 'Filtro por tipo: INCOME ou EXPENSE. Omita para buscar ambos.',
+            description:
+              'Filtro por tipo: INCOME ou EXPENSE. Omita para buscar ambos.',
           },
         },
         required: ['startDate', 'endDate'],
@@ -117,6 +125,7 @@ export class ChatCompletionUseCase {
     private readonly config: ConfigService,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly familyContext: FamilyContextService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {
     this.openai = new OpenAI({
       apiKey: this.config.getOrThrow<string>('OPENAI_API_KEY'),
@@ -127,7 +136,7 @@ export class ChatCompletionUseCase {
     this.logger.log(`Chat request from user ${userId}: "${input.message}"`);
 
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const context = await this.buildFinancialContext(userIds);
+    const context = await this.getFinancialContext(userIds);
 
     const today = new Date().toISOString().split('T')[0];
     const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}\n\n## Contexto financeiro atual do usuario:\n${context}`;
@@ -168,7 +177,9 @@ export class ChatCompletionUseCase {
 
         if (delta.content) {
           content += delta.content;
-          this.logger.debug(`Chunk received: "${delta.content.slice(0, 50)}..."`);
+          this.logger.debug(
+            `Chunk received: "${delta.content.slice(0, 50)}..."`,
+          );
           yield delta.content;
         }
 
@@ -238,7 +249,9 @@ export class ChatCompletionUseCase {
       this.logger.warn(`Failed to parse args for ${name}: ${rawArgs}`);
       return { error: 'Argumentos invalidos' };
     }
-    this.logger.log(`Executing function ${name} with args: ${JSON.stringify(args)}`);
+    this.logger.log(
+      `Executing function ${name} with args: ${JSON.stringify(args)}`,
+    );
 
     switch (name) {
       case 'queryTransactions': {
@@ -282,11 +295,12 @@ export class ChatCompletionUseCase {
       }
 
       case 'getCategoryBreakdownByPeriod': {
-        const breakdown = await this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          args.startDate,
-          args.endDate,
-        );
+        const breakdown =
+          await this.transactionsRepository.getCategoryBreakdown(
+            userIds,
+            args.startDate,
+            args.endDate,
+          );
         return {
           period: `${args.startDate} a ${args.endDate}`,
           categories: breakdown.map((cat) => ({
@@ -301,6 +315,18 @@ export class ChatCompletionUseCase {
         this.logger.warn(`Unknown function: ${name}`);
         return { error: 'Funcao desconhecida' };
     }
+  }
+
+  // Wrapper com cache curto (2min). Chave estável por conjunto de userIds
+  // (família = vários IDs), ordenada para não depender da ordem de resolução.
+  private async getFinancialContext(userIds: string[]): Promise<string> {
+    const key = `chat:context:${[...userIds].sort().join(',')}`;
+    const cached = await this.cache.get<string>(key);
+    if (cached) return cached;
+
+    const context = await this.buildFinancialContext(userIds);
+    await this.cache.set(key, context, CONTEXT_CACHE_TTL);
+    return context;
   }
 
   private async buildFinancialContext(userIds: string[]): Promise<string> {
@@ -344,13 +370,17 @@ export class ChatCompletionUseCase {
     parts.push(
       `- Saldo: R$ ${summary.balance.toFixed(2)} (${summary.balance >= 0 ? 'positivo' : 'negativo'})`,
     );
-    parts.push(`- Total de transacoes: ${summary.incomeCount + summary.expenseCount}`);
+    parts.push(
+      `- Total de transacoes: ${summary.incomeCount + summary.expenseCount}`,
+    );
 
     if (categoryBreakdown.length > 0) {
       parts.push('\n### Gastos por categoria (mes atual)');
       for (const cat of categoryBreakdown.slice(0, 5)) {
         const name = cat.category?.name ?? 'Outros';
-        parts.push(`- ${name}: R$ ${cat.total.toFixed(2)} (${cat.count} transacoes)`);
+        parts.push(
+          `- ${name}: R$ ${cat.total.toFixed(2)} (${cat.count} transacoes)`,
+        );
       }
     }
 
