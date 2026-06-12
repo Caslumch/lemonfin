@@ -36,10 +36,10 @@ Implementar quando tiver **~50 usuarios ativos**. Custo: zero ou minimo.
 
 ### Indices no Banco
 
-- [ ] Index composto em Transaction: `(userId, date)` — query principal
-- [ ] Index composto em Transaction: `(userId, categoryId, date)` — filtro por categoria
-- [ ] Index em Transaction: `(cardId, date)` — faturas
-- [ ] Index em FamilyMember: `(userId)` — lookup de familia
+- [x] Index composto em Transaction: `(userId, date)` — query principal (ja existia)
+- [x] Index composto em Transaction: `(userId, categoryId, date)` — filtro por categoria (substituiu o `(userId, categoryId)`)
+- [x] Index em Transaction: `(cardId, date)` — faturas
+- [x] Index em FamilyMember: `(userId)` — JA COBERTO pelo `@@unique([userId, familyId])` (userId e prefixo do indice composto); criar um indice separado seria redundante
 - [ ] Verificar plano de execucao das queries mais usadas (`EXPLAIN ANALYZE`)
 
 ---

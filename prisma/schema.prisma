@@ -70,8 +70,12 @@ model Transaction {
   recurring RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
 
   @@index([userId, date])
-  @@index([userId, categoryId])
+  // Breakdown por categoria com filtro/ordenação por data (alerts, chat,
+  // dashboard). Inclui o antigo (userId, categoryId) como prefixo.
+  @@index([userId, categoryId, date])
   @@index([userId, cardId])
+  // Faturas: transações de um cartão por período.
+  @@index([cardId, date])
   @@index([recurringId])
   @@map("transactions")
 }
