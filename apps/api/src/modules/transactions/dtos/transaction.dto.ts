@@ -23,6 +23,7 @@ export const listTransactionsQuerySchema = z.object({
   perPage: z.coerce.number().int().positive().max(100).default(20),
   type: z.enum(['INCOME', 'EXPENSE']).optional(),
   categoryId: z.string().cuid().optional(),
+  search: z.string().trim().min(1).max(100).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   orderBy: z.enum(['date', 'amount', 'createdAt']).default('date'),

@@ -22,6 +22,7 @@ export interface Transaction {
   categoryId: string;
   category: Category;
   cardId: string | null;
+  card?: { id: string; name: string; brand: string | null } | null;
   user?: TransactionUser;
   createdAt: string;
   updatedAt: string;

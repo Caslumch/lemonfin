@@ -11,12 +11,29 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+// "este mês" quando for o mês corrente, senão "Maio de 2026"
+function monthLabel(month: Date) {
+  const now = new Date();
+  if (
+    month.getFullYear() === now.getFullYear() &&
+    month.getMonth() === now.getMonth()
+  ) {
+    return "este mês";
+  }
+  const label = month.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 interface SummaryCardsProps {
   summary: TransactionSummary | null;
+  month: Date;
   loading?: boolean;
 }
 
-export function SummaryCards({ summary, loading }: SummaryCardsProps) {
+export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
   const cards = [
     {
       label: "Entradas",
@@ -113,7 +130,7 @@ export function SummaryCards({ summary, loading }: SummaryCardsProps) {
                   )}
                 >
                   {card.label === "Saldo"
-                    ? "este mês"
+                    ? monthLabel(month)
                     : card.label === "Fatura cartão"
                       ? "aberta"
                       : `${card.count} ${card.count === 1 ? "transação" : "transações"}`}

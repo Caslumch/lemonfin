@@ -18,6 +18,7 @@ export class ListTransactionsUseCase {
       userIds,
       type: query.type,
       categoryId: query.categoryId,
+      search: query.search,
       startDate: query.startDate,
       endDate: query.endDate,
       orderBy: query.orderBy,

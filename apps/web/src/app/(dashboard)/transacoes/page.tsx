@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
@@ -37,9 +37,34 @@ export default function TransacoesPage() {
   // Filters
   const [type, setType] = useState("ALL");
   const [categoryId, setCategoryId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  // Debounce search input so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Start/end of the selected month as ISO (local boundaries)
+  const monthRange = useMemo(() => {
+    const start = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(
+      month.getFullYear(),
+      month.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, [month]);
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
@@ -59,21 +84,18 @@ export default function TransacoesPage() {
     params.set("perPage", "20");
     if (type !== "ALL") params.set("type", type);
     if (categoryId) params.set("categoryId", categoryId);
-    if (startDate)
-      params.set("startDate", new Date(startDate + "T00:00:00").toISOString());
-    if (endDate)
-      params.set("endDate", new Date(endDate + "T23:59:59").toISOString());
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    params.set("startDate", monthRange.start);
+    params.set("endDate", monthRange.end);
     return params;
-  }, [page, type, categoryId, startDate, endDate]);
+  }, [page, type, categoryId, debouncedSearch, monthRange]);
 
   const buildSummaryParams = useCallback(() => {
     const params = new URLSearchParams();
-    if (startDate)
-      params.set("startDate", new Date(startDate + "T00:00:00").toISOString());
-    if (endDate)
-      params.set("endDate", new Date(endDate + "T23:59:59").toISOString());
+    params.set("startDate", monthRange.start);
+    params.set("endDate", monthRange.end);
     return params;
-  }, [startDate, endDate]);
+  }, [monthRange]);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
@@ -145,7 +167,7 @@ export default function TransacoesPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [type, categoryId, startDate, endDate]);
+  }, [type, categoryId, debouncedSearch, month]);
 
   // Handlers
   async function handleCreate(data: {
@@ -223,7 +245,7 @@ export default function TransacoesPage() {
 
       <div className="px-5 pb-8 pt-2 md:px-8 space-y-5">
         {/* Summary cards */}
-        <SummaryCards summary={summary} loading={summaryLoading} />
+        <SummaryCards summary={summary} month={month} loading={summaryLoading} />
 
         {/* Filters */}
         <FiltersBar
@@ -231,10 +253,10 @@ export default function TransacoesPage() {
           onTypeChange={setType}
           categoryId={categoryId}
           onCategoryChange={setCategoryId}
-          startDate={startDate}
-          onStartDateChange={setStartDate}
-          endDate={endDate}
-          onEndDateChange={setEndDate}
+          month={month}
+          onMonthChange={setMonth}
+          search={search}
+          onSearchChange={setSearch}
           categories={categories}
         />
 
