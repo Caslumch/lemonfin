@@ -29,10 +29,36 @@ export class ReservesRepository {
     });
   }
 
+  // Todas as reservas (ativas + concluídas). Ativas primeiro, depois por prazo.
+  async findMany(userIds: string[]) {
+    return this.prisma.reserve.findMany({
+      where: { userId: { in: userIds } },
+      orderBy: [{ active: 'desc' }, { deadline: 'asc' }],
+    });
+  }
+
   async findById(id: string, userIds: string[]) {
     return this.prisma.reserve.findFirst({
       where: { id, userId: { in: userIds } },
     });
+  }
+
+  async update(
+    id: string,
+    data: { name?: string; targetAmount?: number; deadline?: Date },
+  ) {
+    const updateData: Prisma.ReserveUpdateInput = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.targetAmount !== undefined) {
+      updateData.targetAmount = new Prisma.Decimal(data.targetAmount);
+    }
+    if (data.deadline !== undefined) updateData.deadline = data.deadline;
+
+    return this.prisma.reserve.update({ where: { id }, data: updateData });
+  }
+
+  async delete(id: string) {
+    return this.prisma.reserve.delete({ where: { id } });
   }
 
   // Incrementa savedAmount atomicamente (evita read-modify-write). Quando a
