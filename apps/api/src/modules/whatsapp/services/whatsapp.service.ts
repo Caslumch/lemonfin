@@ -924,12 +924,21 @@ export class WhatsappService {
     if (forecast.pendingExpense > 0) {
       lines.push(`💸 *A pagar:* ${fmt(forecast.pendingExpense)}`);
     }
+    if (forecast.estimatedVariableExpense > 0) {
+      lines.push(`📊 *Gastos estimados:* ${fmt(forecast.estimatedVariableExpense)}`);
+    }
 
     lines.push(
       '',
       `${emoji} *Previsão:* ${fmt(forecast.projectedBalance)}`,
       `_${daysLabel} no mês_`,
     );
+
+    if (forecast.estimatedVariableExpense > 0) {
+      lines.push(
+        `_inclui ~${fmt(forecast.estimatedVariableExpense)} de gastos variáveis estimados pela sua média_`,
+      );
+    }
 
     if (forecast.pending.length > 0) {
       lines.push('', '*Contas fixas ainda neste mês:*');

@@ -249,6 +249,28 @@ export class TransactionsRepository {
     }));
   }
 
+  // Total de gasto variável "em dinheiro" num período: despesa avulsa que sai
+  // direto do saldo. Exclui cartão (pago depois via fatura, não afeta o saldo
+  // corrente) e recorrências (tratadas à parte na previsão). Usado para
+  // estimar quanto ainda deve ser gasto no resto do mês com base na média.
+  async getVariableExpenseTotal(
+    userIds: string[],
+    start: Date,
+    end: Date,
+  ): Promise<number> {
+    const agg = await this.prisma.transaction.aggregate({
+      where: {
+        userId: { in: userIds },
+        type: 'EXPENSE',
+        cardId: null,
+        recurringId: null,
+        date: { gte: start, lt: end },
+      },
+      _sum: { amount: true },
+    });
+    return agg._sum.amount?.toNumber() ?? 0;
+  }
+
   async getSummary(userIds: string[], startDate?: string, endDate?: string) {
     const where: Prisma.TransactionWhereInput = { userId: { in: userIds } };
     if (startDate || endDate) {

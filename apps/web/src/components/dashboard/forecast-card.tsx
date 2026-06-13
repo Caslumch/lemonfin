@@ -97,7 +97,20 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
             − {formatCurrency(forecast.pendingExpense)} a pagar
           </span>
         )}
+        {forecast.estimatedVariableExpense > 0 && (
+          <span className="text-danger font-medium">
+            − {formatCurrency(forecast.estimatedVariableExpense)} gastos estimados
+          </span>
+        )}
       </div>
+
+      {forecast.estimatedVariableExpense > 0 && (
+        <p className="text-[11px] text-on-dark-muted/70 mt-2 leading-snug">
+          Inclui ~{formatCurrency(forecast.estimatedVariableExpense)} de gastos
+          variáveis estimados pela sua média de{" "}
+          {formatCurrency(forecast.avgDailyVariableExpense)}/dia.
+        </p>
+      )}
 
       {/* Detalhe das recorrências pendentes */}
       {open && hasPending && (
