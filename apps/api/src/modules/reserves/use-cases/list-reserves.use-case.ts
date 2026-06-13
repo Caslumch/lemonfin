@@ -10,11 +10,12 @@ export class ListReservesUseCase {
     private readonly familyContext: FamilyContextService,
   ) {}
 
-  // Lista reservas ativas da família com progresso calculado. Decimal → number
-  // para serializar limpo no JSON da API.
+  // Lista as reservas da família (ativas + concluídas) com progresso calculado.
+  // Decimal → number para serializar limpo no JSON da API. O WhatsApp usa
+  // findManyActive direto no repo; a tela web quer ver tudo.
   async execute(userId: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const reserves = await this.reservesRepository.findManyActive(userIds);
+    const reserves = await this.reservesRepository.findMany(userIds);
 
     return reserves.map((reserve) => {
       const targetAmount = reserve.targetAmount.toNumber();

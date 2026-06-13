@@ -10,3 +10,11 @@ export const createReserveSchema = z.object({
 });
 
 export type CreateReserveInput = z.infer<typeof createReserveSchema>;
+
+export const updateReserveSchema = z.object({
+  name: z.string().min(1).optional(),
+  targetAmount: z.number().positive('Valor deve ser positivo').optional(),
+  deadline: z.coerce.date().optional(),
+});
+
+export type UpdateReserveInput = z.infer<typeof updateReserveSchema>;
