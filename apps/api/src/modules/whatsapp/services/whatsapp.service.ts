@@ -12,12 +12,15 @@ import {
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
-import { GetBudgetUseCase } from '../../budgets/use-cases/get-budget.use-case';
 import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
 import { computeReserveProgress } from '../../reserves/reserve-progress';
+import { GoalsRepository } from '../../goals/repositories/goals.repository';
+import { ListGoalsUseCase } from '../../goals/use-cases/list-goals.use-case';
+import { ChatCompletionUseCase } from '../../chat/use-cases/chat-completion.use-case';
 import {
   ConversationRepository,
   PendingConfirmation,
+  HistoryEntry,
 } from '../repositories/conversation.repository';
 
 interface IncomingMessage {
@@ -40,8 +43,10 @@ export class WhatsappService {
     private readonly wmodeClient: WmodeClientService,
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
-    private readonly getBudget: GetBudgetUseCase,
     private readonly reservesRepository: ReservesRepository,
+    private readonly goalsRepository: GoalsRepository,
+    private readonly listGoals: ListGoalsUseCase,
+    private readonly chatCompletion: ChatCompletionUseCase,
     private readonly conversation: ConversationRepository,
   ) {}
 
@@ -122,14 +127,14 @@ export class WhatsappService {
       case 'reserve_contribution':
         await this.handleReserveContribution(from, user.id, result, phoneKey);
         break;
+      case 'goal_create':
+        await this.handleGoalCreate(from, user.id, result.data);
+        break;
       case 'batch':
         await this.handleBatch(from, user.id, result);
         break;
-      case 'tips':
-        await this.wmodeClient.sendMessage({
-          to: from,
-          content: result.message,
-        });
+      case 'advice':
+        await this.handleAdvisor(from, user, content, history, phoneKey);
         break;
       case 'unknown':
         await this.wmodeClient.sendMessage({
@@ -434,12 +439,24 @@ export class WhatsappService {
     }
 
     if (result.queryType === 'budget') {
-      await this.handleBudget(from, userId);
+      // "Metas" = tetos de gasto por categoria (model Goal). O antigo handleBudget
+      // (model Budget, teto único do mês) ficou obsoleto para o WhatsApp.
+      await this.handleGoalsQuery(from, userId);
       return;
     }
 
     if (result.queryType === 'reserves') {
       await this.handleReserveQuery(from, userId);
+      return;
+    }
+
+    if (result.queryType === 'recurring') {
+      await this.handleRecurringQuery(from, userId);
+      return;
+    }
+
+    if (result.queryType === 'category') {
+      await this.handleCategoryQuery(from, userId, result.categorySlug);
       return;
     }
 
@@ -610,6 +627,216 @@ export class WhatsappService {
     });
   }
 
+  // Gasto numa CATEGORIA específica (alimentação, transporte...) no mês corrente.
+  private async handleCategoryQuery(
+    from: string,
+    userId: string,
+    categorySlug?: string,
+  ) {
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const category = categorySlug
+      ? await this.categoriesRepository.findBySlug(categorySlug)
+      : null;
+    if (!category) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não consegui identificar a categoria. Tente algo como ' +
+          '_"quanto gastei com transporte?"_ ou _"gastos com alimentação"_.',
+      });
+      return;
+    }
+
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const now = new Date();
+    const startDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    ).toISOString();
+    const endDate = now.toISOString();
+
+    const breakdown = await this.transactionsRepository.getCategoryBreakdown(
+      userIds,
+      startDate,
+      endDate,
+    );
+    const row = breakdown.find((b) => b.categoryId === category.id);
+    const monthName = now.toLocaleDateString('pt-BR', { month: 'long' });
+    const label = `${category.icon ?? ''} ${category.name}`.trim();
+
+    if (!row || row.count === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `Você ainda não tem gastos com *${category.name}* em ${monthName} 👍`,
+      });
+      return;
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Aqui vão seus gastos com ${category.name} este mês 👇\n\n` +
+        `${label} — ${monthName}\n` +
+        `*Total:* ${fmt(row.total)}\n` +
+        `*Transações:* ${row.count}`,
+    });
+  }
+
+  // "Metas" = tetos de gasto por categoria (model Goal). O gasto é recalculado
+  // por período (mês/semana) e o teto persiste — não precisa redefinir todo mês.
+  private async handleGoalsQuery(from: string, userId: string) {
+    const goals = await this.listGoals.execute(userId);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (goals.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `🎯 *Metas*\n\n` +
+          `Você ainda não tem metas de gasto.\n\n` +
+          `_Crie uma assim: "limite de 800 em alimentação por mês"._`,
+      });
+      return;
+    }
+
+    const blocks = goals.map((g) => {
+      const { spent, limit, percentage, remaining, exceeded } = g.progress;
+      const bar = this.progressBar(percentage);
+      const periodLabel = g.period === 'WEEKLY' ? 'semana' : 'mês';
+      const icon = g.category?.icon ?? '🎯';
+      const name = g.category?.name ?? g.name;
+      const status = exceeded
+        ? `⚠️ estourou ${fmt(spent - limit)}`
+        : `restam ${fmt(remaining)}`;
+      return (
+        `${icon} *${name}* — por ${periodLabel}\n` +
+        `${bar} ${percentage}%\n` +
+        `${fmt(spent)} de ${fmt(limit)}  •  ${status}`
+      );
+    });
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Olha como estão suas metas de gasto 👇\n\n` +
+        `🎯 *Suas metas*\n\n` +
+        blocks.join('\n\n'),
+    });
+  }
+
+  // Cria uma meta (teto de gasto por categoria, model Goal) a partir de uma
+  // mensagem. categorySlug e amount vêm do parser; period default MONTHLY.
+  private async handleGoalCreate(
+    from: string,
+    userId: string,
+    data: {
+      categorySlug: string;
+      amount: number;
+      period: 'MONTHLY' | 'WEEKLY';
+    },
+  ) {
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const category = await this.categoriesRepository.findBySlug(
+      data.categorySlug,
+    );
+    if (!category) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não consegui identificar a categoria da meta. Tente algo como ' +
+          '_"limite de 800 em alimentação por mês"_.',
+      });
+      return;
+    }
+
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const existing = await this.goalsRepository.findByCategory(
+      userIds,
+      category.id,
+    );
+    if (existing) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Você já tem uma meta para *${category.name}* (${fmt(existing.amount.toNumber())}). ` +
+          `Pra mudar o valor, é só ajustar no app por enquanto 😉`,
+      });
+      return;
+    }
+
+    const periodLabel = data.period === 'WEEKLY' ? 'semana' : 'mês';
+    await this.goalsRepository.create({
+      name: category.name,
+      amount: data.amount,
+      period: data.period,
+      userId,
+      categoryId: category.id,
+    });
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Meta criada ✅\n\n` +
+        `${category.icon ?? '🎯'} *${category.name}*\n` +
+        `Limite de ${fmt(data.amount)} por ${periodLabel}.\n\n` +
+        `_Eu te aviso quando você se aproximar do teto._`,
+    });
+
+    this.logger.log(
+      `Goal created for category ${category.slug} (${fmt(data.amount)}/${data.period}) for user ${userId}`,
+    );
+  }
+
+  // Assessor financeiro: perguntas abertas, conselhos, análises e small talk.
+  // Delega ao mesmo motor do chat web (ChatCompletionUseCase), que tem acesso
+  // aos dados reais do usuário e a ferramentas para consultar qualquer período.
+  // O nome (primeiro nome) entra no contexto para um tom mais pessoal.
+  private async handleAdvisor(
+    from: string,
+    user: { id: string; name: string },
+    message: string,
+    history: HistoryEntry[],
+    phoneKey: string,
+  ) {
+    const firstName = user.name?.trim().split(/\s+/)[0];
+    // Histórico do WhatsApp → formato do chat (bot vira assistant). Limita aos
+    // últimos turnos para não inflar o prompt.
+    const chatHistory = history.slice(-10).map((h) => ({
+      role: h.role === 'bot' ? ('assistant' as const) : ('user' as const),
+      content: h.text,
+    }));
+
+    let reply = '';
+    try {
+      reply = await this.chatCompletion.executeSync(
+        user.id,
+        { message, history: chatHistory },
+        firstName,
+      );
+    } catch (error) {
+      this.logger.error(`Advisor error: ${error}`);
+    }
+
+    if (!reply) {
+      reply =
+        'Tive um probleminha pra pensar nisso agora 😅. ' +
+        'Pode tentar de novo? Posso te ajudar a entender seus gastos, ' +
+        'achar onde dá pra economizar e organizar suas metas.';
+    }
+
+    await this.wmodeClient.sendMessage({ to: from, content: reply });
+    await this.conversation.appendHistory(phoneKey, [
+      { role: 'bot', text: reply },
+    ]);
+  }
+
   // Corrige o cartão da última transação. cardName=null remove o vínculo;
   // string troca para o cartão informado (igual handleCorrection, mas no cartão).
   private async handleCorrectionCard(
@@ -718,58 +945,6 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content: lines.join('\n'),
-    });
-  }
-
-  private async handleBudget(from: string, userId: string) {
-    const budget = await this.getBudget.execute(userId);
-
-    const fmt = (v: number) =>
-      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-    if (budget.amount === null) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content:
-          '📊 *Orçamento do mês*\n\n' +
-          'Você ainda não definiu um orçamento para este mês.\n\n' +
-          '_Defina em Orçamento no app para acompanhar quanto pode gastar._',
-      });
-      return;
-    }
-
-    const emoji = budget.exceeded
-      ? '🔴'
-      : budget.percentage >= 80
-        ? '⚠️'
-        : '✅';
-    const paceLabel =
-      budget.pace === 'over'
-        ? '📈 acima do previsto — no ritmo atual você estoura o limite'
-        : budget.pace === 'under'
-          ? '📉 abaixo do previsto — bom controle!'
-          : '✅ dentro do previsto';
-
-    const remainingLine = budget.exceeded
-      ? `*Estourou:* ${fmt(Math.abs(budget.remaining))} acima`
-      : `*Pode gastar ainda:* ${fmt(budget.remaining)}`;
-
-    const daysLabel =
-      budget.daysRemaining > 0
-        ? `faltam ${budget.daysRemaining} ${budget.daysRemaining === 1 ? 'dia' : 'dias'}`
-        : 'último dia do mês';
-
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `Sobre seu orçamento 👇\n\n` +
-        `${emoji} *Orçamento do mês*\n\n` +
-        `*Limite:* ${fmt(budget.amount)}\n` +
-        `*Gasto:* ${fmt(budget.spent)} (${budget.percentage}%)\n` +
-        `${remainingLine}\n` +
-        `_${daysLabel}_\n\n` +
-        `*Ritmo:* ${paceLabel}\n` +
-        `_Projeção do mês: ${fmt(budget.projectedSpend)}_`,
     });
   }
 
@@ -1113,6 +1288,57 @@ export class WhatsappService {
     });
   }
 
+  // Lista as recorrências (contas fixas / assinaturas) ativas do usuário,
+  // separando entradas fixas de saídas fixas e mostrando o dia do mês.
+  private async handleRecurringQuery(from: string, userId: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const recurrences = await this.recurringRepository.findMany(userIds, true);
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (recurrences.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `🔁 *Recorrências*\n\n` +
+          `Você ainda não tem nenhuma conta fixa cadastrada.\n\n` +
+          `_Crie uma assim: "todo dia 5 pago 1500 de aluguel"._`,
+      });
+      return;
+    }
+
+    const line = (r: (typeof recurrences)[number]) =>
+      `• Dia ${r.dayOfMonth} — *${r.description}* ${fmt(r.amount.toNumber())}`;
+
+    const expenses = recurrences.filter((r) => r.type === 'EXPENSE');
+    const incomes = recurrences.filter((r) => r.type === 'INCOME');
+
+    const sections: string[] = [];
+    if (expenses.length > 0) {
+      const total = expenses.reduce((s, r) => s + r.amount.toNumber(), 0);
+      sections.push(
+        `💸 *Saídas fixas* (${fmt(total)}/mês)\n` +
+          expenses.map(line).join('\n'),
+      );
+    }
+    if (incomes.length > 0) {
+      const total = incomes.reduce((s, r) => s + r.amount.toNumber(), 0);
+      sections.push(
+        `💰 *Entradas fixas* (${fmt(total)}/mês)\n` +
+          incomes.map(line).join('\n'),
+      );
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Suas contas fixas do mês 👇\n\n` +
+        `🔁 *Recorrências*\n\n` +
+        sections.join('\n\n'),
+    });
+  }
+
   // SEMPRE pergunta em qual reserva lançar (decisão de produto): guarda o aporte
   // como pendente e lista as reservas numeradas. A resposta é resolvida sem IA
   // por resolveReserveContribution.
@@ -1236,7 +1462,10 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({ to: from, content: body });
 
     await this.conversation.appendHistory(phoneKey, [
-      { role: 'bot', text: `Guardado ${fmt(pending.amount)} em ${chosen.name}` },
+      {
+        role: 'bot',
+        text: `Guardado ${fmt(pending.amount)} em ${chosen.name}`,
+      },
     ]);
 
     this.logger.log(

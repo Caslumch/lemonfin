@@ -32,7 +32,7 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Quando mencionar valores, use o formato R$ X.XXX,XX
 - Nao invente dados — use apenas o contexto financeiro fornecido e os dados retornados pelas funcoes
 - Se nao tiver dados suficientes, diga isso claramente
-- Nao fale sobre assuntos que nao sejam financas pessoais do usuario
+- Seu foco e financas pessoais do usuario. Se ele te cumprimentar, perguntar seu nome/como vai, ou trocar uma palavra leve ("bom dia", "tudo bem?", "qual meu nome?"), responda de forma breve, humana e calorosa (use o nome dele quando souber) e reconduza com gentileza para as financas. Para assuntos totalmente fora do escopo (noticias, esportes, codigo, etc.), diga com simpatia que esse nao e o seu forte e lembre no que voce ajuda.
 
 ## Funcoes disponiveis:
 - Voce tem acesso a funcoes para consultar transacoes, resumos e gastos por categoria em qualquer periodo
@@ -132,14 +132,29 @@ export class ChatCompletionUseCase {
     });
   }
 
-  async *execute(userId: string, input: ChatMessageInput) {
+  // Consome o stream e devolve a resposta completa de uma vez. Usado por canais
+  // sem streaming (ex: WhatsApp), reaproveitando todo o motor (contexto + tools).
+  async executeSync(
+    userId: string,
+    input: ChatMessageInput,
+    userName?: string,
+  ): Promise<string> {
+    let full = '';
+    for await (const chunk of this.execute(userId, input, userName)) {
+      full += chunk;
+    }
+    return full.trim();
+  }
+
+  async *execute(userId: string, input: ChatMessageInput, userName?: string) {
     this.logger.log(`Chat request from user ${userId}: "${input.message}"`);
 
     const userIds = await this.familyContext.resolveUserIds(userId);
     const context = await this.getFinancialContext(userIds);
 
     const today = new Date().toISOString().split('T')[0];
-    const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}\n\n## Contexto financeiro atual do usuario:\n${context}`;
+    const nameLine = userName ? `\nNome do usuario: ${userName}` : '';
+    const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}${nameLine}\n\n## Contexto financeiro atual do usuario:\n${context}`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemInstruction },

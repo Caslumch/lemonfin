@@ -11,8 +11,9 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { CardsModule } from '../cards/cards.module';
 import { FamiliesModule } from '../families/families.module';
 import { RecurringModule } from '../recurring/recurring.module';
-import { BudgetsModule } from '../budgets/budgets.module';
 import { ReservesModule } from '../reserves/reserves.module';
+import { GoalsModule } from '../goals/goals.module';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
@@ -22,8 +23,9 @@ import { ReservesModule } from '../reserves/reserves.module';
     CardsModule,
     FamiliesModule,
     RecurringModule,
-    BudgetsModule,
     ReservesModule,
+    GoalsModule,
+    ChatModule,
   ],
   controllers: [WebhookController],
   providers: [
