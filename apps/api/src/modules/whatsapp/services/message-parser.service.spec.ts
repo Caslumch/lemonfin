@@ -561,4 +561,53 @@ describe('MessageParserService', () => {
       }
     });
   });
+
+  describe('prompt dinâmico de categorias', () => {
+    it('injeta as categorias personalizadas no system prompt', async () => {
+      mockResponse({
+        intent: 'transaction',
+        amount: 80,
+        type: 'EXPENSE',
+        categorySlug: 'petshop',
+        categoryConfidence: 0.95,
+        description: 'ração',
+      });
+
+      const result = await service.parse('gastei 80 no petshop', [], [
+        { slug: 'petshop', name: 'Petshop' },
+      ]);
+
+      const systemPrompt = createMock.mock.calls[0][0].messages[0].content;
+      // A categoria custom aparece na lista, marcada como personalizada.
+      expect(systemPrompt).toContain('petshop: Petshop');
+      expect(systemPrompt).toContain('categoria personalizada');
+      // As de sistema continuam presentes.
+      expect(systemPrompt).toContain('alimentacao:');
+      // Custom vem ANTES de "outros" (catch-all por último).
+      expect(systemPrompt.indexOf('petshop:')).toBeLessThan(
+        systemPrompt.indexOf('- outros:'),
+      );
+      // O slug custom é resolvido normalmente.
+      expect(result.intent).toBe('transaction');
+      if (result.intent === 'transaction') {
+        expect(result.data.categorySlug).toBe('petshop');
+      }
+    });
+
+    it('sem categorias custom, o prompt traz só as de sistema', async () => {
+      mockResponse({
+        intent: 'transaction',
+        amount: 50,
+        type: 'EXPENSE',
+        categorySlug: 'alimentacao',
+        categoryConfidence: 0.95,
+        description: 'mercado',
+      });
+
+      await service.parse('gastei 50 no mercado');
+
+      const systemPrompt = createMock.mock.calls[0][0].messages[0].content;
+      expect(systemPrompt).not.toContain('categoria personalizada');
+    });
+  });
 });

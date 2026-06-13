@@ -92,7 +92,19 @@ export class WhatsappService {
 
     // 2) Fluxo normal — com histórico de conversa como contexto.
     const history = await this.conversation.getHistory(phoneKey);
-    const result = await this.messageParser.parse(content, history);
+    // Categorias personalizadas entram no prompt para a IA poder classificar
+    // transações nelas (além das de sistema).
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const customCategories = (
+      await this.categoriesRepository.findForUser(userIds)
+    )
+      .filter((c) => c.userId !== null)
+      .map((c) => ({ slug: c.slug, name: c.name }));
+    const result = await this.messageParser.parse(
+      content,
+      history,
+      customCategories,
+    );
 
     // Registra a mensagem do usuário no histórico.
     await this.conversation.appendHistory(phoneKey, [
@@ -160,8 +172,10 @@ export class WhatsappService {
       return;
     }
 
+    const userIds = await this.familyContext.resolveUserIds(userId);
     let category = await this.categoriesRepository.findBySlug(
       data.categorySlug,
+      userIds,
     );
     if (!category) {
       this.logger.warn(
@@ -178,7 +192,6 @@ export class WhatsappService {
     }
 
     // Resolve card if mentioned
-    const userIds = await this.familyContext.resolveUserIds(userId);
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName) {
@@ -636,8 +649,9 @@ export class WhatsappService {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const category = categorySlug
-      ? await this.categoriesRepository.findBySlug(categorySlug)
+      ? await this.categoriesRepository.findBySlug(categorySlug, userIds)
       : null;
     if (!category) {
       await this.wmodeClient.sendMessage({
@@ -648,8 +662,6 @@ export class WhatsappService {
       });
       return;
     }
-
-    const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const startDate = new Date(
       now.getFullYear(),
@@ -743,8 +755,10 @@ export class WhatsappService {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+    const userIds = await this.familyContext.resolveUserIds(userId);
     const category = await this.categoriesRepository.findBySlug(
       data.categorySlug,
+      userIds,
     );
     if (!category) {
       await this.wmodeClient.sendMessage({
@@ -755,8 +769,6 @@ export class WhatsappService {
       });
       return;
     }
-
-    const userIds = await this.familyContext.resolveUserIds(userId);
     const existing = await this.goalsRepository.findByCategory(
       userIds,
       category.id,
@@ -1040,8 +1052,10 @@ export class WhatsappService {
   ) {
     const { data } = result;
 
+    const userIds = await this.familyContext.resolveUserIds(userId);
     let category = await this.categoriesRepository.findBySlug(
       data.categorySlug,
+      userIds,
     );
     if (!category) {
       category = await this.categoriesRepository.findBySlug('outros');
@@ -1059,7 +1073,6 @@ export class WhatsappService {
     const now = new Date();
 
     // Try to link to card if cardName was mentioned
-    const userIds = await this.familyContext.resolveUserIds(userId);
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName) {
@@ -1135,8 +1148,10 @@ export class WhatsappService {
   ) {
     const { data } = result;
 
+    const userIds = await this.familyContext.resolveUserIds(userId);
     let category = await this.categoriesRepository.findBySlug(
       data.categorySlug,
+      userIds,
     );
     if (!category) {
       category = await this.categoriesRepository.findBySlug('outros');
@@ -1150,7 +1165,6 @@ export class WhatsappService {
     }
 
     // Resolve cartão se mencionado (somente nome específico).
-    const userIds = await this.familyContext.resolveUserIds(userId);
     let cardId: string | undefined;
     let cardLabel = '';
     if (data.cardName && data.cardName !== 'cartao') {
@@ -1550,8 +1564,10 @@ export class WhatsappService {
     item: BatchItem,
   ): Promise<string> {
     const category =
-      (await this.categoriesRepository.findBySlug(item.data.categorySlug)) ??
-      (await this.categoriesRepository.findBySlug('outros'));
+      (await this.categoriesRepository.findBySlug(
+        item.data.categorySlug,
+        userIds,
+      )) ?? (await this.categoriesRepository.findBySlug('outros'));
     if (!category) {
       throw new Error('categoria indisponível');
     }
