@@ -121,7 +121,7 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
           {forecast.pending.map((p) => (
             <div key={p.id} className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-[10px] bg-white/10 flex items-center justify-center shrink-0">
-                <CategoryIcon slug={p.category?.slug} size={14} />
+                <CategoryIcon slug={p.category?.slug} icon={p.category?.icon} size={14} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-on-dark truncate">{p.description}</p>

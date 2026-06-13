@@ -53,7 +53,7 @@ export function CategoryBreakdown({ data, loading }: CategoryBreakdownProps) {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm text-fg">
-                    <CategoryIcon slug={item.category?.slug} size={14} className="inline mr-1.5" />
+                    <CategoryIcon slug={item.category?.slug} icon={item.category?.icon} size={14} className="inline mr-1.5" />
                     {item.category?.name ?? "Outros"}
                   </span>
                   <span className="font-[family-name:var(--font-mono)] text-sm text-fg-secondary">

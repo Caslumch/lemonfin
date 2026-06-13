@@ -385,6 +385,7 @@ export default function DashboardPage() {
                       >
                         <CategoryIconWithBg
                           slug={tx.category.slug}
+                          icon={tx.category.icon}
                           colorBg={tx.category.colorBg}
                           colorText={tx.category.colorText}
                         />
@@ -440,7 +441,7 @@ export default function DashboardPage() {
                       key={alert.categoryId}
                       className="flex items-center gap-2 text-sm"
                     >
-                      <CategoryIcon slug={alert.category?.slug} size={14} />
+                      <CategoryIcon slug={alert.category?.slug} icon={alert.category?.icon} size={14} />
                       <span className="text-fg flex-1 truncate">
                         {alert.category?.name ?? "Outros"}
                       </span>
@@ -489,7 +490,7 @@ export default function DashboardPage() {
                       <div key={goal.id} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-fg truncate">
-                            <CategoryIcon slug={goal.category?.slug} size={12} className="inline mr-1" />
+                            <CategoryIcon slug={goal.category?.slug} icon={goal.category?.icon} size={12} className="inline mr-1" />
                             {goal.category?.name}
                           </span>
                           <span

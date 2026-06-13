@@ -177,6 +177,7 @@ export default function RecorrentesPage() {
               >
                 <CategoryIconWithBg
                   slug={item.category?.slug}
+                  icon={item.category?.icon}
                   colorBg={item.category?.colorBg}
                   colorText={item.category?.colorText}
                 />

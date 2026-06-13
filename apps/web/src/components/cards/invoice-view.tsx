@@ -123,6 +123,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
               <div className="flex items-center gap-3 min-w-0">
                 <CategoryIconWithBg
                   slug={tx.category.slug}
+                  icon={tx.category.icon}
                   colorBg={tx.category.colorBg}
                   colorText={tx.category.colorText}
                 />
