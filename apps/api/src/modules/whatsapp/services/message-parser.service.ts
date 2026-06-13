@@ -91,7 +91,39 @@ export type ParseResult =
   | { intent: 'advice' }
   | { intent: 'unknown'; message: string };
 
-const SYSTEM_PROMPT = `Você é o LemonFin, um assistente financeiro inteligente via WhatsApp. Você ajuda usuários a registrar transações, consultar gastos e dar dicas financeiras.
+// Categorias de SISTEMA com palavras-chave ricas para a classificação. São
+// fixas (não incluem "reservas", que é tratada por reserve_*). As categorias
+// personalizadas do usuário entram dinamicamente via buildCategoryList.
+const SYSTEM_CATEGORY_LINES = [
+  '- alimentacao: supermercado, restaurante, lanche, padaria, café, delivery, ifood',
+  '- transporte: gasolina, uber, ônibus, estacionamento, pedágio, mecânico',
+  '- moradia: aluguel, condomínio, luz, água, gás, internet, manutenção',
+  '- saude: farmácia, consulta, plano de saúde, academia, dentista',
+  '- lazer: cinema, streaming, jogos, viagem, bar, festa, hobby',
+  '- educacao: curso, livro, faculdade, escola, material escolar',
+  '- compras: roupa, eletrônico, presente, móveis, decoração',
+  '- salario: salário mensal, adiantamento, 13º, férias',
+  '- freelance: trabalho freelance, projeto, consultoria',
+];
+const OUTROS_LINE = '- outros: quando não se encaixa em nenhuma categoria';
+
+// Categorias personalizadas vão ANTES de "outros" (catch-all) para terem
+// prioridade na escolha do modelo.
+function buildCategoryList(
+  custom: { slug: string; name: string }[],
+): string {
+  const lines = [...SYSTEM_CATEGORY_LINES];
+  for (const c of custom) {
+    lines.push(`- ${c.slug}: ${c.name} (categoria personalizada do usuário)`);
+  }
+  lines.push(OUTROS_LINE);
+  return lines.join('\n');
+}
+
+function buildSystemPrompt(
+  custom: { slug: string; name: string }[],
+): string {
+  return `Você é o LemonFin, um assistente financeiro inteligente via WhatsApp. Você ajuda usuários a registrar transações, consultar gastos e dar dicas financeiras.
 
 Analise a mensagem do usuário e identifique a INTENÇÃO. Responda APENAS com JSON válido (sem markdown, sem backticks, sem explicações).
 
@@ -100,16 +132,7 @@ Analise a mensagem do usuário e identifique a INTENÇÃO. Responda APENAS com J
 ### 1. TRANSACTION — Registrar uma transação
 Quando o usuário menciona um gasto, despesa, recebimento ou ganho com valor.
 Categorias disponíveis (use exatamente o slug):
-- alimentacao: supermercado, restaurante, lanche, padaria, café, delivery, ifood
-- transporte: gasolina, uber, ônibus, estacionamento, pedágio, mecânico
-- moradia: aluguel, condomínio, luz, água, gás, internet, manutenção
-- saude: farmácia, consulta, plano de saúde, academia, dentista
-- lazer: cinema, streaming, jogos, viagem, bar, festa, hobby
-- educacao: curso, livro, faculdade, escola, material escolar
-- compras: roupa, eletrônico, presente, móveis, decoração
-- salario: salário mensal, adiantamento, 13º, férias
-- freelance: trabalho freelance, projeto, consultoria
-- outros: quando não se encaixa em nenhuma categoria
+${buildCategoryList(custom)}
 
 Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string, "cardName": string | null}
 - cardName: nome específico do cartão se mencionado (ex: "Nubank", "Inter", "Bradesco"), senão null. Se o usuário diz apenas "cartão", "cartão de crédito" ou "crédito" sem nome específico, use "cartao" como valor.
@@ -247,6 +270,7 @@ Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soa
 
 ## CARTÃO — regra crítica:
 SÓ defina cardName quando o cartão estiver na MENSAGEM ATUAL. NUNCA herde o nome de um cartão que apareceu no histórico de mensagens anteriores. Se a mensagem atual não cita cartão, cardName é null — mesmo que uma mensagem anterior tenha citado um cartão.`;
+}
 
 const MODEL = 'gpt-4o-mini';
 
@@ -264,6 +288,7 @@ export class MessageParserService {
   async parse(
     message: string,
     history: { role: 'user' | 'bot'; text: string }[] = [],
+    customCategories: { slug: string; name: string }[] = [],
   ): Promise<ParseResult> {
     try {
       // O histórico serve APENAS para resolver referências ("e o mês passado?",
@@ -292,7 +317,7 @@ export class MessageParserService {
       const completion = await this.openai.chat.completions.create({
         model: MODEL,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: buildSystemPrompt(customCategories) },
           ...userTurns,
           { role: 'user', content: `MENSAGEM ATUAL: ${message}` },
         ],

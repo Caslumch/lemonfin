@@ -166,6 +166,7 @@ export default function MetasPage() {
                   <div className="flex items-center gap-2">
                     <CategoryIconWithBg
                       slug={goal.category?.slug}
+                      icon={goal.category?.icon}
                       colorBg={goal.category?.colorBg}
                       colorText={goal.category?.colorText}
                     />

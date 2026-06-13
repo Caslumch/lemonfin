@@ -212,6 +212,7 @@ function AlertsSection({ alerts }: { alerts: SpendingAlert[] }) {
           >
             <CategoryIconWithBg
               slug={alert.category?.slug}
+              icon={alert.category?.icon}
               colorBg={alert.category?.colorBg}
               colorText={alert.category?.colorText}
             />
@@ -299,6 +300,7 @@ function TrendSection({
             >
               <CategoryIconWithBg
                 slug={item.category?.slug}
+                icon={item.category?.icon}
                 colorBg={item.category?.colorBg}
                 colorText={item.category?.colorText}
               />
@@ -379,7 +381,7 @@ function ComparisonTable({
             style={{ animationDelay: `${index * 40}ms` }}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <CategoryIcon slug={item.category?.slug} size={14} />
+              <CategoryIcon slug={item.category?.slug} icon={item.category?.icon} size={14} />
               <span className="text-sm text-fg truncate">
                 {item.category?.name ?? "Outros"}
               </span>

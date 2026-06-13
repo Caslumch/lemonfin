@@ -30,17 +30,40 @@ const iconMap: Record<string, LucideIcon> = {
 
 interface CategoryIconProps {
   slug?: string | null;
+  // Emoji da categoria (usado nas personalizadas, que não têm ícone Lucide).
+  icon?: string | null;
   className?: string;
   size?: number;
 }
 
-export function CategoryIcon({ slug, className, size = 16 }: CategoryIconProps) {
-  const Icon = (slug && iconMap[slug]) || Package;
-  return <Icon size={size} className={cn("shrink-0", className)} />;
+export function CategoryIcon({
+  slug,
+  icon,
+  className,
+  size = 16,
+}: CategoryIconProps) {
+  // Categorias de sistema usam o ícone Lucide (monocromático, segue a cor).
+  const SystemIcon = slug ? iconMap[slug] : undefined;
+  if (SystemIcon) {
+    return <SystemIcon size={size} className={cn("shrink-0", className)} />;
+  }
+  // Personalizadas: renderiza o emoji escolhido pelo usuário.
+  if (icon) {
+    return (
+      <span
+        className={cn("shrink-0 leading-none", className)}
+        style={{ fontSize: size }}
+      >
+        {icon}
+      </span>
+    );
+  }
+  return <Package size={size} className={cn("shrink-0", className)} />;
 }
 
 export function CategoryIconWithBg({
   slug,
+  icon,
   colorBg,
   colorText,
   size = 16,
@@ -50,7 +73,7 @@ export function CategoryIconWithBg({
       className="w-8 h-8 rounded-[12px] flex items-center justify-center shrink-0"
       style={{ backgroundColor: colorBg, color: colorText }}
     >
-      <CategoryIcon slug={slug} size={size} />
+      <CategoryIcon slug={slug} icon={icon} size={size} />
     </div>
   );
 }
