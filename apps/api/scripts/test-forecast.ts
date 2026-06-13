@@ -85,6 +85,18 @@ async function main() {
     categoryId: category.id,
   });
 
+  // Histórico de gasto variável: 1800 em fev/2026 (mês completo anterior).
+  // Janela de média = dez/jan/fev = 90 dias → média de 20/dia.
+  await txRepo.create({
+    amount: 1800,
+    type: 'EXPENSE',
+    description: 'Gastos variáveis fev',
+    date: new Date(2026, 1, 15, 12, 0, 0).toISOString(),
+    source: 'MANUAL',
+    userId: user.id,
+    categoryId: category.id,
+  });
+
   // Recorrências:
   // - Aluguel 1500, dia 15 (FUTURO → deve entrar como pendente)
   const aluguel = await recRepo.create({
@@ -138,8 +150,20 @@ async function main() {
   check('2 recorrências pendentes', result.pending.length === 2, `(got ${result.pending.length})`);
   check('pendingIncome = 800', result.pendingIncome === 800, `(got ${result.pendingIncome})`);
   check('pendingExpense = 1500', result.pendingExpense === 1500, `(got ${result.pendingExpense})`);
-  // Projetado = 4800 + 800 - 1500 = 4100
-  check('projetado = 4100', result.projectedBalance === 4100, `(got ${result.projectedBalance})`);
+  // Média diária de gasto variável = 1800 / 90 dias = 20
+  check(
+    'média diária variável = 20',
+    result.avgDailyVariableExpense === 20,
+    `(got ${result.avgDailyVariableExpense})`,
+  );
+  // Estimado p/ o resto do mês = 20 * 21 dias restantes = 420
+  check(
+    'gasto variável estimado = 420',
+    result.estimatedVariableExpense === 420,
+    `(got ${result.estimatedVariableExpense})`,
+  );
+  // Projetado = 4800 + 800 - 1500 - 420 = 3680
+  check('projetado = 3680', result.projectedBalance === 3680, `(got ${result.projectedBalance})`);
   // Dias restantes = 31 - 10 = 21
   check('dias restantes = 21', result.daysRemaining === 21, `(got ${result.daysRemaining})`);
   // Internet NÃO está na lista

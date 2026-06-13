@@ -12,6 +12,8 @@ export interface Forecast {
   projectedBalance: number;
   pendingIncome: number;
   pendingExpense: number;
+  estimatedVariableExpense: number;
+  avgDailyVariableExpense: number;
   daysRemaining: number;
   pending: PendingRecurrence[];
 }

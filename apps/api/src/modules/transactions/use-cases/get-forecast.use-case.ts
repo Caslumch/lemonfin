@@ -17,9 +17,14 @@ export interface ForecastResult {
   projectedBalance: number; // saldo previsto ao fim do mês
   pendingIncome: number; // receitas recorrentes que ainda vão cair
   pendingExpense: number; // despesas recorrentes que ainda vão cair
+  estimatedVariableExpense: number; // gasto variável estimado p/ o resto do mês
+  avgDailyVariableExpense: number; // média diária de gasto variável (base da estimativa)
   daysRemaining: number;
   pending: PendingRecurrence[]; // detalhe das recorrências pendentes
 }
+
+// Meses completos usados para estimar a média de gastos variáveis.
+const VARIABLE_HISTORY_MONTHS = 3;
 
 @Injectable()
 export class GetForecastUseCase {
@@ -93,15 +98,53 @@ export class GetForecastUseCase {
 
     pending.sort((a, b) => a.dayOfMonth - b.dayOfMonth);
 
-    const projectedBalance =
-      summary.balance + pendingIncome - pendingExpense;
+    const daysRemaining = lastDayOfMonth - today;
+
+    // Estimativa de gastos variáveis (avulsos) para o resto do mês. Base: média
+    // diária de despesas variáveis "em dinheiro" dos últimos meses completos.
+    // Cartão fica de fora (não afeta saldo até a fatura) e recorrências também
+    // (já estão em pendingExpense), então não há dupla contagem.
+    const histStart = new Date(year, month - VARIABLE_HISTORY_MONTHS, 1, 0, 0, 0, 0);
+    const histEnd = monthStart; // exclui o mês corrente
+    const histVariable = await this.transactionsRepository.getVariableExpenseTotal(
+      userIds,
+      histStart,
+      histEnd,
+    );
+    const histDays = Math.round(
+      (histEnd.getTime() - histStart.getTime()) / 86_400_000,
+    );
+
+    let avgDailyVariableExpense = histDays > 0 ? histVariable / histDays : 0;
+
+    // Sem histórico (usuário novo): cai para o ritmo do próprio mês até agora.
+    if (avgDailyVariableExpense === 0 && today > 0) {
+      const variableSoFar =
+        await this.transactionsRepository.getVariableExpenseTotal(
+          userIds,
+          monthStart,
+          now,
+        );
+      avgDailyVariableExpense = variableSoFar / today;
+    }
+
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const estimatedVariableExpense = round2(
+      avgDailyVariableExpense * daysRemaining,
+    );
+
+    const projectedBalance = round2(
+      summary.balance + pendingIncome - pendingExpense - estimatedVariableExpense,
+    );
 
     return {
       currentBalance: summary.balance,
       projectedBalance,
       pendingIncome,
       pendingExpense,
-      daysRemaining: lastDayOfMonth - today,
+      estimatedVariableExpense,
+      avgDailyVariableExpense: round2(avgDailyVariableExpense),
+      daysRemaining,
       pending,
     };
   }
