@@ -6,6 +6,7 @@ interface FindManyOptions {
   userIds: string[];
   type?: 'INCOME' | 'EXPENSE';
   categoryId?: string;
+  search?: string;
   startDate?: string;
   endDate?: string;
   orderBy?: string;
@@ -16,6 +17,7 @@ interface FindManyOptions {
 
 const txInclude = {
   category: true,
+  card: { select: { id: true, name: true, brand: true } },
   user: { select: { id: true, name: true } },
 } as const;
 
@@ -97,6 +99,11 @@ export class TransactionsRepository {
 
     if (options.type) where.type = options.type;
     if (options.categoryId) where.categoryId = options.categoryId;
+    if (options.search)
+      where.description = {
+        contains: options.search,
+        mode: 'insensitive',
+      };
     if (options.startDate || options.endDate) {
       where.date = {};
       if (options.startDate) where.date.gte = new Date(options.startDate);

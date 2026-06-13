@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { Transaction } from "@/types/transaction";
@@ -116,11 +116,20 @@ export function TransactionList({
               <p className="text-sm font-medium text-fg truncate">
                 {tx.description || tx.category.name}
               </p>
-              <p className="text-xs text-fg-muted mt-0.5">
-                {formatDate(tx.date)}
-                {tx.user?.name && ` · ${tx.user.name.split(" ")[0]}`}
-                {tx.source === "WHATSAPP" && " · via WhatsApp"}
-              </p>
+              <div className="text-xs text-fg-muted mt-0.5 flex items-center gap-1 flex-wrap">
+                <span>{formatDate(tx.date)}</span>
+                {tx.user?.name && (
+                  <span>· {tx.user.name.split(" ")[0]}</span>
+                )}
+                {tx.source === "WHATSAPP" && <span>· via WhatsApp</span>}
+                {tx.card && (
+                  <span className="inline-flex items-center gap-1 text-fg-secondary">
+                    ·
+                    <CreditCard size={12} className="shrink-0" />
+                    {tx.card.name}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Amount */}

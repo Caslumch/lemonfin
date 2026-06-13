@@ -1,7 +1,7 @@
 "use client";
 
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Tabs } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import type { Category } from "@/types/transaction";
 
 interface FiltersBarProps {
@@ -9,11 +9,23 @@ interface FiltersBarProps {
   onTypeChange: (type: string) => void;
   categoryId: string;
   onCategoryChange: (id: string) => void;
-  startDate: string;
-  onStartDateChange: (date: string) => void;
-  endDate: string;
-  onEndDateChange: (date: string) => void;
+  month: Date;
+  onMonthChange: (month: Date) => void;
+  search: string;
+  onSearchChange: (search: string) => void;
   categories: Category[];
+}
+
+function addMonths(date: Date, delta: number) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function formatMonth(date: Date) {
+  const label = date.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 export function FiltersBar({
@@ -21,14 +33,14 @@ export function FiltersBar({
   onTypeChange,
   categoryId,
   onCategoryChange,
-  startDate,
-  onStartDateChange,
-  endDate,
-  onEndDateChange,
+  month,
+  onMonthChange,
+  search,
+  onSearchChange,
   categories,
 }: FiltersBarProps) {
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
       {/* Type filter */}
       <Tabs
         value={type}
@@ -54,22 +66,41 @@ export function FiltersBar({
         ))}
       </select>
 
-      {/* Date range */}
-      <div className="flex items-center gap-2">
-        <Input
-          id="startDate"
-          type="date"
-          value={startDate}
-          onChange={(e) => onStartDateChange(e.target.value)}
-          className="!py-2 !text-xs"
+      {/* Month selector */}
+      <div className="flex items-center rounded-[12px] border-[1.5px] border-border bg-surface">
+        <button
+          type="button"
+          aria-label="Mês anterior"
+          onClick={() => onMonthChange(addMonths(month, -1))}
+          className="flex h-9 w-9 items-center justify-center rounded-l-[10px] text-fg-secondary transition-colors hover:bg-muted hover:text-fg"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <span className="min-w-[120px] select-none px-1 text-center text-sm font-medium text-fg">
+          {formatMonth(month)}
+        </span>
+        <button
+          type="button"
+          aria-label="Próximo mês"
+          onClick={() => onMonthChange(addMonths(month, 1))}
+          className="flex h-9 w-9 items-center justify-center rounded-r-[10px] text-fg-secondary transition-colors hover:bg-muted hover:text-fg"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative sm:ml-auto sm:w-56">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-fg-muted"
         />
-        <span className="text-fg-muted text-xs">até</span>
-        <Input
-          id="endDate"
-          type="date"
-          value={endDate}
-          onChange={(e) => onEndDateChange(e.target.value)}
-          className="!py-2 !text-xs"
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Buscar transação..."
+          className="w-full rounded-[12px] border-[1.5px] border-border bg-surface py-2 pl-10 pr-3.5 text-sm text-fg placeholder:text-fg-muted transition-colors focus:border-fg focus:outline-none"
         />
       </div>
     </div>
