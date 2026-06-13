@@ -19,6 +19,6 @@ import { FamiliesModule } from '../families/families.module';
     UpdateGoalUseCase,
     DeleteGoalUseCase,
   ],
-  exports: [GoalsRepository],
+  exports: [GoalsRepository, ListGoalsUseCase],
 })
 export class GoalsModule {}

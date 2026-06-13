@@ -135,7 +135,11 @@ describe('MessageParserService', () => {
     });
 
     it('parseia query de cartão com cardName', async () => {
-      mockResponse({ intent: 'query', queryType: 'card', cardName: 'Bradesco' });
+      mockResponse({
+        intent: 'query',
+        queryType: 'card',
+        cardName: 'Bradesco',
+      });
 
       const result = await service.parse('como está meu cartão Bradesco?');
 
@@ -294,6 +298,14 @@ describe('MessageParserService', () => {
       expect(result.intent).toBe('unknown');
     });
 
+    it('roteia pergunta aberta/conselho para advice (sem texto pronto)', async () => {
+      mockResponse({ intent: 'advice' });
+
+      const result = await service.parse('me ajuda a organizar meus gastos');
+
+      expect(result).toEqual({ intent: 'advice' });
+    });
+
     it('repassa query reserves', async () => {
       mockResponse({ intent: 'query', queryType: 'reserves' });
 
@@ -303,13 +315,88 @@ describe('MessageParserService', () => {
       });
     });
 
-    it('roteia "quais são minhas metas" para reserves', async () => {
-      mockResponse({ intent: 'query', queryType: 'reserves' });
+    it('roteia "quais são minhas metas" para budget (Metas = teto de gasto)', async () => {
+      mockResponse({ intent: 'query', queryType: 'budget' });
 
       expect(await service.parse('quais são minhas metas')).toEqual({
         intent: 'query',
-        queryType: 'reserves',
+        queryType: 'budget',
       });
+    });
+
+    it('repassa query recurring (recorrências / contas fixas)', async () => {
+      mockResponse({ intent: 'query', queryType: 'recurring' });
+
+      expect(await service.parse('minhas recorrências')).toEqual({
+        intent: 'query',
+        queryType: 'recurring',
+      });
+    });
+
+    it('repassa query category com o categorySlug', async () => {
+      mockResponse({
+        intent: 'query',
+        queryType: 'category',
+        categorySlug: 'alimentacao',
+      });
+
+      expect(await service.parse('quanto gastei com comida esse mês?')).toEqual(
+        {
+          intent: 'query',
+          queryType: 'category',
+          categorySlug: 'alimentacao',
+        },
+      );
+    });
+
+    it('query category sem slug vira unknown (não inventa categoria)', async () => {
+      mockResponse({ intent: 'query', queryType: 'category' });
+
+      const result = await service.parse('quanto gastei com aquilo?');
+
+      expect(result.intent).toBe('unknown');
+    });
+  });
+
+  describe('goal_create (meta = teto de gasto por categoria)', () => {
+    it('parseia uma meta válida com período mensal', async () => {
+      mockResponse({
+        intent: 'goal_create',
+        categorySlug: 'alimentacao',
+        amount: 800,
+        period: 'MONTHLY',
+      });
+
+      expect(
+        await service.parse('limite de 800 em alimentação por mês'),
+      ).toEqual({
+        intent: 'goal_create',
+        data: { categorySlug: 'alimentacao', amount: 800, period: 'MONTHLY' },
+      });
+    });
+
+    it('usa MONTHLY como default quando o período não é semanal', async () => {
+      mockResponse({
+        intent: 'goal_create',
+        categorySlug: 'lazer',
+        amount: 500,
+        period: 'INVALIDO',
+      });
+
+      const result = await service.parse('meta de 500 em lazer');
+
+      expect(result).toMatchObject({
+        intent: 'goal_create',
+        data: { period: 'MONTHLY' },
+      });
+    });
+
+    it('meta sem categoria ou sem valor vira unknown', async () => {
+      mockResponse({ intent: 'goal_create', amount: 800 });
+
+      expect((await service.parse('quero um limite de 800')).intent).toBe(
+        'unknown',
+      );
     });
   });
 
@@ -357,9 +444,9 @@ describe('MessageParserService', () => {
       }[];
       // Sem histórico → só system + a mensagem atual (nenhum bloco de contexto).
       expect(sentMessages).toHaveLength(2);
-      expect(
-        sentMessages.some((m) => m.content.startsWith('CONTEXTO')),
-      ).toBe(false);
+      expect(sentMessages.some((m) => m.content.startsWith('CONTEXTO'))).toBe(
+        false,
+      );
     });
   });
 

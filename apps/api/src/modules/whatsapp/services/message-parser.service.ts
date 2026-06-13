@@ -35,6 +35,12 @@ export interface ParsedReserve {
   deadline: string; // ISO 'YYYY-MM-DD...'; sempre futura (validador garante)
 }
 
+export interface ParsedGoal {
+  categorySlug: string;
+  amount: number; // teto de gasto
+  period: 'MONTHLY' | 'WEEKLY';
+}
+
 // Um item de um lote (várias transações/contas numa só mensagem). Cada item é
 // processado individualmente pelos mesmos handlers do fluxo de item único.
 export type BatchItem =
@@ -61,9 +67,13 @@ export type ParseResult =
         | 'forecast'
         | 'budget'
         | 'reserves'
+        | 'recurring'
+        | 'category'
         | 'card';
       // Só presente quando queryType === 'card'. "cartao" = genérico (sem nome).
       cardName?: string;
+      // Só presente quando queryType === 'category'. Slug da categoria perguntada.
+      categorySlug?: string;
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
@@ -73,8 +83,12 @@ export type ParseResult =
   | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'reserve_create'; data: ParsedReserve }
   | { intent: 'reserve_contribution'; amount: number }
+  | { intent: 'goal_create'; data: ParsedGoal }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
-  | { intent: 'tips'; message: string }
+  // Pergunta aberta de assessoria, dica, small talk ou qualquer coisa que não
+  // seja um comando estruturado. O texto original é repassado ao motor de chat
+  // (assessor financeiro com acesso aos dados do usuário).
+  | { intent: 'advice' }
   | { intent: 'unknown'; message: string };
 
 const SYSTEM_PROMPT = `Você é o LemonFin, um assistente financeiro inteligente via WhatsApp. Você ajuda usuários a registrar transações, consultar gastos e dar dicas financeiras.
@@ -105,21 +119,31 @@ Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENS
 Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financeiro.
 Exemplos: "quanto gastei esse mês?", "como estão meus gastos?", "qual meu saldo?", "resumo"
 Para previsão/projeção: "quanto vou ter no fim do mês?", "quanto vai sobrar?", "vou fechar no positivo?", "como termino o mês?"
-Para orçamento: "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
-Para reservas/metas: "minhas reservas", "quais são minhas metas", "minhas metas", "que metas eu tenho", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
+Para METAS / orçamento (teto de gasto): "minhas metas", "quais são minhas metas", "que metas eu tenho", "como estão minhas metas?", "quanto posso gastar?", "como está meu orçamento?", "quanto falta do meu limite?", "estourei o orçamento?"
+Para reservas (juntar dinheiro): "minhas reservas", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
+Para RECORRÊNCIAS / contas fixas: "minhas recorrências", "minhas recorrencias", "quais são minhas contas fixas?", "minhas assinaturas", "o que tenho fixo todo mês?", "meus gastos fixos", "contas que se repetem"
+Para uma CATEGORIA específica: "quanto gastei com comida esse mês?", "gastos com transporte", "quanto foi de mercado?", "quanto gastei em saúde?", "meus gastos com lazer", "quanto torrei em ifood?"
 Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nubank", "quanto gastei no Inter?", "meu cartão X", "fatura do Bradesco", "o que gastei no <cartão>?"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "card", "cardName": string | null}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card", "cardName": string | null, "categorySlug": string | null}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
 - balance: foco no saldo
 - forecast: previsão de quanto vai sobrar/ter no FIM do mês (considerando contas fixas a vencer)
-- budget: situação do ORÇAMENTO do mês (teto de GASTO definido, quanto gastou, quanto pode ainda gastar)
+- budget: situação das METAS / ORÇAMENTO do mês (teto de GASTO definido, quanto gastou, quanto pode ainda gastar)
 - reserves: situação das RESERVAS / objetivos de juntar dinheiro (quanto já juntou de cada reserva, quanto falta)
+- recurring: lista das RECORRÊNCIAS / contas fixas / assinaturas que se repetem todo mês (quanto, em que dia)
+- category: gasto numa CATEGORIA específica de despesa (alimentação, transporte, etc.) no mês
 - card: gastos de um CARTÃO específico
 - cardName: SÓ quando queryType="card". Nome do cartão mencionado (ex: "Bradesco", "Nubank"), ou "cartao" se disser só "meu cartão" sem nome. Nos outros queryTypes, null.
-IMPORTANTE: orçamento (budget) = teto de gasto do mês. Reserva (reserves) = juntar dinheiro para um objetivo. "minha reserva"/"minhas reservas" e "minhas metas" são reserves, NUNCA budget e NUNCA saudação. "como está meu cartão X" / "gastos no X" é queryType "card", NUNCA o resumo geral.
+- categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
+IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
+- "METAS" no LemonFin = teto/limite de GASTO do mês → queryType "budget". "minhas metas", "minhas metas de economia", "quais minhas metas" são budget.
+- "RESERVAS" = juntar dinheiro para um objetivo (viagem, carro) → queryType "reserves". SÓ use reserves quando o usuário fala explicitamente de "reserva", "juntar", "guardar" ou um objetivo nomeado. NUNCA classifique "metas" como reserves.
+- "RECORRÊNCIAS"/"contas fixas"/"assinaturas" (consulta, sem valor novo) → queryType "recurring".
+- Pergunta que cita UMA categoria de gasto ("comida", "transporte", "mercado", "saúde", "lazer"...) → queryType "category" com o categorySlug, NUNCA "expenses". "expenses" é SÓ o total geral de despesas, sem categoria citada.
+- "como está meu cartão X" / "gastos no X" → queryType "card", NUNCA o resumo geral.
 
 ### 3. CANCEL — Cancelar última transação
 Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
@@ -178,12 +202,13 @@ Exemplos: "guardei 200 na viagem", "separei 500 pra reserva", "depositei 1000 na
 Responda: {"intent": "reserve_contribution", "amount": number}
 - amount: valor guardado. IGNORE o nome da reserva (o app vai perguntar em qual reserva lançar). Se não houver valor, responda "unknown".
 
-### 10. TIPS — Dicas e orientações financeiras
-Quando o usuário pede dicas, ideias, conselhos ou orientações sobre finanças pessoais.
-Exemplos: "me dá uma dica", "como economizar?", "ideias para investir".
+### 10. ADVICE — Conversa aberta, dicas, análise dos gastos e small talk
+Use para QUALQUER mensagem que NÃO seja um comando estruturado das outras intenções: pedidos de dica/conselho, perguntas abertas/analíticas sobre as finanças, e também saudações ou perguntas pessoais leves.
+Exemplos: "me ajuda a organizar meus gastos", "no que eu mais tenho gastado?", "como posso gastar menos com ifood?", "como anda minha vida financeira?", "me dá uma dica", "como economizar?", "qual seria um bom plano pra mim?", "oi", "bom dia", "tudo bem?", "qual é o meu nome?".
+Diferença para QUERY: query é um número/resumo pronto e direto (totais, saldo, gastos de uma categoria/cartão). advice é quando a pessoa quer ANÁLISE, CONSELHO, COMPARAÇÃO, PLANO ou conversa — algo que exige raciocínio sobre os dados, não só um total.
 
-Responda: {"intent": "tips", "message": string}
-Escreva a dica de forma curta, prática e amigável (máx 500 caracteres). Use emojis com moderação.
+Responda: {"intent": "advice"}
+NÃO escreva a resposta aqui — outro componente (com acesso aos dados do usuário) vai responder. Só identifique a intenção.
 
 ### 11. CORRECTION_CARD — Corrigir/remover o cartão da última transação
 Quando o usuário corrige em QUAL cartão a ÚLTIMA transação registrada caiu, OU diz que não foi em cartão nenhum. É SEMPRE sobre algo JÁ REGISTRADO (referência ao passado), não um gasto novo.
@@ -195,16 +220,28 @@ Responda: {"intent": "correction_card", "cardName": string | null}
 - cardName: null quando o usuário REMOVE o vínculo (não foi em cartão nenhum / tira o cartão / "não foi no X" sem indicar outro cartão).
 IMPORTANTE: só use correction_card quando NÃO há um gasto NOVO com valor na mensagem. Se a mensagem descreve um gasto novo com valor (ex: "gastei 50 no Nubank"), use transaction.
 
-### 12. UNKNOWN — Mensagem não reconhecida
-Quando a mensagem não se encaixa em nenhuma das intenções acima.
+### 12. GOAL_CREATE — Criar uma META (teto de gasto por categoria)
+Quando o usuário quer DEFINIR um limite/teto de quanto pode gastar numa categoria (por mês ou semana). NÃO é juntar dinheiro (isso é reserve) nem um gasto realizado (isso é transaction).
+Exemplos: "limite de 800 em alimentação por mês", "quero gastar no máximo 500 com lazer", "meta de 300 de transporte", "não quero passar de 1000 em compras no mês", "teto de 200 por semana em alimentação".
+
+Responda: {"intent": "goal_create", "categorySlug": string, "amount": number, "period": "MONTHLY" | "WEEKLY"}
+- categorySlug: slug EXATO da categoria (mesma lista de TRANSACTION). Se não houver categoria clara, responda "unknown".
+- amount: valor do teto. Se não houver valor, responda "unknown".
+- period: "WEEKLY" se o usuário disser "por semana"/"semanal"; caso contrário "MONTHLY".
+
+### 13. UNKNOWN — Mensagem vazia ou totalmente ininteligível
+Use SOMENTE quando a mensagem não tem sentido algum (ex: "asdkjh", figurinha sem texto). Para saudações, perguntas pessoais leves, assuntos fora de finanças ou qualquer conversa, use "advice" (o assessor responde com tom humano). Na dúvida entre unknown e advice, escolha "advice".
 
 Responda: {"intent": "unknown", "message": string}
-Explique brevemente o que você pode fazer — registrar gastos, consultar o resumo, criar reservas ("quero juntar 5000 pra viagem") e dar dicas — com exemplos curtos.
+Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soar robótico.
 
 ## DESAMBIGUAÇÃO (evite confundir):
 - "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
 - "quero juntar/guardar + valor", "reserva de + valor" ou "objetivo de + valor" → reserve_create (NÃO transaction, NÃO recurring).
-- "minhas reservas" / "como tá minha reserva" / "minhas metas" → query com queryType "reserves" (NÃO budget, NÃO saudação).
+- "limite/teto/meta de + valor + EM/DE uma categoria", "não quero passar de X em Y", "gastar no máximo X com Y" → goal_create (definir teto de gasto). NÃO confunda com reserve_create (juntar dinheiro) nem com query (consultar). goal_create SEMPRE tem categoria + valor de teto.
+- "minhas metas" / "minhas metas de economia" / "quais minhas metas" → query com queryType "budget" (METAS = teto de gasto), NÃO reserves.
+- "minhas reservas" / "como tá minha reserva" / "quanto juntei pra viagem" → query com queryType "reserves" (objetivo de poupança), NÃO budget, NÃO saudação.
+- "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
 - "como está meu cartão X" / "gastos no X" / "quanto gastei no X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
 
@@ -280,15 +317,31 @@ export class MessageParserService {
 
         case 'query': {
           const queryType = json.queryType || 'summary';
-          // cardName só entra no objeto quando presente (mantém o shape antigo
-          // dos outros queryTypes — evita quebrar comparações estritas).
+          // cardName/categorySlug só entram no objeto quando presentes (mantém o
+          // shape antigo dos outros queryTypes — evita quebrar comparações estritas).
           const cardName =
             typeof json.cardName === 'string' && json.cardName.trim()
               ? json.cardName.trim()
               : undefined;
-          return cardName
-            ? { intent: 'query', queryType, cardName }
-            : { intent: 'query', queryType };
+          const categorySlug =
+            typeof json.categorySlug === 'string' && json.categorySlug.trim()
+              ? json.categorySlug.trim()
+              : undefined;
+          // Categoria sem slug identificado: não dá pra consultar — vira unknown.
+          if (queryType === 'category' && !categorySlug) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui identificar a categoria. Tente algo como "quanto gastei com transporte?" ou "gastos com alimentação".',
+            };
+          }
+          const out: Extract<ParseResult, { intent: 'query' }> = {
+            intent: 'query',
+            queryType,
+          };
+          if (cardName) out.cardName = cardName;
+          if (categorySlug) out.categorySlug = categorySlug;
+          return out;
         }
 
         case 'cancel':
@@ -356,14 +409,23 @@ export class MessageParserService {
             amount: Number(json.amount),
           };
 
+        case 'goal_create': {
+          const item = this.parseGoalItem(json);
+          if (!item) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender a meta. Tente algo como "limite de 800 em alimentação por mês".',
+            };
+          }
+          return item;
+        }
+
         case 'batch':
           return this.parseBatch(json, message);
 
-        case 'tips':
-          return {
-            intent: 'tips',
-            message: json.message,
-          };
+        case 'advice':
+          return { intent: 'advice' };
 
         default:
           return {
@@ -450,8 +512,7 @@ export class MessageParserService {
   private parseCorrectionCard(
     json: Record<string, unknown>,
   ): Extract<ParseResult, { intent: 'correction_card' }> {
-    const raw =
-      typeof json.cardName === 'string' ? json.cardName.trim() : '';
+    const raw = typeof json.cardName === 'string' ? json.cardName.trim() : '';
     const cardName = raw && raw.toLowerCase() !== 'cartao' ? raw : null;
     return { intent: 'correction_card', cardName };
   }
@@ -460,7 +521,8 @@ export class MessageParserService {
     json: Record<string, unknown>,
   ): Extract<ParseResult, { intent: 'reserve_create' }> | null {
     // Valor-alvo é obrigatório — sem ele, não dá pra criar a reserva (não inventa).
-    if (!json.targetAmount || typeof json.targetAmount !== 'number') return null;
+    if (!json.targetAmount || typeof json.targetAmount !== 'number')
+      return null;
     const name = (json.name as string)?.trim() || 'minha reserva';
     const deadline = this.normalizeDeadline(
       json.deadline as string | null | undefined,
@@ -468,6 +530,22 @@ export class MessageParserService {
     return {
       intent: 'reserve_create',
       data: { name, targetAmount: Number(json.targetAmount), deadline },
+    };
+  }
+
+  private parseGoalItem(
+    json: Record<string, unknown>,
+  ): Extract<ParseResult, { intent: 'goal_create' }> | null {
+    // Categoria e valor de teto são obrigatórios — sem eles não dá pra criar.
+    const categorySlug =
+      typeof json.categorySlug === 'string' ? json.categorySlug.trim() : '';
+    if (!categorySlug || !json.amount || typeof json.amount !== 'number') {
+      return null;
+    }
+    const period = json.period === 'WEEKLY' ? 'WEEKLY' : 'MONTHLY';
+    return {
+      intent: 'goal_create',
+      data: { categorySlug, amount: Number(json.amount), period },
     };
   }
 

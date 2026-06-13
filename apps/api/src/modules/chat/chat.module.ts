@@ -8,5 +8,6 @@ import { FamiliesModule } from '../families/families.module';
   imports: [TransactionsModule, FamiliesModule],
   controllers: [ChatController],
   providers: [ChatCompletionUseCase],
+  exports: [ChatCompletionUseCase],
 })
 export class ChatModule {}
