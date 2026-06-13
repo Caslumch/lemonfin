@@ -40,6 +40,7 @@ model User {
   ownedFamilies     Family[]               @relation("FamilyOwner")
   familyMembers     FamilyMember[]
   verificationCodes VerificationCode[]
+  categories        Category[]
 
   @@map("users")
 }
@@ -74,18 +75,28 @@ model VerificationCode {
   @@map("verification_codes")
 }
 
+// Categoria de transação. Dois tipos no mesmo modelo:
+// - Sistema (userId = null): as do seed, compartilhadas por todos, read-only.
+// - Do usuário (userId preenchido): criadas pelo dono; visíveis/usáveis por toda
+//   a família (resolução via FamilyContext, igual ao resto do app).
+// O slug é gerado pelo backend a partir do nome e é único por dono
+// (@@unique[userId, slug]). icon guarda um emoji.
 model Category {
   id           String                 @id @default(cuid())
-  name         String                 @unique
-  slug         String                 @unique
+  name         String
+  slug         String
   icon         String?
   colorBg      String                 @map("color_bg")
   colorText    String                 @map("color_text")
+  userId       String?                @map("user_id")
   createdAt    DateTime               @default(now()) @map("created_at")
+  user         User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   goals        Goal[]
   recurring    RecurringTransaction[]
 
+  @@unique([userId, slug])
+  @@index([userId])
   @@map("categories")
 }
 

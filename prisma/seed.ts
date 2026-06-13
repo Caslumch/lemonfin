@@ -20,11 +20,17 @@ async function main() {
   console.log('Seeding categories...')
 
   for (const category of categories) {
-    await prisma.category.upsert({
-      where: { slug: category.slug },
-      update: category,
-      create: category,
+    // Categorias de sistema têm userId null. Com o compound unique (userId, slug)
+    // não dá para usar upsert direto (a semântica de NULL no SQL não casa em
+    // índice único), então buscamos a de sistema pelo slug e criamos/atualizamos.
+    const existing = await prisma.category.findFirst({
+      where: { slug: category.slug, userId: null },
     })
+    if (existing) {
+      await prisma.category.update({ where: { id: existing.id }, data: category })
+    } else {
+      await prisma.category.create({ data: category })
+    }
   }
 
   console.log(`Seeded ${categories.length} categories`)
