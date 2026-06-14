@@ -117,7 +117,14 @@ export class TransactionsController {
   remove(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
+    // scope=group exclui todas as parcelas do mesmo grupo; o default (single)
+    // mantém o comportamento de excluir apenas a transação informada.
+    @Query('scope') scope?: string,
   ) {
-    return this.deleteTransaction.execute(id, user.id);
+    return this.deleteTransaction.execute(
+      id,
+      user.id,
+      scope === 'group' ? 'group' : 'single',
+    );
   }
 }

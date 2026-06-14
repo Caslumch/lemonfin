@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
@@ -1110,6 +1111,10 @@ export class WhatsappService {
       }
     }
 
+    // Vincula todas as parcelas pelo mesmo grupo (permite excluir o grupo
+    // inteiro depois). O id é só um agrupador opaco.
+    const installmentGroupId = randomUUID();
+
     for (let i = 0; i < data.installments; i++) {
       const installmentDate = new Date(
         now.getFullYear(),
@@ -1126,6 +1131,9 @@ export class WhatsappService {
         userId,
         categoryId: category.id,
         cardId,
+        installmentGroupId,
+        installmentNumber: i + 1,
+        installmentTotal: data.installments,
       });
     }
 
@@ -1601,6 +1609,7 @@ export class WhatsappService {
       const perInstallment =
         Math.round((data.amount / data.installments) * 100) / 100;
       const now = new Date();
+      const installmentGroupId = randomUUID();
       for (let i = 0; i < data.installments; i++) {
         const date = new Date(
           now.getFullYear(),
@@ -1616,6 +1625,9 @@ export class WhatsappService {
           userId,
           categoryId: category.id,
           cardId,
+          installmentGroupId,
+          installmentNumber: i + 1,
+          installmentTotal: data.installments,
         });
       }
       return `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`;
