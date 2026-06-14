@@ -1,5 +1,11 @@
 # Plano — Conversa contínua no WhatsApp (referências ao histórico + refazer/excluir a última ação)
 
+> **Status (14/06):** ✅ Implementado na PR #43 — fundação `lastAction`,
+> `cancel` em grupo e intenção `redo` (`handleRedo`). Refinamento opcional que
+> ficou de fora: confirmação interativa antes de refazer em casos ambíguos
+> (hoje o `redo` executa direto quando os dados estão claros e pede os dados
+> quando faltam — sem um passo de "confirma?" via `pending`).
+
 **Problema:** o parser trata cada mensagem como comando isolado e o "desfazer"
 só conhece **uma** transação. Falhas observadas (prints de 14/06):
 
