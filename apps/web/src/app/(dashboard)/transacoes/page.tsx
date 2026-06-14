@@ -229,8 +229,11 @@ export default function TransacoesPage() {
       );
       fetchTransactions();
       fetchSummary();
-    } catch {
+    } catch (error) {
       toast.error("Erro ao excluir transação");
+      // Re-lança para o modal NÃO fechar em caso de falha (mantém aberto para
+      // nova tentativa); sem isso o handleConfirm chamaria onClose() mesmo no erro.
+      throw error;
     }
   }
 

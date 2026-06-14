@@ -129,7 +129,7 @@ export class WhatsappService {
         await this.handleCorrectionCard(from, user.id, result.cardName);
         break;
       case 'installment':
-        await this.handleInstallment(from, user.id, result);
+        await this.handleInstallment(from, user.id, result, phoneKey);
         break;
       case 'recurring':
         await this.handleRecurring(from, user.id, result);
@@ -144,7 +144,7 @@ export class WhatsappService {
         await this.handleGoalCreate(from, user.id, result.data);
         break;
       case 'batch':
-        await this.handleBatch(from, user.id, result);
+        await this.handleBatch(from, user.id, result, phoneKey);
         break;
       case 'advice':
         await this.handleAdvisor(from, user, content, history, phoneKey);
@@ -1061,10 +1061,52 @@ export class WhatsappService {
     );
   }
 
+  // Cria as N parcelas de uma compra: vincula todas pelo mesmo grupo (permite
+  // excluir o grupo inteiro depois), uma por mês a partir de hoje. Retorna o
+  // valor de cada parcela para compor a mensagem de confirmação.
+  private async createInstallments(params: {
+    amount: number;
+    installments: number;
+    description: string;
+    userId: string;
+    categoryId: string;
+    cardId?: string;
+  }): Promise<number> {
+    const perInstallment =
+      Math.round((params.amount / params.installments) * 100) / 100;
+    const now = new Date();
+    const installmentGroupId = randomUUID();
+
+    for (let i = 0; i < params.installments; i++) {
+      const installmentDate = new Date(
+        now.getFullYear(),
+        now.getMonth() + i,
+        now.getDate(),
+      );
+
+      await this.transactionsRepository.create({
+        amount: perInstallment,
+        type: 'EXPENSE',
+        description: `${params.description} (${i + 1}/${params.installments})`,
+        date: installmentDate.toISOString(),
+        source: 'WHATSAPP',
+        userId: params.userId,
+        categoryId: params.categoryId,
+        cardId: params.cardId,
+        installmentGroupId,
+        installmentNumber: i + 1,
+        installmentTotal: params.installments,
+      });
+    }
+
+    return perInstallment;
+  }
+
   private async handleInstallment(
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'installment' }>,
+    phoneKey?: string,
   ) {
     const { data } = result;
 
@@ -1083,10 +1125,6 @@ export class WhatsappService {
         return;
       }
     }
-
-    const perInstallment =
-      Math.round((data.amount / data.installments) * 100) / 100;
-    const now = new Date();
 
     // Try to link to card if cardName was mentioned
     let cardId: string | undefined;
@@ -1111,31 +1149,14 @@ export class WhatsappService {
       }
     }
 
-    // Vincula todas as parcelas pelo mesmo grupo (permite excluir o grupo
-    // inteiro depois). O id é só um agrupador opaco.
-    const installmentGroupId = randomUUID();
-
-    for (let i = 0; i < data.installments; i++) {
-      const installmentDate = new Date(
-        now.getFullYear(),
-        now.getMonth() + i,
-        now.getDate(),
-      );
-
-      await this.transactionsRepository.create({
-        amount: perInstallment,
-        type: 'EXPENSE',
-        description: `${data.description} (${i + 1}/${data.installments})`,
-        date: installmentDate.toISOString(),
-        source: 'WHATSAPP',
-        userId,
-        categoryId: category.id,
-        cardId,
-        installmentGroupId,
-        installmentNumber: i + 1,
-        installmentTotal: data.installments,
-      });
-    }
+    const perInstallment = await this.createInstallments({
+      amount: data.amount,
+      installments: data.installments,
+      description: data.description,
+      userId,
+      categoryId: category.id,
+      cardId,
+    });
 
     const totalFormatted = data.amount.toLocaleString('pt-BR', {
       style: 'currency',
@@ -1156,6 +1177,17 @@ export class WhatsappService {
         `*${data.installments}x de ${perFormatted}* (total ${totalFormatted}). ` +
         `Já dividi tudo nos próximos meses pra você 📅`,
     });
+
+    // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
+    // re-extrair o parcelamento de uma mensagem anterior do usuário num batch.
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        {
+          role: 'bot',
+          text: `[parcelamento registrado: ${data.installments}x]`,
+        },
+      ]);
+    }
 
     this.logger.log(
       `Installment created: ${data.installments}x ${perInstallment} for user ${userId}`,
@@ -1532,6 +1564,7 @@ export class WhatsappService {
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'batch' }>,
+    phoneKey?: string,
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const lines: string[] = [];
@@ -1567,6 +1600,17 @@ export class WhatsappService {
       to: from,
       content: parts.join('\n\n'),
     });
+
+    // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
+    // re-extrair os lançamentos deste lote numa mensagem posterior do usuário.
+    if (phoneKey && lines.length > 0) {
+      await this.conversation.appendHistory(phoneKey, [
+        {
+          role: 'bot',
+          text: `[registrei ${lines.length} ${lines.length === 1 ? 'lançamento' : 'lançamentos'}]`,
+        },
+      ]);
+    }
 
     this.logger.log(
       `Batch processed: ${lines.length} registered, ${result.skipped.length} skipped for user ${userId}`,
@@ -1606,30 +1650,14 @@ export class WhatsappService {
 
     if (item.intent === 'installment') {
       const { data } = item;
-      const perInstallment =
-        Math.round((data.amount / data.installments) * 100) / 100;
-      const now = new Date();
-      const installmentGroupId = randomUUID();
-      for (let i = 0; i < data.installments; i++) {
-        const date = new Date(
-          now.getFullYear(),
-          now.getMonth() + i,
-          now.getDate(),
-        );
-        await this.transactionsRepository.create({
-          amount: perInstallment,
-          type: 'EXPENSE',
-          description: `${data.description} (${i + 1}/${data.installments})`,
-          date: date.toISOString(),
-          source: 'WHATSAPP',
-          userId,
-          categoryId: category.id,
-          cardId,
-          installmentGroupId,
-          installmentNumber: i + 1,
-          installmentTotal: data.installments,
-        });
-      }
+      const perInstallment = await this.createInstallments({
+        amount: data.amount,
+        installments: data.installments,
+        description: data.description,
+        userId,
+        categoryId: category.id,
+        cardId,
+      });
       return `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`;
     }
 

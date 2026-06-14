@@ -36,6 +36,9 @@ export function DeleteModal({
     try {
       await onConfirm(scope);
       onClose();
+    } catch {
+      // onConfirm já notificou o erro (toast); aqui só evitamos fechar o modal,
+      // deixando o usuário tentar de novo. Não re-propaga (sem unhandled rejection).
     } finally {
       setLoadingScope(null);
     }
@@ -55,7 +58,8 @@ export function DeleteModal({
             </h2>
             <button
               onClick={onClose}
-              className="text-fg-muted hover:text-fg cursor-pointer"
+              disabled={loading}
+              className="text-fg-muted hover:text-fg cursor-pointer disabled:opacity-50 disabled:cursor-default"
             >
               <X size={20} />
             </button>
