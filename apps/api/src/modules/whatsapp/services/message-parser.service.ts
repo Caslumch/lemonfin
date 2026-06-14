@@ -85,6 +85,22 @@ export type ParseResult =
   | { intent: 'reserve_contribution'; amount: number }
   | { intent: 'goal_create'; data: ParsedGoal }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
+  // Refaz a ÚLTIMA AÇÃO de outro jeito: o bot exclui o que registrou por último
+  // e recria com o ajuste. Sempre referencia algo JÁ registrado.
+  // - installments: (re)parcelar a mesma compra em N vezes (reusa valor total,
+  //   categoria, descrição e cartão da ação anterior).
+  // - items: separar/refazer com itens explícitos que o usuário forneceu (com
+  //   valores). Cada item segue o formato de transaction/installment.
+  // - cardName: trocar/remover o cartão ao refazer.
+  // Pelo menos um ajuste é obrigatório (o validador garante).
+  | {
+      intent: 'redo';
+      adjust: {
+        installments?: number;
+        items?: BatchItem[];
+        cardName?: string | null;
+      };
+    }
   // Pergunta aberta de assessoria, dica, small talk ou qualquer coisa que não
   // seja um comando estruturado. O texto original é repassado ao motor de chat
   // (assessor financeiro com acesso aos dados do usuário).
@@ -253,7 +269,21 @@ Responda: {"intent": "goal_create", "categorySlug": string, "amount": number, "p
 - amount: valor do teto. Se não houver valor, responda "unknown".
 - period: "WEEKLY" se o usuário disser "por semana"/"semanal"; caso contrário "MONTHLY".
 
-### 13. UNKNOWN — Mensagem vazia ou totalmente ininteligível
+### 13. REDO — Refazer a ÚLTIMA ação de outro jeito
+Quando o usuário quer que você REFAÇA o que acabou de registrar, de forma diferente — separar em vários, (re)parcelar, ou trocar o cartão. É SEMPRE uma referência ao que JÁ foi registrado ("essa que criou", "isso", "o anterior", "o último"). O bot vai EXCLUIR o registro anterior e recriar com o ajuste.
+Exemplos:
+- "faz separado, uma de 139 e outra de 139" / "cria duas transações: 139 e 139" → separar em itens (com valores informados).
+- "na verdade era em 4x" / "parcela isso em 3x" / "divide em 6 vezes" → re-parcelar a MESMA compra.
+- "refaz no Nubank" / "troca tudo pro Inter" → trocar o cartão ao refazer.
+
+Responda: {"intent": "redo", "adjust": { "installments": number | null, "items": [ <transaction|installment> ] | null, "cardName": string | null }}
+- installments: número de parcelas, quando o usuário pede pra (re)parcelar a mesma compra. Senão null.
+- items: SÓ quando o usuário FORNECEU os itens separados COM VALORES (ex: "139 e 139"). Cada item segue o formato de TRANSACTION ou INSTALLMENT (com seu "intent"). Se o usuário disser "separa" mas NÃO der os valores, deixe items null (o bot vai pedir os valores — NÃO invente divisão).
+- cardName: novo cartão se ele mandar trocar; null se não mencionar cartão.
+- Pelo menos um dos três deve estar preenchido. Se nenhum, isso não é redo.
+IMPORTANTE: redo NÃO é um gasto novo. Se a mensagem descreve uma compra NOVA com valor próprio (sem referência ao registro anterior), use transaction/installment/batch normalmente.
+
+### 14. UNKNOWN — Mensagem vazia ou totalmente ininteligível
 Use SOMENTE quando a mensagem não tem sentido algum (ex: "asdkjh", figurinha sem texto). Para saudações, perguntas pessoais leves, assuntos fora de finanças ou qualquer conversa, use "advice" (o assessor responde com tom humano). Na dúvida entre unknown e advice, escolha "advice".
 
 Responda: {"intent": "unknown", "message": string}
@@ -268,6 +298,9 @@ Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soa
 - "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
 - "como está meu cartão X" / "gastos no X" / "quanto gastei no X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
+- "faz separado" / "cria duas transações" / "separa isso" / "na verdade era em Nx" / "parcela isso" / "refaz ..." referindo-se ao que ACABOU de registrar → redo (refazer a última ação), NÃO um gasto novo. Se vierem valores ("139 e 139"), preencha redo.adjust.items; se for só "em 4x", preencha redo.adjust.installments.
+- "exclui essa que criou" / "apaga o que registrou" / "cancela isso" (SEM recriar) → cancel (apaga a última AÇÃO inteira), NÃO redo.
+- redo SEMPRE se refere a algo já registrado. Uma compra nova e completa (com valor) que não referencia o anterior é transaction/installment/batch, não redo.
 
 ## CARTÃO — regra crítica:
 SÓ defina cardName quando o cartão estiver na MENSAGEM ATUAL. NUNCA herde o nome de um cartão que apareceu no histórico de mensagens anteriores. Se a mensagem atual não cita cartão, cardName é null — mesmo que uma mensagem anterior tenha citado um cartão.`;
@@ -456,6 +489,9 @@ export class MessageParserService {
 
         case 'batch':
           return this.parseBatch(json, message);
+
+        case 'redo':
+          return this.parseRedo(json, message);
 
         case 'advice':
           return { intent: 'advice' };
@@ -669,5 +705,60 @@ export class MessageParserService {
     }
 
     return { intent: 'batch', items, skipped };
+  }
+
+  // Refazer a última ação. Aceita installments (re-parcelar a mesma compra),
+  // items (separar com valores fornecidos) e/ou cardName (trocar cartão). Exige
+  // ao menos um ajuste — sem nenhum, não há o que refazer (vira unknown).
+  private parseRedo(
+    json: Record<string, unknown>,
+    message: string,
+  ): ParseResult {
+    const adjustRaw =
+      json.adjust && typeof json.adjust === 'object'
+        ? (json.adjust as Record<string, unknown>)
+        : json; // tolera o modelo devolver os campos no nível de cima
+
+    const adjust: Extract<ParseResult, { intent: 'redo' }>['adjust'] = {};
+
+    const inst = Number(adjustRaw.installments);
+    if (Number.isFinite(inst) && inst >= 2 && inst <= 48) {
+      adjust.installments = inst;
+    }
+
+    // Itens explícitos: valida cada um como transação/parcelamento. Só entram os
+    // que têm valor — nunca inventa (decisão: split exige valores na mensagem).
+    const rawItems = Array.isArray(adjustRaw.items) ? adjustRaw.items : [];
+    const items: BatchItem[] = [];
+    for (const raw of rawItems) {
+      if (!raw || typeof raw !== 'object') continue;
+      const obj = raw as Record<string, unknown>;
+      const parsed =
+        obj.intent === 'installment'
+          ? this.parseInstallmentItem(obj)
+          : this.parseTransactionItem(obj, message);
+      if (parsed) items.push(parsed);
+    }
+    if (items.length > 0) adjust.items = items;
+
+    // cardName: presente (troca) ou explicitamente null no JSON (remove). Só
+    // consideramos "trocar cartão" quando veio uma string não-vazia.
+    if (typeof adjustRaw.cardName === 'string' && adjustRaw.cardName.trim()) {
+      adjust.cardName = adjustRaw.cardName.trim();
+    }
+
+    if (
+      adjust.installments === undefined &&
+      adjust.items === undefined &&
+      adjust.cardName === undefined
+    ) {
+      return {
+        intent: 'unknown',
+        message:
+          'Pra refazer, me diz como: _"faz em 4x"_, _"separa em 139 e 139"_ ou _"refaz no Nubank"_.',
+      };
+    }
+
+    return { intent: 'redo', adjust };
   }
 }

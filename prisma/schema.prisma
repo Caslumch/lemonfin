@@ -286,10 +286,14 @@ model Reserve {
 }
 
 model ConversationState {
-  phone     String   @id
-  pending   Json? // confirmação aguardando (ex: categoria a confirmar)
-  history   Json     @default("[]") // últimas trocas (texto curto)
-  updatedAt DateTime @updatedAt @map("updated_at")
+  phone      String   @id
+  pending    Json? // confirmação aguardando (ex: categoria a confirmar)
+  history    Json     @default("[]") // últimas trocas (texto curto)
+  // Última ação de registro (transação/parcelamento/lote): guarda os ids
+  // criados e os dados de origem, para "cancela"/"refaz" operarem sobre a ação
+  // inteira (N transações), não só a última transação única.
+  lastAction Json?    @map("last_action")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("conversation_states")
 }

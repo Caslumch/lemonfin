@@ -120,7 +120,7 @@ export class WhatsappService {
         await this.handleQuery(from, user.id, result);
         break;
       case 'cancel':
-        await this.handleCancel(from, user.id);
+        await this.handleCancel(from, user.id, phoneKey);
         break;
       case 'correction':
         await this.handleCorrection(from, user.id, result);
@@ -145,6 +145,9 @@ export class WhatsappService {
         break;
       case 'batch':
         await this.handleBatch(from, user.id, result, phoneKey);
+        break;
+      case 'redo':
+        await this.handleRedo(from, user.id, result, phoneKey);
         break;
       case 'advice':
         await this.handleAdvisor(from, user, content, history, phoneKey);
@@ -228,6 +231,14 @@ export class WhatsappService {
               `então deixei sem cartão por enquanto. ` +
               `Se quiser vincular, é só dizer o nome — tipo _"foi no ${userCards[0].name}"_ 💳`,
           });
+
+          if (phoneKey) {
+            await this.conversation.setLastAction(phoneKey, {
+              kind: 'transaction',
+              transactionIds: [transaction.id],
+              label: `${amountFormatted} em ${category.name}`,
+            });
+          }
 
           this.logger.log(
             `Transaction ${transaction.id} created without card — multiple cards`,
@@ -339,6 +350,12 @@ export class WhatsappService {
           text: `Registrado: ${amountFormatted} em ${category.name}`,
         },
       ]);
+      // Última ação = esta transação, para "cancela"/"refaz".
+      await this.conversation.setLastAction(phoneKey, {
+        kind: 'transaction',
+        transactionIds: [transaction.id],
+        label: `${amountFormatted} em ${category.name}`,
+      });
     }
 
     this.logger.log(
@@ -987,7 +1004,42 @@ export class WhatsappService {
     });
   }
 
-  private async handleCancel(from: string, userId: string) {
+  private async handleCancel(from: string, userId: string, phoneKey?: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+
+    // Caminho preferido: cancela a ÚLTIMA AÇÃO inteira (parcelamento/lote =
+    // N transações), não só a última transação. Fallback para a última
+    // transação quando não há ação registrada (ex.: conversas antigas).
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    if (lastAction && lastAction.transactionIds.length > 0) {
+      const count = await this.transactionsRepository.deleteManyByIds(
+        lastAction.transactionIds,
+        userIds,
+      );
+      if (phoneKey) await this.conversation.clearLastAction(phoneKey);
+
+      if (count > 0) {
+        const what =
+          count === 1
+            ? `*${lastAction.label}*`
+            : `as *${count}* transações de *${lastAction.label}*`;
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            `Prontinho, removi ✅\n\n` +
+            `Apaguei ${what}. Tá tudo certo de novo no painel 🧹`,
+        });
+        this.logger.log(
+          `Cancelled last action (${count} tx) for user ${userId}`,
+        );
+        return;
+      }
+      // Se nada foi apagado (ids já removidos), cai no fallback abaixo.
+    }
+
     const last = await this.transactionsRepository.findLastByUser(userId);
 
     if (!last) {
@@ -1004,6 +1056,7 @@ export class WhatsappService {
     });
 
     await this.transactionsRepository.delete(last.id);
+    if (phoneKey) await this.conversation.clearLastAction(phoneKey);
 
     await this.wmodeClient.sendMessage({
       to: from,
@@ -1063,7 +1116,8 @@ export class WhatsappService {
 
   // Cria as N parcelas de uma compra: vincula todas pelo mesmo grupo (permite
   // excluir o grupo inteiro depois), uma por mês a partir de hoje. Retorna o
-  // valor de cada parcela para compor a mensagem de confirmação.
+  // valor de cada parcela, o grupo e os ids criados (para a mensagem e para
+  // registrar a "última ação").
   private async createInstallments(params: {
     amount: number;
     installments: number;
@@ -1071,11 +1125,16 @@ export class WhatsappService {
     userId: string;
     categoryId: string;
     cardId?: string;
-  }): Promise<number> {
+  }): Promise<{
+    perInstallment: number;
+    installmentGroupId: string;
+    transactionIds: string[];
+  }> {
     const perInstallment =
       Math.round((params.amount / params.installments) * 100) / 100;
     const now = new Date();
     const installmentGroupId = randomUUID();
+    const transactionIds: string[] = [];
 
     for (let i = 0; i < params.installments; i++) {
       const installmentDate = new Date(
@@ -1084,7 +1143,7 @@ export class WhatsappService {
         now.getDate(),
       );
 
-      await this.transactionsRepository.create({
+      const tx = await this.transactionsRepository.create({
         amount: perInstallment,
         type: 'EXPENSE',
         description: `${params.description} (${i + 1}/${params.installments})`,
@@ -1097,9 +1156,10 @@ export class WhatsappService {
         installmentNumber: i + 1,
         installmentTotal: params.installments,
       });
+      transactionIds.push(tx.id);
     }
 
-    return perInstallment;
+    return { perInstallment, installmentGroupId, transactionIds };
   }
 
   private async handleInstallment(
@@ -1149,14 +1209,15 @@ export class WhatsappService {
       }
     }
 
-    const perInstallment = await this.createInstallments({
-      amount: data.amount,
-      installments: data.installments,
-      description: data.description,
-      userId,
-      categoryId: category.id,
-      cardId,
-    });
+    const { perInstallment, installmentGroupId, transactionIds } =
+      await this.createInstallments({
+        amount: data.amount,
+        installments: data.installments,
+        description: data.description,
+        userId,
+        categoryId: category.id,
+        cardId,
+      });
 
     const totalFormatted = data.amount.toLocaleString('pt-BR', {
       style: 'currency',
@@ -1178,15 +1239,23 @@ export class WhatsappService {
         `Já dividi tudo nos próximos meses pra você 📅`,
     });
 
-    // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
-    // re-extrair o parcelamento de uma mensagem anterior do usuário num batch.
     if (phoneKey) {
+      // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
+      // re-extrair o parcelamento de uma mensagem anterior do usuário num batch.
       await this.conversation.appendHistory(phoneKey, [
         {
           role: 'bot',
           text: `[parcelamento registrado: ${data.installments}x]`,
         },
       ]);
+      // Última ação = este parcelamento inteiro, para "cancela"/"refaz".
+      await this.conversation.setLastAction(phoneKey, {
+        kind: 'installment',
+        transactionIds,
+        installmentGroupId,
+        installments: data.installments,
+        label: `${data.description} (${data.installments}x de ${perFormatted})`,
+      });
     }
 
     this.logger.log(
@@ -1568,11 +1637,15 @@ export class WhatsappService {
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const lines: string[] = [];
+    const allTransactionIds: string[] = [];
+    const installmentGroupIds: string[] = [];
 
     for (const item of result.items) {
       try {
-        const line = await this.persistBatchItem(userId, userIds, item);
-        lines.push(line);
+        const r = await this.persistBatchItem(userId, userIds, item);
+        lines.push(r.line);
+        allTransactionIds.push(...r.transactionIds);
+        if (r.installmentGroupId) installmentGroupIds.push(r.installmentGroupId);
       } catch (error) {
         this.logger.error(`Batch item failed: ${error}`);
         lines.push('⚠️ um item falhou ao registrar');
@@ -1601,19 +1674,199 @@ export class WhatsappService {
       content: parts.join('\n\n'),
     });
 
-    // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
-    // re-extrair os lançamentos deste lote numa mensagem posterior do usuário.
     if (phoneKey && lines.length > 0) {
+      // Resumo NEUTRO no histórico (não os itens em si): impede o parser de
+      // re-extrair os lançamentos deste lote numa mensagem posterior do usuário.
       await this.conversation.appendHistory(phoneKey, [
         {
           role: 'bot',
           text: `[registrei ${lines.length} ${lines.length === 1 ? 'lançamento' : 'lançamentos'}]`,
         },
       ]);
+      // Última ação = este lote inteiro, para "cancela"/"refaz" (só transações;
+      // recorrências do lote ficam de fora pois não são Transaction).
+      if (allTransactionIds.length > 0) {
+        await this.conversation.setLastAction(phoneKey, {
+          kind: 'batch',
+          transactionIds: allTransactionIds,
+          installmentGroupIds,
+          count: lines.length,
+          label: `${lines.length} ${lines.length === 1 ? 'lançamento' : 'lançamentos'}`,
+        });
+      }
     }
 
     this.logger.log(
       `Batch processed: ${lines.length} registered, ${result.skipped.length} skipped for user ${userId}`,
+    );
+  }
+
+  // Refaz a ÚLTIMA AÇÃO de outro jeito: recria com o ajuste e remove o registro
+  // anterior. Estratégia "cria-depois-apaga": cria o novo PRIMEIRO e só então
+  // apaga o antigo — se a criação falhar, nada é perdido (o antigo permanece).
+  private async handleRedo(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'redo' }>,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    if (!lastAction || lastAction.transactionIds.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não achei um registro recente pra refazer. Me manda o lançamento ' +
+          'que você quer e eu registro 😉',
+      });
+      return;
+    }
+
+    // Reconstrói os dados da ação anterior a partir das transações em si (fonte
+    // da verdade — não depende de o lastAction guardar valor/categoria).
+    const prev = await this.transactionsRepository.findManyByIds(
+      lastAction.transactionIds,
+      userIds,
+    );
+    if (prev.length === 0) {
+      if (phoneKey) await this.conversation.clearLastAction(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Esse registro não está mais aqui (já foi removido). Manda de novo ' +
+          'que eu registro 😉',
+      });
+      return;
+    }
+
+    const { adjust } = result;
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Cartão a aplicar no refazer: se o usuário mandou trocar, resolve pelo
+    // nome; senão herda o cartão da ação anterior.
+    let cardId: string | undefined;
+    if (adjust.cardName) {
+      const card = await this.cardsRepository.findByName(
+        adjust.cardName,
+        userIds,
+      );
+      cardId = card?.id;
+    } else {
+      cardId = prev[0].cardId ?? undefined;
+    }
+
+    const newTransactionIds: string[] = [];
+    const newGroupIds: string[] = [];
+    const lines: string[] = [];
+
+    if (adjust.items && adjust.items.length > 0) {
+      // Separar/refazer com itens explícitos fornecidos pelo usuário (já têm
+      // valores e categoria). Reaproveita o mesmo caminho do lote.
+      for (const item of adjust.items) {
+        const withCard: BatchItem = adjust.cardName
+          ? ({
+              ...item,
+              data: { ...item.data, cardName: adjust.cardName },
+            } as BatchItem)
+          : item;
+        const r = await this.persistBatchItem(userId, userIds, withCard);
+        lines.push(r.line);
+        newTransactionIds.push(...r.transactionIds);
+        if (r.installmentGroupId) newGroupIds.push(r.installmentGroupId);
+      }
+    } else if (adjust.installments) {
+      // (Re)parcelar a MESMA compra: total = soma da ação anterior; herda
+      // categoria e descrição-base (sem o sufixo "(n/N)").
+      const total = prev.reduce((s, t) => s + Number(t.amount), 0);
+      const baseDescription = (prev[0].description || prev[0].category.name)
+        .replace(/\s*\(\d+\/\d+\)\s*$/, '')
+        .trim();
+      const { perInstallment, installmentGroupId, transactionIds } =
+        await this.createInstallments({
+          amount: total,
+          installments: adjust.installments,
+          description: baseDescription,
+          userId,
+          categoryId: prev[0].categoryId,
+          cardId,
+        });
+      newTransactionIds.push(...transactionIds);
+      newGroupIds.push(installmentGroupId);
+      lines.push(
+        `🛍️ ${baseDescription}: ${adjust.installments}x de ${fmt(perInstallment)}`,
+      );
+    } else {
+      // Só troca de cartão (sem split nem parcelamento): recria cada transação
+      // anterior igual, apenas com o novo cartão.
+      for (const t of prev) {
+        const created = await this.transactionsRepository.create({
+          amount: Number(t.amount),
+          type: t.type,
+          description: t.description ?? undefined,
+          source: 'WHATSAPP',
+          userId,
+          categoryId: t.categoryId,
+          cardId,
+        });
+        newTransactionIds.push(created.id);
+        lines.push(`${t.description || t.category.name}: ${fmt(Number(t.amount))}`);
+      }
+    }
+
+    // Nada recriado (ex.: itens não validaram) → aborta SEM apagar o anterior.
+    if (newTransactionIds.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não consegui montar o novo registro. Me diz os valores, ex: ' +
+          '_"separa em 139 e 139"_ ou _"faz em 4x"_.',
+      });
+      return;
+    }
+
+    // Agora que o novo está criado, remove a ação anterior.
+    await this.transactionsRepository.deleteManyByIds(
+      lastAction.transactionIds,
+      userIds,
+    );
+
+    // Atualiza a última ação para apontar ao que acabou de ser criado.
+    if (phoneKey) {
+      const newLabel =
+        lines.length === 1 ? lines[0] : `${lines.length} lançamentos`;
+      if (newGroupIds.length === 1 && lines.length === 1) {
+        await this.conversation.setLastAction(phoneKey, {
+          kind: 'installment',
+          transactionIds: newTransactionIds,
+          installmentGroupId: newGroupIds[0],
+          installments: adjust.installments ?? 0,
+          label: newLabel,
+        });
+      } else {
+        await this.conversation.setLastAction(phoneKey, {
+          kind: 'batch',
+          transactionIds: newTransactionIds,
+          installmentGroupIds: newGroupIds,
+          count: lines.length,
+          label: newLabel,
+        });
+      }
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Refiz pra você ✅\n\n` +
+        lines.map((l) => `• ${l}`).join('\n') +
+        `\n\n_Troquei o registro anterior por esse 🔁_`,
+    });
+
+    this.logger.log(
+      `Redo: replaced ${lastAction.transactionIds.length} tx with ${newTransactionIds.length} for user ${userId}`,
     );
   }
 
@@ -1624,7 +1877,11 @@ export class WhatsappService {
     userId: string,
     userIds: string[],
     item: BatchItem,
-  ): Promise<string> {
+  ): Promise<{
+    line: string;
+    transactionIds: string[];
+    installmentGroupId?: string;
+  }> {
     const category =
       (await this.categoriesRepository.findBySlug(
         item.data.categorySlug,
@@ -1650,15 +1907,20 @@ export class WhatsappService {
 
     if (item.intent === 'installment') {
       const { data } = item;
-      const perInstallment = await this.createInstallments({
-        amount: data.amount,
-        installments: data.installments,
-        description: data.description,
-        userId,
-        categoryId: category.id,
-        cardId,
-      });
-      return `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`;
+      const { perInstallment, installmentGroupId, transactionIds } =
+        await this.createInstallments({
+          amount: data.amount,
+          installments: data.installments,
+          description: data.description,
+          userId,
+          categoryId: category.id,
+          cardId,
+        });
+      return {
+        line: `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`,
+        transactionIds,
+        installmentGroupId,
+      };
     }
 
     if (item.intent === 'recurring') {
@@ -1673,12 +1935,16 @@ export class WhatsappService {
         cardId,
       });
       const emoji = data.type === 'INCOME' ? '💰' : '🔁';
-      return `${emoji} ${data.description || category.name}: ${fmt(data.amount)} (todo dia ${data.dayOfMonth})`;
+      // Recorrência não é uma Transaction — fica fora do "cancela" deste lote.
+      return {
+        line: `${emoji} ${data.description || category.name}: ${fmt(data.amount)} (todo dia ${data.dayOfMonth})`,
+        transactionIds: [],
+      };
     }
 
     // transaction
     const { data } = item;
-    await this.transactionsRepository.create({
+    const tx = await this.transactionsRepository.create({
       amount: data.amount,
       type: data.type,
       description: data.description,
@@ -1688,7 +1954,10 @@ export class WhatsappService {
       cardId,
     });
     const emoji = data.type === 'EXPENSE' ? '💸' : '💰';
-    return `${emoji} ${data.description}: ${fmt(data.amount)}`;
+    return {
+      line: `${emoji} ${data.description}: ${fmt(data.amount)}`,
+      transactionIds: [tx.id],
+    };
   }
 
   // "hoje" / "ontem" / "há N dias" a partir de uma data passada.
