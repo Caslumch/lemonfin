@@ -205,7 +205,8 @@ Quebre em itens INDEPENDENTES. Cada item segue o mesmo formato da sua intenção
 Se um item for descrito mas você NÃO conseguir extrair um valor único e definido (ex.: "água e luz varia entre 80 e 90"), NÃO invente: coloque-o em "skipped" com o motivo.
 
 Responda: {"intent": "batch", "items": [ <objeto transaction|installment|recurring, cada um com seu próprio "intent"> ], "skipped": [ {"description": string, "reason": string} ]}
-- Use "batch" SOMENTE quando houver 2+ itens. Para 1 item, use a intenção direta.
+- Use "batch" SOMENTE quando houver 2+ itens NA MENSAGEM ATUAL. Para 1 item, use a intenção direta.
+- NUNCA inclua no batch itens que vieram do histórico/contexto — apenas o que está escrito na mensagem atual. Se a mensagem atual descreve um único gasto, é "transaction" (ou a intenção correspondente), NUNCA "batch", mesmo que o histórico tenha outros lançamentos.
 - Cada objeto em "items" deve ter seu campo "intent" ("transaction", "installment" ou "recurring") e todos os campos daquela intenção.
 - "skipped": itens que você reconheceu mas não conseguiu transformar em valor único. Pode ser lista vazia.
 
@@ -306,11 +307,18 @@ export class MessageParserService {
         userTurns.push({
           role: 'user',
           content:
-            'CONTEXTO (apenas para entender referências como "e o mês passado?". ' +
-            'NÃO registre nada daqui e NÃO reaproveite NENHUM dado deste histórico ' +
-            '— valor, categoria, descrição e principalmente CARTÃO. Se a mensagem ' +
-            'atual não cita um cartão, NÃO use um cartão que apareceu aqui. ' +
-            `Classifique SOMENTE a mensagem atual):\n${transcript}`,
+            'CONTEXTO (apenas para entender referências como "e o mês passado?" ou ' +
+            '"muda pra 30"). REGRAS ABSOLUTAS sobre este histórico:\n' +
+            '1. NÃO registre nada daqui. Gastos, compras, parcelamentos e contas ' +
+            'que aparecem no histórico JÁ FORAM registrados antes — NUNCA os ' +
+            'registre de novo nem os inclua num "batch".\n' +
+            '2. NÃO reaproveite NENHUM dado do histórico (valor, categoria, ' +
+            'descrição e principalmente CARTÃO). Se a mensagem atual não cita um ' +
+            'cartão, NÃO use um cartão que apareceu aqui.\n' +
+            '3. Classifique e registre SOMENTE os itens presentes na MENSAGEM ' +
+            'ATUAL. Se a mensagem atual tem só um item, a intenção NÃO é "batch" — ' +
+            'mesmo que o histórico contenha outros itens.\n' +
+            `HISTÓRICO:\n${transcript}`,
         });
       }
 
