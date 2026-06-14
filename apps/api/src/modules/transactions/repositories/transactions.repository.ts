@@ -182,6 +182,16 @@ export class TransactionsRepository {
     return count;
   }
 
+  // Exclui um conjunto de transações por id, escopado aos usuários (isolamento
+  // de tenant). Usado para cancelar a "última ação" inteira (lote/parcelamento).
+  async deleteManyByIds(ids: string[], userIds: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const { count } = await this.prisma.transaction.deleteMany({
+      where: { id: { in: ids }, userId: { in: userIds } },
+    });
+    return count;
+  }
+
   // Despesas com descrição num período — usado para detectar assinaturas
   // (mesma descrição recorrendo em meses distintos).
   async findExpensesWithDescriptionSince(userIds: string[], since: Date) {

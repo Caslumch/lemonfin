@@ -29,6 +29,32 @@ export type PendingConfirmation =
       options: { id: string; name: string }[];
     };
 
+// Última ação de registro na conversa. Guarda os ids criados (para excluir a
+// ação INTEIRA depois — "cancela"/"refaz") e dados de origem mínimos para
+// mensagens/refazer. União discriminada por `kind`; o repositório trata como
+// JSON opaco (só o WhatsappService interpreta).
+export type LastAction =
+  | {
+      kind: 'transaction';
+      transactionIds: string[];
+      // Rótulo curto para a mensagem de cancelamento ("R$ 50 em Alimentação").
+      label: string;
+    }
+  | {
+      kind: 'installment';
+      transactionIds: string[];
+      installmentGroupId: string;
+      installments: number;
+      label: string;
+    }
+  | {
+      kind: 'batch';
+      transactionIds: string[];
+      installmentGroupIds: string[];
+      count: number;
+      label: string;
+    };
+
 const MAX_HISTORY = 4; // últimas 4 trocas
 const MAX_TEXT = 160; // trunca cada texto
 
@@ -48,6 +74,27 @@ export class ConversationRepository {
   async getHistory(phone: string): Promise<HistoryEntry[]> {
     const state = await this.get(phone);
     return (state?.history as HistoryEntry[] | undefined) ?? [];
+  }
+
+  async getLastAction(phone: string): Promise<LastAction | null> {
+    const state = await this.get(phone);
+    return (state?.lastAction as LastAction | null) ?? null;
+  }
+
+  // Salva (ou limpa) a última ação, preservando histórico/pending.
+  async setLastAction(phone: string, action: LastAction | null) {
+    const value: Prisma.InputJsonValue | Prisma.NullTypes.JsonNull = action
+      ? (action as unknown as Prisma.InputJsonValue)
+      : Prisma.JsonNull;
+    await this.prisma.conversationState.upsert({
+      where: { phone },
+      create: { phone, lastAction: value, history: [] },
+      update: { lastAction: value },
+    });
+  }
+
+  async clearLastAction(phone: string) {
+    await this.setLastAction(phone, null);
   }
 
   // Salva (ou limpa) a confirmação pendente, preservando o histórico.
