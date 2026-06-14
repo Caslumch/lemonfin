@@ -200,7 +200,6 @@ export class WhatsappService {
             categoryId: category.id,
           });
 
-          const emoji = data.type === 'EXPENSE' ? '💸' : '💰';
           const amountFormatted = data.amount.toLocaleString('pt-BR', {
             style: 'currency',
             currency: 'BRL',
@@ -209,12 +208,11 @@ export class WhatsappService {
           await this.wmodeClient.sendMessage({
             to: from,
             content:
-              `${emoji} *Despesa registrada!*\n\n` +
-              `*Valor:* ${amountFormatted}\n` +
-              `*Categoria:* ${category.icon} ${category.name}\n` +
-              `*Descrição:* ${data.description}\n\n` +
-              `⚠️ Você tem ${userCards.length} cartões cadastrados (${names}). ` +
-              `Para vincular ao cartão, diga o nome. Ex: _"comprei X no ${userCards[0].name}"_`,
+              `Anotado! ${category.icon} *${amountFormatted}* em *${data.description}* ` +
+              `registrado em *${category.name}*.\n\n` +
+              `Só uma coisa: você tem ${userCards.length} cartões (${names}), ` +
+              `então deixei sem cartão por enquanto. ` +
+              `Se quiser vincular, é só dizer o nome — tipo _"foi no ${userCards[0].name}"_ 💳`,
           });
 
           this.logger.log(
@@ -256,32 +254,68 @@ export class WhatsappService {
       cardId,
     });
 
-    const emoji = data.type === 'EXPENSE' ? '💸' : '💰';
-    const typeLabel = data.type === 'EXPENSE' ? 'Despesa' : 'Receita';
     const amountFormatted = data.amount.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     });
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
+    const cardInfo = cardLabel ? ` no *${cardLabel}*` : '';
 
     let duplicateWarning = '';
     if (duplicate) {
       const when = this.relativeWhen(duplicate.createdAt);
       duplicateWarning =
         `\n\n⚠️ _Você já registrou ${amountFormatted} em ${category.name} ${when}. ` +
-        `Se foi engano, responda *cancela* para remover._`;
+        `Se foi engano, responda *cancela* que eu removo._`;
+    }
+
+    let message: string;
+    if (data.type === 'INCOME') {
+      message =
+        `Boa! 🎉 *${amountFormatted}* de *${data.description}* ` +
+        `registrado em *${category.name}*${cardInfo}.\n\n` +
+        `Já tá no seu painel ✨`;
+    } else {
+      // Insight: total gasto na categoria no mês (inclui a transação recém-criada).
+      const now = new Date();
+      const startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+      const breakdown = await this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        startDate,
+        now.toISOString(),
+      );
+      const row = breakdown.find((b) => b.categoryId === category.id);
+      const monthTotal = row?.total ?? data.amount;
+
+      const opener = this.pick([
+        `Anotado!`,
+        `Pronto!`,
+        `Show, registrei!`,
+        `Feito!`,
+      ]);
+
+      const insight =
+        monthTotal > data.amount
+          ? `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* este mês. ` +
+            `Quer ver o resumo? 📊`
+          : `\n\nFoi o primeiro gasto em *${category.name}* este mês 👀`;
+
+      message =
+        `${opener} ${category.icon} *${amountFormatted}* em *${data.description}* ` +
+        `registrado em *${category.name}*${cardInfo}.` +
+        insight +
+        duplicateWarning;
     }
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `${emoji} *${typeLabel} registrada!*\n\n` +
-        `*Valor:* ${amountFormatted}\n` +
-        `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
-        `*Descrição:* ${data.description}\n\n` +
-        `_Registrado via WhatsApp_` +
-        duplicateWarning,
+      content: message,
     });
 
     if (phoneKey) {
@@ -351,9 +385,9 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Anotei ${amountFormatted} — _${data.description}_.\n\n` +
-        `Em qual categoria?\n${optionsText}\n\n` +
-        `_Responda com o número._`,
+        `Anotei *${amountFormatted}* em _${data.description}_ 👍\n\n` +
+        `Só me diz em qual categoria entra:\n${optionsText}\n\n` +
+        `_Responde com o número._`,
     });
   }
 
@@ -501,40 +535,32 @@ export class WhatsappService {
     switch (result.queryType) {
       case 'expenses':
         message =
-          `Aqui vão suas despesas do mês 👇\n\n` +
-          `💸 *Despesas de ${monthName}*\n\n` +
-          `*Total:* ${expenseFormatted}\n` +
-          `*Transações:* ${summary.expenseCount}\n\n` +
-          `_Envie "resumo" para ver o quadro completo_`;
+          `💸 Em ${monthName} você gastou *${expenseFormatted}* ` +
+          `(${summary.expenseCount} ${summary.expenseCount === 1 ? 'lançamento' : 'lançamentos'}).\n\n` +
+          `_Quer o quadro completo? Manda "resumo" 📊_`;
         break;
 
       case 'income':
         message =
-          `Suas receitas do mês 👇\n\n` +
-          `💰 *Receitas de ${monthName}*\n\n` +
-          `*Total:* ${incomeFormatted}\n` +
-          `*Transações:* ${summary.incomeCount}\n\n` +
-          `_Envie "resumo" para ver o quadro completo_`;
+          `💰 Em ${monthName} entraram *${incomeFormatted}* ` +
+          `(${summary.incomeCount} ${summary.incomeCount === 1 ? 'lançamento' : 'lançamentos'}).\n\n` +
+          `_Quer o quadro completo? Manda "resumo" 📊_`;
         break;
 
       case 'balance':
         message =
-          `Seu saldo tá assim 👇\n\n` +
-          `${balanceEmoji} *Saldo de ${monthName}*\n\n` +
-          `*Saldo:* ${balanceFormatted}\n\n` +
-          `💰 Receitas: ${incomeFormatted}\n` +
-          `💸 Despesas: ${expenseFormatted}`;
+          `${balanceEmoji} Seu saldo de ${monthName} é *${balanceFormatted}*.\n\n` +
+          `Entrou ${incomeFormatted} 💰 e saiu ${expenseFormatted} 💸.`;
         break;
 
       case 'summary':
       default:
         message =
-          `Beleza, aqui está como o mês tá indo 👇\n\n` +
-          `📊 *Resumo de ${monthName}*\n\n` +
-          `💰 *Receitas:* ${incomeFormatted} (${summary.incomeCount} transações)\n` +
-          `💸 *Despesas:* ${expenseFormatted} (${summary.expenseCount} transações)\n` +
-          `${balanceEmoji} *Saldo:* ${balanceFormatted}\n\n` +
-          `_Dica: envie "me da uma dica" para receber orientacoes financeiras_`;
+          `📊 *Como ${monthName} tá indo:*\n\n` +
+          `💰 Entrou *${incomeFormatted}* (${summary.incomeCount})\n` +
+          `💸 Saiu *${expenseFormatted}* (${summary.expenseCount})\n` +
+          `${balanceEmoji} Saldo: *${balanceFormatted}*\n\n` +
+          `_Quer uma dica de onde economizar? É só pedir 😉_`;
         break;
     }
 
@@ -612,7 +638,7 @@ export class WhatsappService {
     if (count === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `Você ainda não tem gastos no *${card.name}* em ${monthName} 👍`,
+        content: `Nada no *${card.name}* em ${monthName} ainda — fatura limpa 👍`,
       });
       return;
     }
@@ -620,10 +646,8 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Aqui vão seus gastos no *${card.name}* este mês 👇\n\n` +
-        `💳 *${card.name}* — ${monthName}\n` +
-        `*Total:* ${fmt(total)}\n` +
-        `*Transações:* ${count}`,
+        `💳 No *${card.name}* você gastou *${fmt(total)}* em ${monthName} ` +
+        `(${count} ${count === 1 ? 'compra' : 'compras'}).`,
     });
   }
 
@@ -670,7 +694,7 @@ export class WhatsappService {
     if (!row || row.count === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `Você ainda não tem gastos com *${category.name}* em ${monthName} 👍`,
+        content: `Zero gastos com *${category.name}* em ${monthName} até agora 👍`,
       });
       return;
     }
@@ -678,10 +702,8 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Aqui vão seus gastos com ${category.name} este mês 👇\n\n` +
-        `${label} — ${monthName}\n` +
-        `*Total:* ${fmt(row.total)}\n` +
-        `*Transações:* ${row.count}`,
+        `${label} Em ${monthName} você gastou *${fmt(row.total)}* com *${category.name}* ` +
+        `(${row.count} ${row.count === 1 ? 'lançamento' : 'lançamentos'}).`,
     });
   }
 
@@ -697,9 +719,9 @@ export class WhatsappService {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `🎯 *Metas*\n\n` +
-          `Você ainda não tem metas de gasto.\n\n` +
-          `_Crie uma assim: "limite de 800 em alimentação por mês"._`,
+          `Você ainda não tem nenhuma meta de gasto 🎯\n\n` +
+          `Que tal criar uma? É só dizer algo como ` +
+          `_"limite de 800 em alimentação por mês"_.`,
       });
       return;
     }
@@ -722,10 +744,7 @@ export class WhatsappService {
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `Olha como estão suas metas de gasto 👇\n\n` +
-        `🎯 *Suas metas*\n\n` +
-        blocks.join('\n\n'),
+      content: `🎯 *Suas metas de gasto*\n\n` + blocks.join('\n\n'),
     });
   }
 
@@ -783,10 +802,9 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Meta criada ✅\n\n` +
-        `${category.icon ?? '🎯'} *${category.name}*\n` +
-        `Limite de ${fmt(data.amount)} por ${periodLabel}.\n\n` +
-        `_Eu te aviso quando você se aproximar do teto._`,
+        `Meta criada! ${category.icon ?? '🎯'} ` +
+        `Vou segurar *${category.name}* em até *${fmt(data.amount)}* por ${periodLabel}.\n\n` +
+        `_Pode deixar que eu te aviso quando chegar perto do teto 👀_`,
     });
 
     this.logger.log(
@@ -864,8 +882,8 @@ export class WhatsappService {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `Pronto, tirei o cartão desse lançamento ✅\n\n` +
-          `*${desc}* — ${amount}`,
+          `Feito! Tirei o cartão de *${desc}* (${amount}). ` +
+          `Agora tá sem cartão vinculado 👍`,
       });
       this.logger.log(`Transaction ${last.id} card removed by user ${userId}`);
       return;
@@ -890,8 +908,7 @@ export class WhatsappService {
     await this.transactionsRepository.update(last.id, { cardId: card.id });
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `Pronto, troquei pra *${card.name}* ✅\n\n` + `*${desc}* — ${amount}`,
+      content: `Trocado ✅ *${desc}* (${amount}) agora tá no *${card.name}* 💳`,
     });
     this.logger.log(
       `Transaction ${last.id} card changed to ${card.name} by user ${userId}`,
@@ -969,11 +986,10 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `🗑️ *Transação cancelada!*\n\n` +
-        `*Valor:* ${amountFormatted}\n` +
-        `*Categoria:* ${last.category.icon} ${last.category.name}\n` +
-        `*Descrição:* ${last.description || '-'}\n\n` +
-        `_A transação foi removida com sucesso_`,
+        `Prontinho, removi ✅\n\n` +
+        `Apaguei *${amountFormatted}* de *${last.category.name}* ` +
+        `(${last.description || 'sem descrição'}). ` +
+        `Tá tudo certo de novo no painel 🧹`,
     });
 
     this.logger.log(`Transaction ${last.id} cancelled by user ${userId}`);
@@ -1011,12 +1027,11 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `✏️ *Transação corrigida!*\n\n` +
-        `*Antes:* ${oldFormatted}\n` +
-        `*Agora:* ${newFormatted}\n` +
-        `*Categoria:* ${last.category.icon} ${last.category.name}\n` +
-        `*Descrição:* ${last.description || '-'}\n\n` +
-        `_Valor atualizado com sucesso_`,
+        `Corrigido ✏️\n\n` +
+        `${last.category.icon} *${last.category.name}* ` +
+        `(${last.description || 'sem descrição'}): ` +
+        `de ~${oldFormatted}~ pra *${newFormatted}*. ` +
+        `Já ajustei tudo no painel ✨`,
     });
 
     this.logger.log(
@@ -1101,17 +1116,15 @@ export class WhatsappService {
       currency: 'BRL',
     });
 
-    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
+    const cardInfo = cardLabel ? ` no *${cardLabel}*` : '';
 
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `🛍️ *Parcelamento registrado!*\n\n` +
-        `*Total:* ${totalFormatted}\n` +
-        `*Parcelas:* ${data.installments}x de ${perFormatted}\n` +
-        `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
-        `*Descrição:* ${data.description}\n\n` +
-        `_${data.installments} transações criadas com datas futuras_`,
+        `Parcelamento anotado! 🛍️ ${category.icon} *${data.description}* ` +
+        `em *${category.name}*${cardInfo}.\n\n` +
+        `*${data.installments}x de ${perFormatted}* (total ${totalFormatted}). ` +
+        `Já dividi tudo nos próximos meses pra você 📅`,
     });
 
     this.logger.log(
@@ -1169,19 +1182,17 @@ export class WhatsappService {
       style: 'currency',
       currency: 'BRL',
     });
-    const typeLabel = data.type === 'INCOME' ? 'Receita fixa' : 'Conta fixa';
+    const typeLabel = data.type === 'INCOME' ? 'entrada fixa' : 'conta fixa';
     const emoji = data.type === 'INCOME' ? '💰' : '🔁';
-    const cardInfo = cardLabel ? `\n*Cartão:* ${cardLabel}` : '';
+    const cardInfo = cardLabel ? ` no *${cardLabel}*` : '';
+    const desc = data.description || category.name;
 
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `${emoji} *${typeLabel} cadastrada!*\n\n` +
-        `*Valor:* ${amountFormatted}\n` +
-        `*Categoria:* ${category.icon} ${category.name}${cardInfo}\n` +
-        `*Descrição:* ${data.description || category.name}\n` +
-        `*Todo dia:* ${data.dayOfMonth}\n\n` +
-        `_Vou lançar automaticamente todo mês. Gerencie em Recorrentes no app._`,
+        `${emoji} Anotei sua ${typeLabel}: *${desc}* de *${amountFormatted}* ` +
+        `todo dia *${data.dayOfMonth}*${cardInfo} (${category.icon} ${category.name}).\n\n` +
+        `_Eu lanço sozinho todo mês — pode esquecer 😉_`,
     });
 
     this.logger.log(
@@ -1222,13 +1233,11 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `🏦 *Reserva criada!*\n\n` +
-        `*Objetivo:* ${data.name}\n` +
-        `*Alvo:* ${fmt(data.targetAmount)}\n` +
-        `*Prazo:* ${deadlineLabel}\n\n` +
-        `Pra chegar lá, guarde cerca de *${fmt(suggestedMonthly)}/mês* ` +
-        `(${monthsRemaining} ${monthsRemaining === 1 ? 'mês' : 'meses'}).\n` +
-        `_Quando guardar, me diga: "guardei 200 na ${data.name}"._`,
+        `Reserva criada! 🏦 Bora juntar *${fmt(data.targetAmount)}* pra *${data.name}* ` +
+        `até ${deadlineLabel}.\n\n` +
+        `Pra chegar lá tranquilo, guarda uns *${fmt(suggestedMonthly)}/mês* ` +
+        `(${monthsRemaining} ${monthsRemaining === 1 ? 'mês' : 'meses'}) 💪\n\n` +
+        `_Quando guardar, é só me dizer: "guardei 200 na ${data.name}"._`,
     });
 
     if (phoneKey) {
@@ -1254,9 +1263,9 @@ export class WhatsappService {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `🏦 *Reservas*\n\n` +
-          `Você ainda não tem nenhuma reserva.\n\n` +
-          `_Crie uma assim: "quero juntar 5000 pra viagem até dezembro"._`,
+          `Você ainda não tem nenhuma reserva 🏦\n\n` +
+          `Bora começar? Me diz um objetivo, tipo ` +
+          `_"quero juntar 5000 pra viagem até dezembro"_.`,
       });
       return;
     }
@@ -1281,10 +1290,7 @@ export class WhatsappService {
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `Olha como suas reservas estão indo 👇\n\n` +
-        `🏦 *Suas reservas*\n\n` +
-        blocks.join('\n\n'),
+      content: `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
     });
   }
 
@@ -1301,9 +1307,8 @@ export class WhatsappService {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `🔁 *Recorrências*\n\n` +
-          `Você ainda não tem nenhuma conta fixa cadastrada.\n\n` +
-          `_Crie uma assim: "todo dia 5 pago 1500 de aluguel"._`,
+          `Você ainda não tem nenhuma conta fixa cadastrada 🔁\n\n` +
+          `Cadastra uma assim: _"todo dia 5 pago 1500 de aluguel"_.`,
       });
       return;
     }
@@ -1332,10 +1337,7 @@ export class WhatsappService {
 
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `Suas contas fixas do mês 👇\n\n` +
-        `🔁 *Recorrências*\n\n` +
-        sections.join('\n\n'),
+      content: `🔁 *Suas contas fixas do mês*\n\n` + sections.join('\n\n'),
     });
   }
 
@@ -1378,8 +1380,8 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Vou guardar ${fmt(result.amount)} em qual reserva?\n\n${list}\n\n` +
-        `_Responda com o número._`,
+        `Boa! Vou guardar *${fmt(result.amount)}* — em qual reserva? 🏦\n\n${list}\n\n` +
+        `_Responde com o número._`,
     });
   }
 
@@ -1452,12 +1454,11 @@ export class WhatsappService {
 
     const done = saved >= target;
     const body = done
-      ? `🎉 *Reserva concluída!* Você completou *${chosen.name}* — ` +
-        `${fmt(saved)} de ${fmt(target)}. Parabéns! 🥳`
-      : `🏦 *Guardado!*\n\n` +
-        `*Reserva:* ${chosen.name}\n` +
-        `Guardei ${fmt(pending.amount)} — agora ${fmt(saved)} de ${fmt(target)} (${percentage}%).\n` +
-        `_Faltam ${fmt(remaining)}._`;
+      ? `🎉 É isso! Você completou *${chosen.name}* — ` +
+        `${fmt(saved)} de ${fmt(target)}. Que orgulho, parabéns! 🥳`
+      : `Guardado! 🏦 Coloquei *${fmt(pending.amount)}* em *${chosen.name}*.\n\n` +
+        `Você já tem *${fmt(saved)}* de ${fmt(target)} (${percentage}%) — ` +
+        `faltam só ${fmt(remaining)} 💪`;
 
     await this.wmodeClient.sendMessage({ to: from, content: body });
 
@@ -1472,6 +1473,15 @@ export class WhatsappService {
       `Reserve contribution: ${pending.amount} to reserve ${chosen.id} by user ${userId}`,
     );
     return true;
+  }
+
+  // Escolhe uma variação de frase para dar um tom mais humano sem repetir
+  // sempre a mesma abertura. Usa o minuto atual como índice — varia ao longo do
+  // dia sem depender de Math.random (determinístico por minuto).
+  private pick(options: string[]): string {
+    if (options.length === 0) return '';
+    const idx = new Date().getMinutes() % options.length;
+    return options[idx];
   }
 
   // Barra de progresso textual (10 blocos): ████░░░░░░
@@ -1508,17 +1518,17 @@ export class WhatsappService {
     const parts: string[] = [];
     if (lines.length > 0) {
       parts.push(
-        `✅ *${lines.length} ${lines.length === 1 ? 'item registrado' : 'itens registrados'}!*\n\n` +
+        `Prontinho! Registrei ${lines.length} ${lines.length === 1 ? 'lançamento' : 'lançamentos'} de uma vez 🚀\n\n` +
           lines.map((l) => `• ${l}`).join('\n'),
       );
     }
     if (result.skipped.length > 0) {
       parts.push(
-        `⚠️ *Não registrei ${result.skipped.length}:*\n` +
+        `⚠️ Só ${result.skipped.length} ficaram de fora:\n` +
           result.skipped
             .map((s) => `• ${s.description} — ${s.reason}`)
             .join('\n') +
-          `\n\n_Mande esses separadamente com um valor fixo._`,
+          `\n\n_Me manda esses de novo com o valor certinho 😉_`,
       );
     }
 
