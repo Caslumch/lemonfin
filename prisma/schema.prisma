@@ -111,6 +111,12 @@ model Transaction {
   categoryId  String            @map("category_id")
   cardId      String?           @map("card_id")
   recurringId String?           @map("recurring_id")
+  // Parcelamento: todas as parcelas de uma mesma compra compartilham o
+  // installmentGroupId, permitindo excluir o grupo inteiro de uma vez.
+  // Nulo em transações avulsas (e em parcelas criadas antes desta migration).
+  installmentGroupId String?    @map("installment_group_id")
+  installmentNumber  Int?       @map("installment_number")
+  installmentTotal   Int?       @map("installment_total")
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
@@ -127,6 +133,8 @@ model Transaction {
   // Faturas: transações de um cartão por período.
   @@index([cardId, date])
   @@index([recurringId])
+  // Excluir/agrupar todas as parcelas de uma mesma compra.
+  @@index([installmentGroupId])
   @@map("transactions")
 }
 

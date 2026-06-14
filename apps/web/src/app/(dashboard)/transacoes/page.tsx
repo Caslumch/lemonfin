@@ -216,18 +216,24 @@ export default function TransacoesPage() {
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(scope: "single" | "group") {
     if (!deletingTx) return;
     try {
-      await fetchApi(`/transactions/${deletingTx.id}`, {
+      const qs = scope === "group" ? "?scope=group" : "";
+      await fetchApi(`/transactions/${deletingTx.id}${qs}`, {
         method: "DELETE",
       });
       setDeletingTx(null);
-      toast.success("Transação excluída");
+      toast.success(
+        scope === "group" ? "Parcelas excluídas" : "Transação excluída",
+      );
       fetchTransactions();
       fetchSummary();
-    } catch {
+    } catch (error) {
       toast.error("Erro ao excluir transação");
+      // Re-lança para o modal NÃO fechar em caso de falha (mantém aberto para
+      // nova tentativa); sem isso o handleConfirm chamaria onClose() mesmo no erro.
+      throw error;
     }
   }
 
@@ -321,6 +327,7 @@ export default function TransacoesPage() {
         onClose={() => setDeletingTx(null)}
         onConfirm={handleDelete}
         description={deletingTx?.description}
+        installmentTotal={deletingTx?.installmentTotal}
       />
     </>
   );

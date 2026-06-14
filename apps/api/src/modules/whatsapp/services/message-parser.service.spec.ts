@@ -434,6 +434,35 @@ describe('MessageParserService', () => {
       expect(current.content).toBe('MENSAGEM ATUAL: cancela');
     });
 
+    it('instrui a NÃO re-registrar nem agrupar itens antigos do histórico', async () => {
+      // Regressão do bug: ao mandar só "Consulta da Tchuca 130 no Bradesco", o
+      // bot montava um batch incluindo blusas que já estavam no histórico.
+      mockResponse({
+        intent: 'transaction',
+        amount: 130,
+        type: 'EXPENSE',
+        categorySlug: 'saude',
+        categoryConfidence: 0.9,
+        description: 'Consulta da Tchuca',
+      });
+
+      await service.parse('Consulta da Tchuca hoje 130 no Bradesco', [
+        { role: 'user', text: 'comprei duas blusas de 139 em 4x no Bradesco' },
+        { role: 'bot', text: '[registrei 2 lançamentos]' },
+      ]);
+
+      const sentMessages = createMock.mock.calls[0][0].messages as {
+        content: string;
+      }[];
+      const contextBlock = sentMessages.find((m) =>
+        m.content.includes('blusas'),
+      );
+      // O bloco de contexto deixa explícito que itens do histórico já foram
+      // registrados e não devem entrar num batch.
+      expect(contextBlock?.content).toContain('JÁ FORAM registrados');
+      expect(contextBlock?.content).toContain('batch');
+    });
+
     it('não injeta bloco de contexto quando não há histórico', async () => {
       mockResponse({ intent: 'cancel' });
 

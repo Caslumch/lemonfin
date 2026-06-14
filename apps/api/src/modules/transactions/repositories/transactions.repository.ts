@@ -35,6 +35,9 @@ export class TransactionsRepository {
     categoryId: string;
     cardId?: string;
     recurringId?: string;
+    installmentGroupId?: string;
+    installmentNumber?: number;
+    installmentTotal?: number;
   }) {
     return this.prisma.transaction.create({
       data: {
@@ -47,6 +50,9 @@ export class TransactionsRepository {
         categoryId: data.categoryId,
         cardId: data.cardId,
         recurringId: data.recurringId,
+        installmentGroupId: data.installmentGroupId,
+        installmentNumber: data.installmentNumber,
+        installmentTotal: data.installmentTotal,
       },
       include: txInclude,
     });
@@ -162,6 +168,18 @@ export class TransactionsRepository {
     return this.prisma.transaction.delete({
       where: { id },
     });
+  }
+
+  // Exclui todas as parcelas de um grupo, escopadas aos usuários (isolamento de
+  // tenant: nunca apaga parcela de outra família). Retorna a contagem removida.
+  async deleteByInstallmentGroup(
+    installmentGroupId: string,
+    userIds: string[],
+  ): Promise<number> {
+    const { count } = await this.prisma.transaction.deleteMany({
+      where: { installmentGroupId, userId: { in: userIds } },
+    });
+    return count;
   }
 
   // Despesas com descrição num período — usado para detectar assinaturas

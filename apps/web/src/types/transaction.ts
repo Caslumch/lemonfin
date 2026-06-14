@@ -24,6 +24,10 @@ export interface Transaction {
   cardId: string | null;
   card?: { id: string; name: string; brand: string | null } | null;
   user?: TransactionUser;
+  // Parcelamento: presente quando a transação faz parte de uma compra parcelada.
+  installmentGroupId?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
   createdAt: string;
   updatedAt: string;
 }
