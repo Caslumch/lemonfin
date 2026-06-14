@@ -146,6 +146,9 @@ export class WhatsappService {
       case 'batch':
         await this.handleBatch(from, user.id, result, phoneKey);
         break;
+      case 'redo':
+        await this.handleRedo(from, user.id, result, phoneKey);
+        break;
       case 'advice':
         await this.handleAdvisor(from, user, content, history, phoneKey);
         break;
@@ -1695,6 +1698,175 @@ export class WhatsappService {
 
     this.logger.log(
       `Batch processed: ${lines.length} registered, ${result.skipped.length} skipped for user ${userId}`,
+    );
+  }
+
+  // Refaz a ÚLTIMA AÇÃO de outro jeito: recria com o ajuste e remove o registro
+  // anterior. Estratégia "cria-depois-apaga": cria o novo PRIMEIRO e só então
+  // apaga o antigo — se a criação falhar, nada é perdido (o antigo permanece).
+  private async handleRedo(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'redo' }>,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    if (!lastAction || lastAction.transactionIds.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não achei um registro recente pra refazer. Me manda o lançamento ' +
+          'que você quer e eu registro 😉',
+      });
+      return;
+    }
+
+    // Reconstrói os dados da ação anterior a partir das transações em si (fonte
+    // da verdade — não depende de o lastAction guardar valor/categoria).
+    const prev = await this.transactionsRepository.findManyByIds(
+      lastAction.transactionIds,
+      userIds,
+    );
+    if (prev.length === 0) {
+      if (phoneKey) await this.conversation.clearLastAction(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Esse registro não está mais aqui (já foi removido). Manda de novo ' +
+          'que eu registro 😉',
+      });
+      return;
+    }
+
+    const { adjust } = result;
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Cartão a aplicar no refazer: se o usuário mandou trocar, resolve pelo
+    // nome; senão herda o cartão da ação anterior.
+    let cardId: string | undefined;
+    if (adjust.cardName) {
+      const card = await this.cardsRepository.findByName(
+        adjust.cardName,
+        userIds,
+      );
+      cardId = card?.id;
+    } else {
+      cardId = prev[0].cardId ?? undefined;
+    }
+
+    const newTransactionIds: string[] = [];
+    const newGroupIds: string[] = [];
+    const lines: string[] = [];
+
+    if (adjust.items && adjust.items.length > 0) {
+      // Separar/refazer com itens explícitos fornecidos pelo usuário (já têm
+      // valores e categoria). Reaproveita o mesmo caminho do lote.
+      for (const item of adjust.items) {
+        const withCard: BatchItem = adjust.cardName
+          ? ({
+              ...item,
+              data: { ...item.data, cardName: adjust.cardName },
+            } as BatchItem)
+          : item;
+        const r = await this.persistBatchItem(userId, userIds, withCard);
+        lines.push(r.line);
+        newTransactionIds.push(...r.transactionIds);
+        if (r.installmentGroupId) newGroupIds.push(r.installmentGroupId);
+      }
+    } else if (adjust.installments) {
+      // (Re)parcelar a MESMA compra: total = soma da ação anterior; herda
+      // categoria e descrição-base (sem o sufixo "(n/N)").
+      const total = prev.reduce((s, t) => s + Number(t.amount), 0);
+      const baseDescription = (prev[0].description || prev[0].category.name)
+        .replace(/\s*\(\d+\/\d+\)\s*$/, '')
+        .trim();
+      const { perInstallment, installmentGroupId, transactionIds } =
+        await this.createInstallments({
+          amount: total,
+          installments: adjust.installments,
+          description: baseDescription,
+          userId,
+          categoryId: prev[0].categoryId,
+          cardId,
+        });
+      newTransactionIds.push(...transactionIds);
+      newGroupIds.push(installmentGroupId);
+      lines.push(
+        `🛍️ ${baseDescription}: ${adjust.installments}x de ${fmt(perInstallment)}`,
+      );
+    } else {
+      // Só troca de cartão (sem split nem parcelamento): recria cada transação
+      // anterior igual, apenas com o novo cartão.
+      for (const t of prev) {
+        const created = await this.transactionsRepository.create({
+          amount: Number(t.amount),
+          type: t.type,
+          description: t.description ?? undefined,
+          source: 'WHATSAPP',
+          userId,
+          categoryId: t.categoryId,
+          cardId,
+        });
+        newTransactionIds.push(created.id);
+        lines.push(`${t.description || t.category.name}: ${fmt(Number(t.amount))}`);
+      }
+    }
+
+    // Nada recriado (ex.: itens não validaram) → aborta SEM apagar o anterior.
+    if (newTransactionIds.length === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não consegui montar o novo registro. Me diz os valores, ex: ' +
+          '_"separa em 139 e 139"_ ou _"faz em 4x"_.',
+      });
+      return;
+    }
+
+    // Agora que o novo está criado, remove a ação anterior.
+    await this.transactionsRepository.deleteManyByIds(
+      lastAction.transactionIds,
+      userIds,
+    );
+
+    // Atualiza a última ação para apontar ao que acabou de ser criado.
+    if (phoneKey) {
+      const newLabel =
+        lines.length === 1 ? lines[0] : `${lines.length} lançamentos`;
+      if (newGroupIds.length === 1 && lines.length === 1) {
+        await this.conversation.setLastAction(phoneKey, {
+          kind: 'installment',
+          transactionIds: newTransactionIds,
+          installmentGroupId: newGroupIds[0],
+          installments: adjust.installments ?? 0,
+          label: newLabel,
+        });
+      } else {
+        await this.conversation.setLastAction(phoneKey, {
+          kind: 'batch',
+          transactionIds: newTransactionIds,
+          installmentGroupIds: newGroupIds,
+          count: lines.length,
+          label: newLabel,
+        });
+      }
+    }
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Refiz pra você ✅\n\n` +
+        lines.map((l) => `• ${l}`).join('\n') +
+        `\n\n_Troquei o registro anterior por esse 🔁_`,
+    });
+
+    this.logger.log(
+      `Redo: replaced ${lastAction.transactionIds.length} tx with ${newTransactionIds.length} for user ${userId}`,
     );
   }
 

@@ -591,6 +591,79 @@ describe('MessageParserService', () => {
     });
   });
 
+  describe('redo — refazer a última ação', () => {
+    it('parseia redo com (re)parcelamento', async () => {
+      mockResponse({ intent: 'redo', adjust: { installments: 4 } });
+
+      const result = await service.parse('na verdade era em 4x');
+
+      expect(result).toEqual({ intent: 'redo', adjust: { installments: 4 } });
+    });
+
+    it('parseia redo com itens explícitos (separar com valores)', async () => {
+      mockResponse({
+        intent: 'redo',
+        adjust: {
+          items: [
+            {
+              intent: 'transaction',
+              amount: 139,
+              type: 'EXPENSE',
+              categorySlug: 'compras',
+              description: 'blusa para mim',
+            },
+            {
+              intent: 'transaction',
+              amount: 139,
+              type: 'EXPENSE',
+              categorySlug: 'compras',
+              description: 'blusa para esposa',
+            },
+          ],
+        },
+      });
+
+      const result = await service.parse(
+        'faz separado, uma de 139 e outra de 139',
+      );
+
+      expect(result.intent).toBe('redo');
+      if (result.intent === 'redo') {
+        expect(result.adjust.items).toHaveLength(2);
+        expect(result.adjust.items?.[0]).toMatchObject({
+          intent: 'transaction',
+          data: { amount: 139, description: 'blusa para mim' },
+        });
+      }
+    });
+
+    it('parseia redo de troca de cartão', async () => {
+      mockResponse({ intent: 'redo', adjust: { cardName: 'Nubank' } });
+
+      const result = await service.parse('refaz no Nubank');
+
+      expect(result).toEqual({ intent: 'redo', adjust: { cardName: 'Nubank' } });
+    });
+
+    it('vira unknown quando o redo não traz nenhum ajuste', async () => {
+      mockResponse({ intent: 'redo', adjust: {} });
+
+      const result = await service.parse('faz separado');
+
+      // Sem valores/parcelas/cartão não há o que refazer — pede os dados.
+      expect(result.intent).toBe('unknown');
+    });
+
+    it('ignora installments fora de faixa (2..48)', async () => {
+      mockResponse({ intent: 'redo', adjust: { installments: 1 } });
+
+      const result = await service.parse('refaz em 1x');
+
+      // 1x não é parcelamento válido e não há outro ajuste → unknown.
+      expect(result.intent).toBe('unknown');
+    });
+  });
+
   describe('prompt dinâmico de categorias', () => {
     it('injeta as categorias personalizadas no system prompt', async () => {
       mockResponse({
