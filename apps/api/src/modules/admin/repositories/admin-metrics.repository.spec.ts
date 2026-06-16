@@ -22,6 +22,12 @@ describe('AdminMetricsRepository', () => {
     const prisma = {
       user: { count: jest.fn(() => Promise.resolve(counts[i++])) },
       transaction: { count: jest.fn(() => Promise.resolve(counts[i++])) },
+      aiUsage: {
+        count: jest.fn(() => Promise.resolve(0)),
+        aggregate: jest.fn(() =>
+          Promise.resolve({ _sum: { costUsd: 0, totalTokens: 0 } }),
+        ),
+      },
     };
     const repo = new AdminMetricsRepository(prisma as never);
 

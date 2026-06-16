@@ -24,6 +24,13 @@ export interface AdminMetrics {
     transactionsLast7Days: number;
     bySource: { whatsapp: number; manual: number; recurring: number };
   };
+  ai: {
+    callsTotal: number;
+    callsLast30Days: number;
+    costUsdTotal: number;
+    costUsdLast30Days: number;
+    tokensTotal: number;
+  };
 }
 
 // Preço mensal de referência para a estimativa de MRR (R$ 14,90).
@@ -51,6 +58,10 @@ export class AdminMetricsRepository {
       txWhatsapp,
       txManual,
       txRecurring,
+      aiCallsTotal,
+      aiCallsLast30Days,
+      aiAggAll,
+      aiAgg30,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { createdAt: { gte: d7 } } }),
@@ -87,6 +98,15 @@ export class AdminMetricsRepository {
       this.prisma.transaction.count({
         where: { source: TransactionSource.RECURRING },
       }),
+      this.prisma.aiUsage.count(),
+      this.prisma.aiUsage.count({ where: { createdAt: { gte: d30 } } }),
+      this.prisma.aiUsage.aggregate({
+        _sum: { costUsd: true, totalTokens: true },
+      }),
+      this.prisma.aiUsage.aggregate({
+        _sum: { costUsd: true },
+        where: { createdAt: { gte: d30 } },
+      }),
     ]);
 
     return {
@@ -111,6 +131,13 @@ export class AdminMetricsRepository {
           manual: txManual,
           recurring: txRecurring,
         },
+      },
+      ai: {
+        callsTotal: aiCallsTotal,
+        callsLast30Days: aiCallsLast30Days,
+        costUsdTotal: Number(aiAggAll._sum.costUsd ?? 0),
+        costUsdLast30Days: Number(aiAgg30._sum.costUsd ?? 0),
+        tokensTotal: aiAggAll._sum.totalTokens ?? 0,
       },
     };
   }

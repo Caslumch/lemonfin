@@ -8,6 +8,7 @@ import {
   Sparkles,
   Activity,
   MessageCircle,
+  Cpu,
 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { useApi } from "@/hooks/use-api";
@@ -36,6 +37,22 @@ interface Metrics {
     transactionsLast7Days: number;
     bySource: { whatsapp: number; manual: number; recurring: number };
   };
+  ai: {
+    callsTotal: number;
+    callsLast30Days: number;
+    costUsdTotal: number;
+    costUsdLast30Days: number;
+    tokensTotal: number;
+  };
+}
+
+function usd(n: number): string {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
 }
 
 function brl(n: number): string {
@@ -187,9 +204,33 @@ export default function AdminPage() {
               />
             </Section>
 
+            <Section icon={Cpu} title="Custo de IA">
+              <Stat
+                label="Custo total"
+                value={usd(metrics.ai.costUsdTotal)}
+              />
+              <Stat
+                label="Custo (30 dias)"
+                value={usd(metrics.ai.costUsdLast30Days)}
+              />
+              <Stat
+                label="Chamadas (total)"
+                value={String(metrics.ai.callsTotal)}
+              />
+              <Stat
+                label="Chamadas (30 dias)"
+                value={String(metrics.ai.callsLast30Days)}
+              />
+              <Stat
+                label="Tokens (total)"
+                value={metrics.ai.tokensTotal.toLocaleString("pt-BR")}
+              />
+            </Section>
+
             <p className="flex items-center gap-1.5 text-xs text-fg-muted">
               <MessageCircle size={12} />
-              MRR é uma estimativa (não distinguimos mensal/anual no banco ainda).
+              MRR e custo de IA são estimativas (preços de modelo no código; não
+              distinguimos mensal/anual no banco ainda).
             </p>
           </>
         )}

@@ -29,7 +29,8 @@ describe('MessageParserService', () => {
     const config = {
       getOrThrow: jest.fn().mockReturnValue('test-key'),
     } as unknown as ConfigService;
-    service = new MessageParserService(config);
+    const aiUsage = { record: jest.fn().mockResolvedValue(undefined) };
+    service = new MessageParserService(config, aiUsage as never);
   });
 
   describe('intenções de item único', () => {
@@ -642,7 +643,10 @@ describe('MessageParserService', () => {
 
       const result = await service.parse('refaz no Nubank');
 
-      expect(result).toEqual({ intent: 'redo', adjust: { cardName: 'Nubank' } });
+      expect(result).toEqual({
+        intent: 'redo',
+        adjust: { cardName: 'Nubank' },
+      });
     });
 
     it('vira unknown quando o redo não traz nenhum ajuste', async () => {
@@ -675,9 +679,11 @@ describe('MessageParserService', () => {
         description: 'ração',
       });
 
-      const result = await service.parse('gastei 80 no petshop', [], [
-        { slug: 'petshop', name: 'Petshop' },
-      ]);
+      const result = await service.parse(
+        'gastei 80 no petshop',
+        [],
+        [{ slug: 'petshop', name: 'Petshop' }],
+      );
 
       const systemPrompt = createMock.mock.calls[0][0].messages[0].content;
       // A categoria custom aparece na lista, marcada como personalizada.

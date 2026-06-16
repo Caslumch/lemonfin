@@ -52,6 +52,7 @@ model User {
   familyMembers     FamilyMember[]
   verificationCodes VerificationCode[]
   categories        Category[]
+  aiUsage           AiUsage[]
 
   @@map("users")
 }
@@ -301,6 +302,32 @@ model Reserve {
 
   @@index([userId])
   @@map("reserves")
+}
+
+// Consumo de IA por chamada (chat web e parser do WhatsApp). Uma linha por
+// chamada à OpenAI. Permite medir custo por dia/usuário no painel admin.
+// costUsd é estimado a partir dos tokens × tabela de preço do modelo (no código).
+enum AiFeature {
+  CHAT
+  WHATSAPP_PARSER
+}
+
+model AiUsage {
+  id               String    @id @default(cuid())
+  userId           String?   @map("user_id") // null se não resolvido
+  feature          AiFeature
+  model            String
+  promptTokens     Int       @map("prompt_tokens")
+  completionTokens Int       @map("completion_tokens")
+  totalTokens      Int       @map("total_tokens")
+  costUsd          Decimal   @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("ai_usage")
 }
 
 model ConversationState {

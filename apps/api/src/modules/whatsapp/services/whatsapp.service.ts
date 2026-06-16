@@ -130,6 +130,7 @@ export class WhatsappService {
       content,
       history,
       customCategories,
+      user.id,
     );
 
     // Registra a mensagem do usuário no histórico.
@@ -997,7 +998,9 @@ export class WhatsappService {
       lines.push(`💸 *A pagar:* ${fmt(forecast.pendingExpense)}`);
     }
     if (forecast.estimatedVariableExpense > 0) {
-      lines.push(`📊 *Gastos estimados:* ${fmt(forecast.estimatedVariableExpense)}`);
+      lines.push(
+        `📊 *Gastos estimados:* ${fmt(forecast.estimatedVariableExpense)}`,
+      );
     }
 
     lines.push(
@@ -1670,7 +1673,8 @@ export class WhatsappService {
         const r = await this.persistBatchItem(userId, userIds, item);
         lines.push(r.line);
         allTransactionIds.push(...r.transactionIds);
-        if (r.installmentGroupId) installmentGroupIds.push(r.installmentGroupId);
+        if (r.installmentGroupId)
+          installmentGroupIds.push(r.installmentGroupId);
       } catch (error) {
         this.logger.error(`Batch item failed: ${error}`);
         lines.push('⚠️ um item falhou ao registrar');
@@ -1838,7 +1842,9 @@ export class WhatsappService {
           cardId,
         });
         newTransactionIds.push(created.id);
-        lines.push(`${t.description || t.category.name}: ${fmt(Number(t.amount))}`);
+        lines.push(
+          `${t.description || t.category.name}: ${fmt(Number(t.amount))}`,
+        );
       }
     }
 

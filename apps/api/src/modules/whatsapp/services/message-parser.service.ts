@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AiFeature } from '@prisma/client';
 import OpenAI from 'openai';
+import { AiUsageService } from '../../ai-usage/ai-usage.service';
 
 export interface ParsedTransaction {
   amount: number;
@@ -313,7 +315,10 @@ export class MessageParserService {
   private readonly logger = new Logger(MessageParserService.name);
   private readonly openai: OpenAI;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly aiUsage: AiUsageService,
+  ) {
     this.openai = new OpenAI({
       apiKey: this.config.getOrThrow<string>('OPENAI_API_KEY'),
     });
@@ -323,6 +328,7 @@ export class MessageParserService {
     message: string,
     history: { role: 'user' | 'bot'; text: string }[] = [],
     customCategories: { slug: string; name: string }[] = [],
+    userId: string | null = null,
   ): Promise<ParseResult> {
     try {
       // O histórico serve APENAS para resolver referências ("e o mês passado?",
@@ -363,6 +369,16 @@ export class MessageParserService {
           { role: 'user', content: `MENSAGEM ATUAL: ${message}` },
         ],
         response_format: { type: 'json_object' },
+      });
+
+      // Registra o consumo de IA (falha graciosa). usage vem na resposta
+      // não-streaming.
+      await this.aiUsage.record({
+        userId,
+        feature: AiFeature.WHATSAPP_PARSER,
+        model: MODEL,
+        promptTokens: completion.usage?.prompt_tokens ?? 0,
+        completionTokens: completion.usage?.completion_tokens ?? 0,
       });
 
       const text = completion.choices[0]?.message?.content?.trim() ?? '';
