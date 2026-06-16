@@ -16,6 +16,7 @@ interface AdminUser {
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   isSuperAdmin: boolean;
+  lastSeenAt: string | null;
   createdAt: string;
 }
 
@@ -42,6 +43,17 @@ const STATUS_TONE: Record<AdminUser["subscriptionStatus"], string> = {
 
 function date(iso: string | null): string {
   if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+// "Último acesso" amigável: hoje / ontem / há N dias / data.
+function lastSeen(iso: string | null): string {
+  if (!iso) return "nunca";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diffMs / 86400_000);
+  if (days <= 0) return "hoje";
+  if (days === 1) return "ontem";
+  if (days < 30) return `há ${days} dias`;
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
@@ -152,7 +164,8 @@ export function UsersTab() {
                     </p>
                     <p className="truncate text-xs text-fg-muted">{u.email}</p>
                     <p className="mt-1 text-[11px] text-fg-muted">
-                      Cadastro: {date(u.createdAt)} · Trial: {date(u.trialEndsAt)}
+                      Cadastro: {date(u.createdAt)} · Último acesso:{" "}
+                      {lastSeen(u.lastSeenAt)} · Trial: {date(u.trialEndsAt)}
                       {u.currentPeriodEnd && ` · Renova: ${date(u.currentPeriodEnd)}`}
                     </p>
                   </div>

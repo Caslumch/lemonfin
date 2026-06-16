@@ -4,14 +4,28 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
+  Inject,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { Observable, tap } from 'rxjs';
 import * as Sentry from '@sentry/nestjs';
 import type { Request, Response } from 'express';
+import { PrismaService } from '../../prisma/prisma.service';
+
+// "Último acesso": atualiza User.lastSeenAt no máx 1x a cada 15min por usuário
+// (throttle via cache), para não escrever no banco a cada request.
+const LAST_SEEN_THROTTLE_MS = 15 * 60 * 1000;
+const lastSeenKey = (id: string) => `lastSeen:${id}`;
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger('HTTP');
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest<Request>();
@@ -24,6 +38,7 @@ export class LoggingInterceptor implements NestInterceptor {
     // DSN). id + email — decisão de produto (facilita identificar afetados).
     if (userId) {
       Sentry.setUser({ id: userId, email: user?.email });
+      void this.touchLastSeen(userId);
     }
 
     const userInfo = userId ? ` [user:${userId}]` : '';
@@ -47,5 +62,23 @@ export class LoggingInterceptor implements NestInterceptor {
         },
       }),
     );
+  }
+
+  /**
+   * Atualiza lastSeenAt com throttle de 15min (marca no cache). Fire-and-forget:
+   * não atrasa a resposta e nunca derruba o request se a gravação falhar.
+   */
+  private async touchLastSeen(userId: string): Promise<void> {
+    try {
+      const key = lastSeenKey(userId);
+      if (await this.cache.get(key)) return; // visto há <15min
+      await this.cache.set(key, true, LAST_SEEN_THROTTLE_MS);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastSeenAt: new Date() },
+      });
+    } catch {
+      // silencioso de propósito — métrica best-effort
+    }
   }
 }
