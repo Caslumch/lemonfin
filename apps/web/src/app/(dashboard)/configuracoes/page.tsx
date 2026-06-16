@@ -458,8 +458,23 @@ export default function ConfiguracoesPage() {
                 Tentar novamente
               </Button>
             </div>
+          ) : billing?.accessSource === "family" ? (
+            /* Membro coberto pela assinatura do dono da família */
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-lima/15 text-lima">
+                  <Sparkles size={14} />
+                  Premium pela família
+                </span>
+              </div>
+              <p className="text-sm text-fg-secondary">
+                Sua família tem o Premium ativo, então você já aproveita o
+                LemonFin completo. A assinatura é gerenciada pelo dono da
+                família.
+              </p>
+            </div>
           ) : billing?.subscriptionStatus === "ACTIVE" ? (
-            /* Premium ativo */
+            /* Premium ativo (assinatura própria) */
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-lima/15 text-lima">

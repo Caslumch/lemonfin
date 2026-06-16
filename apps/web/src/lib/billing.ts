@@ -15,6 +15,9 @@ export interface BillingStatus {
   trialEndsAt: string | null;
   // Acesso efetivo já derivado pelo backend — o front NÃO recalcula a regra.
   hasPremium: boolean;
+  // De onde vem o acesso: própria assinatura, cobertura da família, ou nenhum.
+  // 'family' → membro coberto pelo dono: não mostrar botão de compra.
+  accessSource: "self" | "family" | "none";
   // Tem customer no Stripe → pode abrir o portal de gerenciamento.
   canManage: boolean;
 }
