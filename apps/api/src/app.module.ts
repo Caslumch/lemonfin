@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -25,6 +26,9 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 @Module({
   imports: [
+    // Sentry: integra o SDK ao ciclo do Nest. No-op se SENTRY_DSN ausente
+    // (o init em instrument.ts não roda sem DSN).
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '../../.env',
@@ -54,6 +58,9 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
   ],
   controllers: [HealthController],
   providers: [
+    // Captura exceções não tratadas e envia ao Sentry (no-op sem DSN). Vem
+    // primeiro para interceptar antes de qualquer outro filtro.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     // Aplica o rate limit em todas as rotas (respeitando os overrides locais).
     { provide: APP_GUARD, useClass: ThrottlerGuard },

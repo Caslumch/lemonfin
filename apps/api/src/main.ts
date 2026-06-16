@@ -1,3 +1,6 @@
+// DEVE ser o primeiro import: inicializa o Sentry antes de qualquer módulo do
+// app (instrumentação de erros/performance depende disso).
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import compression from 'compression';
