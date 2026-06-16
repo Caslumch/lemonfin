@@ -6,9 +6,10 @@ import { ListReservesUseCase } from './use-cases/list-reserves.use-case';
 import { UpdateReserveUseCase } from './use-cases/update-reserve.use-case';
 import { DeleteReserveUseCase } from './use-cases/delete-reserve.use-case';
 import { FamiliesModule } from '../families/families.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
-  imports: [FamiliesModule],
+  imports: [FamiliesModule, BillingEnforcementModule],
   controllers: [ReservesController],
   providers: [
     ReservesRepository,

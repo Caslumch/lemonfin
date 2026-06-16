@@ -11,6 +11,7 @@ import {
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { hasPremiumAccess } from '../../../common/billing/premium-access';
+import { SkipPremium } from '../../../common/billing/skip-premium.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { UsersRepository } from '../repositories/users.repository';
 import { CompleteOnboardingUseCase } from '../use-cases/complete-onboarding.use-case';
@@ -31,6 +32,9 @@ import type {
   DisableTwoFactorInput,
 } from '../dtos/two-factor.dto';
 
+// Gestão de conta (perfil, senha, 2FA, onboarding) continua acessível mesmo
+// sem assinatura — não são features premium e o usuário pode precisar delas.
+@SkipPremium()
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {

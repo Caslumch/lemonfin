@@ -14,6 +14,8 @@ import { RecurringModule } from '../recurring/recurring.module';
 import { ReservesModule } from '../reserves/reserves.module';
 import { GoalsModule } from '../goals/goals.module';
 import { ChatModule } from '../chat/chat.module';
+import { BillingModule } from '../billing/billing.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { ChatModule } from '../chat/chat.module';
     ReservesModule,
     GoalsModule,
     ChatModule,
+    BillingModule,
+    BillingEnforcementModule,
   ],
   controllers: [WebhookController],
   providers: [

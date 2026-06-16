@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PremiumGuard } from '../../../common/billing/premium.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CreateReserveUseCase } from '../use-cases/create-reserve.use-case';
@@ -25,7 +26,7 @@ import type {
 } from '../dtos/reserve.dto';
 
 @Controller('reserves')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PremiumGuard)
 export class ReservesController {
   constructor(
     private readonly createReserve: CreateReserveUseCase,

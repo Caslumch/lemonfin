@@ -19,6 +19,14 @@ export async function api<T = unknown>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    // 402 = paywall hard do backend: a escrita foi bloqueada por falta de
+    // assinatura. Manda o usuário pra tela de assinatura (defesa em profundidade
+    // caso o PaywallGuard não tenha redirecionado antes).
+    if (res.status === 402 && typeof window !== "undefined") {
+      if (!window.location.pathname.startsWith("/assinar")) {
+        window.location.assign("/assinar");
+      }
+    }
     throw new Error(body.message || `Erro ${res.status}`);
   }
 

@@ -7,9 +7,10 @@ import { UpdateCardUseCase } from './use-cases/update-card.use-case';
 import { DeleteCardUseCase } from './use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from './use-cases/get-card-invoice.use-case';
 import { FamiliesModule } from '../families/families.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
-  imports: [FamiliesModule],
+  imports: [FamiliesModule, BillingEnforcementModule],
   controllers: [CardsController],
   providers: [
     CardsRepository,

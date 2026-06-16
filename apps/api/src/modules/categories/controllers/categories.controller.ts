@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PremiumGuard } from '../../../common/billing/premium.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { ListCategoriesUseCase } from '../use-cases/list-categories.use-case';
@@ -25,7 +26,7 @@ import type {
 } from '../dtos/category.dto';
 
 @Controller('categories')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PremiumGuard)
 export class CategoriesController {
   constructor(
     private readonly listCategories: ListCategoriesUseCase,
