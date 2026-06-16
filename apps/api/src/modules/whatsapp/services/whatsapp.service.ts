@@ -55,7 +55,7 @@ export class WhatsappService {
     private readonly billingConfig: BillingConfigService,
   ) {}
 
-  async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
+  async handleIncomingMessage({ from, content }: IncomingMessage) {
     this.logger.log(`Message from ${from}: ${content}`);
 
     const phone = this.normalizePhone(from);

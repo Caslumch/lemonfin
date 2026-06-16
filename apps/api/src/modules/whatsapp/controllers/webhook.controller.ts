@@ -33,7 +33,7 @@ export class WebhookController {
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UseGuards(WebhookSignatureGuard)
-  async handleWebhook(@Body() body: WebhookPayload) {
+  handleWebhook(@Body() body: WebhookPayload) {
     this.logger.log(`Webhook received: ${body.event}`);
     this.logger.debug(`Webhook payload: ${JSON.stringify(body.payload)}`);
 

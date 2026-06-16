@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancela runs antigos do mesmo PR/branch quando chega um push novo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint · Build · Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gera o @prisma/client a partir do schema (não conecta no banco).
+      # Necessário antes de buildar/testar a API.
+      - name: Prisma generate
+        run: pnpm db:generate
+
+      # Lint via script do projeto (eslint --fix). No CI o --fix não persiste;
+      # o que importa é o exit code, que falha em erros NÃO auto-corrigíveis
+      # (bugs reais). Formatação prettier é auto-corrigida e não bloqueia — é o
+      # mesmo comportamento que o dev tem localmente. Para tornar o lint estrito
+      # (barrar formatação também), rodar `pnpm format` na base e trocar por
+      # eslint sem --fix.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm --filter api test
