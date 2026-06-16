@@ -1,7 +1,28 @@
 # Checklist — LemonFin
 
-**Ultima atualizacao:** Abril 2026
+**Ultima atualizacao:** Junho 2026
 **Legenda:** ` ` = pendente | `x` = concluido | `-` = cancelado/adiado
+
+---
+
+## Estado da fundacao de SaaS (jun/2026)
+
+Frente de "deixar vendavel" concluida (PRs #44–#55). Detalhes em
+`docs/billing-stripe.md`.
+
+- [x] **Stripe** — checkout/portal/webhook, validado em modo teste (#44–#49)
+- [x] **Paywall hard** — enforcement atras de flag BILLING_ENFORCEMENT (off por padrao)
+- [x] **Trial -> paywall** — pos-trial bloqueia (quando a flag liga)
+- [x] **E-mails de billing** — boas-vindas/falha/cancelamento via Resend
+- [x] **Familia cobre assinatura** — acesso derivado do OWNER
+- [x] **CI** — GitHub Actions (lint/build/test) em cada PR (#51)
+- [x] **Observabilidade** — Sentry back+front (#52)
+- [x] **Painel admin** — usuarios, assinaturas/MRR, atividade, custo de IA (#53–#55)
+- [x] **Custo de IA por usuario** — tabela AiUsage + instrumentacao (#55)
+- [ ] **Import PDF de fatura + Score de disciplina** — unico ponto pendente (feature premium)
+
+Falta para cobranca real: migrar o Stripe para modo Live e ligar
+BILLING_ENFORCEMENT=on (ver `docs/billing-stripe.md` secao 6).
 
 ---
 
@@ -12,7 +33,7 @@
 **Setup & Infraestrutura**
 
 - [x] Criar repositorio(s) Git
-- [ ] Configurar CI basico (lint, build)
+- [x] Configurar CI basico (lint, build, test) — GitHub Actions (PR #51)
 - [x] Setup Next.js 14+ com App Router
 - [x] Instalar e configurar TailwindCSS
 - [x] Instalar e configurar Jotai (estado)
@@ -459,11 +480,11 @@
 
 **Monitoramento**
 
-- [ ] Error tracking (Sentry)
-- [ ] Logs estruturados
-- [ ] Metricas de uso (analytics)
+- [x] Error tracking (Sentry) — back+front, erros+performance (PR #52)
+- [x] Logs estruturados (LoggingInterceptor + Sentry)
+- [-] Metricas de uso (analytics) — adiado
 - [ ] Alertas de downtime
-- [ ] Dashboard de metricas do produto
+- [x] Dashboard de metricas do produto — painel /admin (PRs #53/#54/#55)
 
 **Lancamento**
 
@@ -546,39 +567,37 @@ Area restrita ao dono da plataforma (super-admin). NAO e o papel ADMIN de
 familia. Nada implementado ainda. Ordem: fundacao → usuarios/atividade →
 tokens → saude.
 
-**Fundacao (habilita o resto)**
+**Fundacao (habilita o resto)** — feito (PRs #53/#54)
 
-- [ ] Campo `isSuperAdmin` no User (setado manualmente no banco)
-- [ ] `SuperAdminGuard` na API — protege `/admin/*` (403 sem a flag)
-- [ ] Rota `/admin` no web, liberada no `proxy.ts` so para super-admin
+- [x] Campo `isSuperAdmin` no User (setado manualmente no banco)
+- [x] `SuperAdminGuard` na API — protege `/admin/*` (403 sem a flag)
+- [x] Rota `/admin` no web (confirma acesso, redireciona nao-admin)
 
-**Painel: Usuarios** (dados ja existem — esforco baixo)
+**Painel: Usuarios**
 
-- [ ] Endpoint admin: agregados de usuarios (total, novos/dia, ativos)
-- [ ] Trials ativos vs. expirados
-- [ ] Grafico de crescimento de usuarios
+- [x] Endpoint admin: agregados de usuarios (total, novos 7/30d)
+- [x] Trials ativos vs. expirados
+- [-] Grafico de crescimento — adiado (hoje sao cards numericos)
 
-**Painel: Atividade** (dados ja existem — esforco baixo)
+**Painel: Atividade**
 
-- [ ] Transacoes criadas por dia
-- [ ] Mensagens de WhatsApp processadas por dia
-- [ ] Cartoes / volume de uso geral
+- [x] Transacoes criadas (total/7d) e por fonte (WhatsApp/manual/recorrente)
+- [-] Mensagens WhatsApp por dia — coberto parcialmente (transacoes via WhatsApp)
 
-**Painel: Uso de IA / tokens** (esforco ALTO — exige instrumentacao previa)
+**Painel: Uso de IA / tokens** — feito (PR #55)
 
-- [ ] Tabela de consumo de IA (por chamada: tokens, modelo, custo, userId)
-- [ ] Instrumentar as chamadas de IA (chat/parsing) para gravar consumo
-- [ ] Painel: tokens por dia, por usuario, custo estimado
+- [x] Tabela de consumo de IA (AiUsage: tokens, modelo, custo, userId, feature)
+- [x] Instrumentar as chamadas de IA (chat web + parser WhatsApp) para gravar consumo
+- [x] Painel: custo total/30d, chamadas, tokens estimados
 
 **Painel: Saude / custos**
 
-- [ ] Status dos servicos (API, WhatsApp)
-- [ ] Erros recentes (idealmente via Sentry — ver Monitoramento)
-- [ ] Estimativa de custo (IA + infra)
+- [x] Erros recentes via Sentry (PR #52) — back+front
+- [-] Status dos servicos (API, WhatsApp) — nao no painel; ha /health
 
-**Pos-Stripe (quando houver monetizacao)**
+**Pos-Stripe (quando houver monetizacao)** — feito (PR #54)
 
-- [ ] Metricas de receita no painel (pagantes, MRR, conversao de trial)
+- [x] Metricas de receita no painel (assinaturas ativas, MRR estimado)
 
 ---
 
