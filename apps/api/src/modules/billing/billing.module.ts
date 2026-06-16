@@ -9,9 +9,10 @@ import { CreatePortalSessionUseCase } from './use-cases/create-portal-session.us
 import { HandleStripeWebhookUseCase } from './use-cases/handle-stripe-webhook.use-case';
 import { GetSubscriptionStatusUseCase } from './use-cases/get-subscription-status.use-case';
 import { FamiliesModule } from '../families/families.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [FamiliesModule],
+  imports: [FamiliesModule, MailModule],
   controllers: [BillingController, StripeWebhookController],
   providers: [
     BillingRepository,
