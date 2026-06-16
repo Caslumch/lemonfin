@@ -4,7 +4,9 @@ import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true expõe req.rawBody preservando o parse JSON normal das demais
+  // rotas. O webhook do Stripe precisa do corpo cru para validar a assinatura.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Headers de segurança (CSP, HSTS, etc.) e gzip nas respostas.
   app.use(helmet());
