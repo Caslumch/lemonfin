@@ -109,7 +109,9 @@ export class StripeClientService {
       // userId no metadata da subscription criada — robustez extra para o webhook.
       subscription_data: { metadata: { userId: params.userId } },
       success_url: `${this.frontendUrl}/assinar/sucesso?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${this.frontendUrl}/assinar`,
+      // Cancelamento volta para Configurações (a tela de onde o usuário partiu).
+      // A página dedicada /assinar (paywall) entra no PR de enforcement.
+      cancel_url: `${this.frontendUrl}/configuracoes`,
       allow_promotion_codes: true,
     });
     if (!session.url) throw new Error('Stripe não retornou URL de checkout.');

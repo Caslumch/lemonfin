@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 import { cn } from "@/lib/utils";
+import type { BillingCycle, BillingStatus } from "@/lib/billing";
+import { PRICE_LABEL } from "@/lib/billing";
 
 interface FamilyMember {
   id: string;
@@ -47,6 +49,14 @@ interface UserProfile {
 function phoneToInternational(phone: string | null): string {
   if (!phone) return "";
   return `+${phone}`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 export default function ConfiguracoesPage() {
@@ -94,6 +104,15 @@ export default function ConfiguracoesPage() {
   // Leave
   const [leaving, setLeaving] = useState(false);
 
+  // Subscription (billing)
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [loadingBilling, setLoadingBilling] = useState(true);
+  const [billingError, setBillingError] = useState(false);
+  // Qual botão está redirecionando (mantém o spinner certo).
+  const [redirecting, setRedirecting] = useState<
+    BillingCycle | "portal" | null
+  >(null);
+
   const fetchProfile = useCallback(async () => {
     setLoadingProfile(true);
     setProfileError(false);
@@ -122,10 +141,52 @@ export default function ConfiguracoesPage() {
     }
   }, [fetchApi]);
 
+  const fetchBilling = useCallback(async () => {
+    setLoadingBilling(true);
+    setBillingError(false);
+    try {
+      const data = await fetchApi<BillingStatus>("/billing/status");
+      setBilling(data);
+    } catch (error) {
+      logApiError("load:billing", error);
+      setBillingError(true);
+    } finally {
+      setLoadingBilling(false);
+    }
+  }, [fetchApi]);
+
   useEffect(() => {
     fetchProfile();
     fetchFamily();
-  }, [fetchProfile, fetchFamily]);
+    fetchBilling();
+  }, [fetchProfile, fetchFamily, fetchBilling]);
+
+  async function handleCheckout(cycle: BillingCycle) {
+    setRedirecting(cycle);
+    try {
+      const { url } = await fetchApi<{ url: string }>("/billing/checkout", {
+        method: "POST",
+        body: JSON.stringify({ cycle }),
+      });
+      window.location.href = url;
+    } catch {
+      toast.error("Não foi possível iniciar o checkout. Tente novamente.");
+      setRedirecting(null);
+    }
+  }
+
+  async function handlePortal() {
+    setRedirecting("portal");
+    try {
+      const { url } = await fetchApi<{ url: string }>("/billing/portal", {
+        method: "POST",
+      });
+      window.location.href = url;
+    } catch {
+      toast.error("Não foi possível abrir o gerenciamento da assinatura.");
+      setRedirecting(null);
+    }
+  }
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -279,6 +340,7 @@ export default function ConfiguracoesPage() {
             onValueChange={setActiveTab}
             items={[
               { value: "perfil", label: "Perfil" },
+              { value: "assinatura", label: "Assinatura" },
               { value: "seguranca", label: "Segurança" },
               { value: "familia", label: "Família" },
             ]}
@@ -370,6 +432,132 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
+        </div>
+        )}
+
+        {activeTab === "assinatura" && (
+        <div className="space-y-6">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Sparkles size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Assinatura
+            </h2>
+          </div>
+
+          {loadingBilling ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : billingError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar sua assinatura.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchBilling}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : billing?.subscriptionStatus === "ACTIVE" ? (
+            /* Premium ativo */
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-lima/15 text-lima">
+                  <Sparkles size={14} />
+                  Premium ativo
+                </span>
+              </div>
+              {billing.currentPeriodEnd && (
+                <p className="text-sm text-fg-secondary">
+                  Seu plano renova em{" "}
+                  <span className="font-medium text-fg">
+                    {formatDate(billing.currentPeriodEnd)}
+                  </span>
+                  .
+                </p>
+              )}
+              {billing.canManage && (
+                <Button size="sm" onClick={handlePortal} disabled={!!redirecting}>
+                  {redirecting === "portal" ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-2" />
+                      Abrindo...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink size={14} className="mr-2" />
+                      Gerenciar assinatura
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          ) : (
+            /* Trial, expirado ou cancelado → oferecer planos */
+            <div className="space-y-5">
+              {billing?.subscriptionStatus === "PAST_DUE" && (
+                <p className="text-sm text-danger">
+                  Houve um problema com seu pagamento. Atualize sua forma de
+                  pagamento para manter o Premium.
+                </p>
+              )}
+              <p className="text-sm text-fg-secondary">
+                Tenha o LemonFin completo: WhatsApp ilimitado, alertas, resumo
+                semanal e mais.
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(["monthly", "yearly"] as BillingCycle[]).map((cycle) => (
+                  <button
+                    key={cycle}
+                    type="button"
+                    onClick={() => handleCheckout(cycle)}
+                    disabled={!!redirecting}
+                    className={cn(
+                      "flex flex-col items-start gap-1 rounded-[16px] border-[1.5px] p-4 text-left transition-colors disabled:opacity-60",
+                      cycle === "yearly"
+                        ? "border-lima bg-lima/5 hover:bg-lima/10"
+                        : "border-border bg-page hover:border-fg",
+                    )}
+                  >
+                    <span className="text-sm font-semibold text-fg">
+                      {cycle === "yearly" ? "Anual" : "Mensal"}
+                    </span>
+                    <span className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
+                      {PRICE_LABEL[cycle]}
+                    </span>
+                    {cycle === "yearly" && (
+                      <span className="text-xs font-medium text-lima">
+                        2 meses grátis
+                      </span>
+                    )}
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-fg-muted">
+                      {redirecting === cycle ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          Redirecionando...
+                        </>
+                      ) : (
+                        "Assinar"
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {billing?.canManage && (
+                <button
+                  type="button"
+                  onClick={handlePortal}
+                  disabled={!!redirecting}
+                  className="text-xs text-fg-muted underline hover:text-fg disabled:opacity-60"
+                >
+                  Gerenciar pagamentos
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         </div>
         )}
 
