@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { hasPremiumAccess } from '../../../common/billing/premium-access';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { UsersRepository } from '../repositories/users.repository';
 import { CompleteOnboardingUseCase } from '../use-cases/complete-onboarding.use-case';
@@ -55,6 +56,11 @@ export class UsersController {
       emailVerifiedAt: found.emailVerifiedAt,
       trialEndsAt: found.trialEndsAt,
       twoFactorEnabled: found.twoFactorEnabled,
+      subscriptionStatus: found.subscriptionStatus,
+      currentPeriodEnd: found.currentPeriodEnd,
+      // Acesso efetivo já derivado (self). A cobertura por família entra num
+      // PR posterior — o front NÃO recalcula a regra, lê este booleano.
+      hasPremium: hasPremiumAccess(found),
     };
   }
 
