@@ -582,6 +582,68 @@ tokens → saude.
 - [ ] Gamificacao (streaks, conquistas)
 - [ ] Planejamento de orcamento mensal
 - [x] Compartilhamento familiar (casais/familias) — ver secao dedicada abaixo
-- [ ] App mobile (React Native) — Apple Store + Play Store com mesmo codigo
+- [ ] App mobile (React Native) — Apple Store + Play Store — ver secao dedicada abaixo
 - [ ] Canal Telegram como alternativa
 - [ ] Categorias customizaveis
+
+---
+
+## APP MOBILE — Play Store + App Store (decidido jun/2026)
+
+**Decisao de arquitetura:**
+
+- [ ] App nativo em **React Native / Expo** (NAO PWA, NAO Capacitor) — web Next.js
+      permanece como esta; backend NestJS nao muda (RN consome a mesma API REST)
+- [ ] Mora no **mesmo monorepo**: nova pasta `apps/mobile` (workspace `apps/*` ja
+      pega automaticamente); reusa `@lemonfin/shared` (tipos/Zod) — contrato de API
+      unico entre api ↔ web ↔ mobile
+- [ ] **Pagamento por fora (modelo "reader app"):** assinatura cobrada no
+      site/WhatsApp via Stripe; app iOS so libera acesso, SEM botao "assinar"
+      dentro dele (evita taxa Apple de 15-30%). Stripe e PRE-REQUISITO da submissao
+
+**Pre-requisitos (Fase 0 — antes de tocar no RN):**
+
+- [ ] Stripe + paywall funcionando no web/WhatsApp (ver Sprint 9)
+- [ ] Garantir que toda funcionalidade esta exposta via API REST (nada server-only
+      do Next que o app dependa)
+
+**Fundacao do app (Expo):**
+
+- [ ] Criar `apps/mobile` (Expo + Expo Router + TypeScript)
+- [ ] `metro.config.js` com watchFolders/nodeModulesPaths para o monorepo pnpm
+- [ ] Auth contra a API (`POST /auth/sign-in` + 2FA) — NextAuth NAO vai pro RN;
+      token em `expo-secure-store`
+- [ ] Cliente HTTP com token (espelha o `useApi` do web)
+- [ ] Design system em NativeWind (reaproveita tokens de cor/tipografia)
+
+**Telas (reescrita de UI, em ordem de valor):**
+
+- [ ] Dashboard (prova de conceito ponta-a-ponta primeiro)
+- [ ] Transacoes, Cartoes, Categorias, Metas, Reservas, Insights
+- [ ] Chat IA
+- [ ] Configuracoes / Familia
+- [ ] Onboarding
+
+**Nativo de verdade (exigido pela Apple — diferencia de "site empacotado"):**
+
+- [ ] Push notifications (Expo Notifications)
+- [ ] Biometria (Face ID / digital) para abrir o app
+- [ ] Deep links (abrir transacao a partir da notificacao)
+- [ ] Icones, splash screen, telas de permissao
+
+**Submissao:**
+
+- [ ] EAS Build (gera .ipa + .aab sem Mac local); configurar monorepo no eas.json
+- [ ] Apple Developer Program (US$ 99/ano) + Google Play (US$ 25, unico)
+- [ ] Politica de Privacidade + data safety (Google) / privacy labels (Apple)
+- [ ] Revisao Apple — ponto sensivel: sem compra no app iOS; acesso via assinatura
+      feita por fora
+
+**Riscos anotados:**
+
+- [ ] Custo permanente de manter 2 frontends (web + RN) — manter TODA regra no
+      backend, frontends "burros"
+- [ ] Fricao do pagamento iOS por fora — desenhar fluxo "ative sua conta" para nao
+      converter mal no iOS
+- [ ] Se um dia adicionar login social (ex: Google), Apple OBRIGA "Entrar com
+      Apple" junto (hoje so email/senha, nao pega)

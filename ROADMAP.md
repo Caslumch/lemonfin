@@ -260,8 +260,40 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 - Gamificacao (streaks de registro, conquistas)
 - Planejamento de orcamento mensal
 - ~~Compartilhamento de controle (casais/familias)~~ ✅ Implementado
-- App mobile (React Native) — Apple Store + Play Store com mesmo codigo
+- App mobile (React Native) — Apple Store + Play Store (ver secao dedicada abaixo)
 - Telegram como canal alternativo
+
+---
+
+## App Mobile — Play Store + App Store (decidido jun/2026)
+
+**Objetivo:** presenca nas duas lojas (retencao maior com app instalado que abrindo
+o navegador). PWA puro foi descartado porque a Apple nao aceita "site empacotado"
+na App Store.
+
+**Decisoes tomadas:**
+
+| Tema | Decisao | Motivo |
+|------|---------|--------|
+| Tecnologia | **React Native / Expo** (nao PWA, nao Capacitor) | UX nativa, zero risco de rejeicao por "ser web". Web Next.js permanece. |
+| Repositorio | **Mesmo monorepo** (`apps/mobile`) | Reusa `@lemonfin/shared`; contrato de API unico entre api/web/mobile; release sincronizado. |
+| Backend | **Nao muda** | RN consome a mesma API REST do NestJS. |
+| Auth no app | API direta + `expo-secure-store` | NextAuth nao vai pro RN; backend ja retorna JWT e suporta 2FA. |
+| Pagamento iOS | **Por fora (Stripe, modelo "reader app")** | Assinatura no site/WhatsApp; app iOS so libera acesso, sem botao de compra → evita taxa Apple de 15-30%. |
+
+**Pre-requisito (bloqueador):** Stripe + paywall no web/WhatsApp (Sprint 9) precisa
+existir antes de submeter na Apple, pois a cobranca acontece fora do app.
+
+**Fases:** (0) Stripe + garantir tudo via API REST → (1) fundacao Expo + auth +
+dashboard como prova de conceito → (2) demais telas → (3) push + biometria + deep
+links (o "nativo" exigido pela Apple) → (4) EAS Build + contas de dev + privacy +
+submissao.
+
+**Esforco:** meses (reescrita de UI). Backend pesado ja pronto reduz o risco. Custo
+permanente: manter 2 frontends — manter toda regra no backend.
+
+**Stack adicional:** Expo, Expo Router, NativeWind, expo-secure-store,
+Expo Notifications, EAS Build.
 
 ---
 
