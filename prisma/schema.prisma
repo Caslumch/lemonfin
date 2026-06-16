@@ -29,6 +29,9 @@ model User {
   twoFactorEnabled  Boolean                @default(false) @map("two_factor_enabled")
   twoFactorSecret   String?                @map("two_factor_secret") // criptografado
   backupCodes       String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  // Super-admin da PLATAFORMA (dono), não o papel ADMIN de família. Setado
+  // manualmente no banco; protege os endpoints /admin/*. Default false.
+  isSuperAdmin      Boolean                @default(false) @map("is_super_admin")
   // Assinatura (Stripe). Default TRIALING cobre quem cadastrou antes do billing —
   // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
   // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
