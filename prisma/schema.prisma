@@ -29,6 +29,14 @@ model User {
   twoFactorEnabled  Boolean                @default(false) @map("two_factor_enabled")
   twoFactorSecret   String?                @map("two_factor_secret") // criptografado
   backupCodes       String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  // Assinatura (Stripe). Default TRIALING cobre quem cadastrou antes do billing —
+  // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
+  // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
+  // A fonte da verdade do status é o webhook do Stripe, não a resposta do checkout.
+  stripeCustomerId     String?             @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?             @unique @map("stripe_subscription_id")
+  subscriptionStatus   SubscriptionStatus  @default(TRIALING) @map("subscription_status")
+  currentPeriodEnd     DateTime?           @map("current_period_end") // fim do ciclo pago
   createdAt         DateTime               @default(now()) @map("created_at")
   updatedAt         DateTime               @updatedAt @map("updated_at")
   transactions      Transaction[]
@@ -43,6 +51,13 @@ model User {
   categories        Category[]
 
   @@map("users")
+}
+
+enum SubscriptionStatus {
+  TRIALING // dentro do trial (ou conta antiga, ainda sem assinatura)
+  ACTIVE   // assinatura paga em dia
+  PAST_DUE // pagamento falhou, em retry pelo Stripe
+  CANCELED // cancelada / expirada
 }
 
 enum VerificationCodeType {
