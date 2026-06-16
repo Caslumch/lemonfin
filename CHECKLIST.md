@@ -356,14 +356,20 @@
 
 ### Sprint 9: Monetizacao e Onboarding (Semanas 17-18)
 
-**Pagamento**
+**Pagamento** — ver `docs/billing-stripe.md` (implementado PRs #44–#49, validado em modo teste jun/2026)
 
-- [ ] Escolher gateway (Stripe / Asaas)
-- [ ] Integrar checkout de assinatura
-- [ ] Plano Premium: R$ 14,90/mes
-- [ ] Webhook de confirmacao de pagamento
-- [ ] Webhook de cancelamento
-- [ ] Gestao de status da assinatura no banco
+- [x] Escolher gateway (Stripe)
+- [x] Integrar checkout de assinatura
+- [x] Plano Premium: R$ 14,90/mes (mensal) + R$ 149/ano (anual)
+- [x] Webhook de confirmacao de pagamento
+- [x] Webhook de cancelamento
+- [x] Gestao de status da assinatura no banco (SubscriptionStatus + campos Stripe no User)
+- [x] Paywall hard atras da flag BILLING_ENFORCEMENT (off por padrao; web + WhatsApp)
+- [x] Assinatura do dono cobre a familia (acesso derivado via FamilyContext)
+- [x] Pagina /assinar (paywall) + aba Assinatura em Configuracoes + /assinar/sucesso
+- [x] Customer Portal (gerenciar/cancelar) via /billing/portal
+- [ ] Migrar para modo Live e ligar cobranca real (BILLING_ENFORCEMENT=on) — pendente
+- [ ] Validar cancelamento e pagamento-falho em teste — pendente
 
 **Trial**
 
@@ -388,10 +394,11 @@
 
 **E-mails**
 
-- [ ] E-mail de boas-vindas
+- [ ] E-mail de boas-vindas (cadastro)
 - [ ] E-mail de fim do trial
-- [ ] E-mail de confirmacao de pagamento
-- [ ] E-mail de cancelamento
+- [x] E-mail de boas-vindas ao Premium (assinatura ativada) — via Resend, validado
+- [x] E-mail de pagamento falhou (PAST_DUE)
+- [x] E-mail de cancelamento de assinatura
 
 ---
 

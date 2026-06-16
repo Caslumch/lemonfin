@@ -202,9 +202,14 @@ FASE 4 — Monetizacao            Semanas 15-20  ██████████�
 
 ### Sprint 9 (Semanas 17-18): Monetizacao e Onboarding
 
+> **Pagamento (Stripe): IMPLEMENTADO e validado em modo teste (jun/2026).**
+> Checkout + portal + webhook, paywall hard atras de flag (off por padrao),
+> assinatura do dono cobre a familia, e-mails de billing. Falta migrar para Live
+> e ligar a cobranca real. Detalhes, envs e testes em `docs/billing-stripe.md`.
+
 | # | Tarefa | Stack/Detalhe | Entregavel |
 |---|--------|---------------|------------|
-| 9.1 | Plano Premium (R$ 14,90/mes) | Gateway de pagamento (Stripe/Asaas) | Checkout e assinatura |
+| 9.1 | ✅ Plano Premium (mensal R$14,90 + anual R$149) | Stripe (checkout/portal/webhook) | Checkout e assinatura |
 | 9.2 | Trial de 90 dias (primeiros 500 usuarios) | Controle de trial por data de cadastro | Trial automatico |
 | 9.3 | Tela de planos e upgrade | Comparativo Gratuito vs Premium | Pagina de pricing |
 | 9.4 | Onboarding guiado | Wizard: conectar WhatsApp → registrar 1a transacao → ver dashboard | Fluxo de primeira experiencia |
