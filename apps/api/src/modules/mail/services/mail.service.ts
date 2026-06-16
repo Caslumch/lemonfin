@@ -59,6 +59,131 @@ export class MailService {
     });
   }
 
+  // ---- Billing (assinatura) ----
+
+  async sendSubscriptionWelcome(to: string, name: string): Promise<boolean> {
+    const firstName = name.split(' ')[0];
+    const appUrl = this.appUrl();
+    return this.resend.send({
+      to,
+      subject: 'Bem-vindo ao LemonFin Premium 🎉',
+      text:
+        `Olá, ${firstName}!\n\n` +
+        `Sua assinatura do LemonFin Premium está ativa. Agora é tudo sem ` +
+        `limites: WhatsApp ilimitado, alertas, resumo e mais.\n\n` +
+        `Acesse: ${appUrl}`,
+      html: this.messageTemplate({
+        title: 'Premium ativado! 🎉',
+        greeting: `Olá, ${firstName}!`,
+        paragraphs: [
+          'Sua assinatura do LemonFin Premium está ativa.',
+          'Agora é tudo sem limites: WhatsApp ilimitado, alertas, resumo e muito mais.',
+        ],
+        cta: { label: 'Abrir o LemonFin', url: appUrl },
+      }),
+    });
+  }
+
+  async sendPaymentFailed(to: string, name: string): Promise<boolean> {
+    const firstName = name.split(' ')[0];
+    const url = `${this.appUrl()}/configuracoes`;
+    return this.resend.send({
+      to,
+      subject: 'Problema com seu pagamento — LemonFin',
+      text:
+        `Olá, ${firstName}!\n\n` +
+        `Não conseguimos processar o pagamento da sua assinatura. Atualize sua ` +
+        `forma de pagamento para manter o Premium: ${url}`,
+      html: this.messageTemplate({
+        title: 'Problema com seu pagamento',
+        greeting: `Olá, ${firstName}!`,
+        paragraphs: [
+          'Não conseguimos processar o pagamento da sua assinatura do LemonFin.',
+          'Atualize sua forma de pagamento para manter o Premium ativo. Sem isso, o acesso pode ser suspenso.',
+        ],
+        cta: { label: 'Atualizar pagamento', url },
+      }),
+    });
+  }
+
+  async sendSubscriptionCanceled(to: string, name: string): Promise<boolean> {
+    const firstName = name.split(' ')[0];
+    const url = `${this.appUrl()}/assinar`;
+    return this.resend.send({
+      to,
+      subject: 'Sua assinatura foi cancelada — LemonFin',
+      text:
+        `Olá, ${firstName}!\n\n` +
+        `Sua assinatura do LemonFin Premium foi cancelada. Seus dados ` +
+        `continuam salvos — você pode reativar quando quiser: ${url}`,
+      html: this.messageTemplate({
+        title: 'Assinatura cancelada',
+        greeting: `Olá, ${firstName}!`,
+        paragraphs: [
+          'Sua assinatura do LemonFin Premium foi cancelada.',
+          'Seus dados continuam salvos e voltam assim que você reativar. Sentiremos sua falta!',
+        ],
+        cta: { label: 'Reativar Premium', url },
+      }),
+    });
+  }
+
+  private appUrl(): string {
+    // Reusa FRONTEND_URL (mesma var usada pelo billing/CORS).
+    return process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
+  }
+
+  /**
+   * Template HTML genérico (título + parágrafos + CTA opcional). Mesmo visual do
+   * otpTemplate, mas para mensagens transacionais sem código. Estilos inline.
+   */
+  private messageTemplate(p: {
+    title: string;
+    greeting: string;
+    paragraphs: string[];
+    cta?: { label: string; url: string };
+  }): string {
+    const body = p.paragraphs
+      .map(
+        (t) =>
+          `<p style="margin:0 0 14px;font-size:14px;color:#5b6150;line-height:1.5;">${t}</p>`,
+      )
+      .join('');
+    const button = p.cta
+      ? `<tr><td style="padding:8px 32px 4px;">
+           <a href="${p.cta.url}" style="display:inline-block;background:#3f5311;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 22px;border-radius:12px;">${p.cta.label}</a>
+         </td></tr>`
+      : '';
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background:#f6f7f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f4;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:440px;background:#ffffff;border-radius:16px;border:1px solid #e7e9e3;overflow:hidden;">
+          <tr>
+            <td style="padding:28px 32px 8px;">
+              <span style="font-size:20px;font-weight:800;color:#1a1d16;">🍋 LemonFin</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 0;">
+              <h1 style="margin:0 0 4px;font-size:18px;color:#1a1d16;">${p.title}</h1>
+              <p style="margin:0 0 16px;font-size:14px;color:#5b6150;">${p.greeting}</p>
+              ${body}
+            </td>
+          </tr>
+          ${button}
+          <tr><td style="padding:20px 32px 28px;"></td></tr>
+        </table>
+        <p style="margin:16px 0 0;font-size:11px;color:#a3a89a;">LemonFin · Suas finanças, no controle.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  }
+
   /**
    * Template HTML único para os emails de OTP. Estilos inline (clientes de email
    * descartam <style>/CSS externo). Paleta alinhada à marca LemonFin (limão).

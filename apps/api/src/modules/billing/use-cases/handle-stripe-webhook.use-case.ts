@@ -10,6 +10,7 @@ import {
   type StripeInvoice,
   type StripeCheckoutSession,
 } from '../services/stripe-client.service';
+import { MailService } from '../../mail/services/mail.service';
 
 // Idempotência: o Stripe reenvia eventos. Guardamos os event.id já processados
 // por um tempo curto no cache em memória (suficiente contra a janela de retry).
@@ -23,6 +24,7 @@ export class HandleStripeWebhookUseCase {
   constructor(
     private readonly billing: BillingRepository,
     private readonly stripe: StripeClientService,
+    private readonly mail: MailService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -71,6 +73,13 @@ export class HandleStripeWebhookUseCase {
     // Busca a subscription completa para extrair status e período.
     const subscription = await this.stripe.getSubscription(subId);
     await this.syncSubscription(subscription);
+
+    // Boas-vindas: o checkout.session.completed ocorre uma vez por compra, então
+    // é o ponto certo para o email (sem repetir a cada subscription.updated).
+    const user = await this.resolveUser(subscription);
+    if (user) {
+      await this.mail.sendSubscriptionWelcome(user.email, user.name);
+    }
   }
 
   private async onSubscriptionDeleted(
@@ -84,6 +93,7 @@ export class HandleStripeWebhookUseCase {
       currentPeriodEnd: this.periodEnd(subscription),
     });
     this.logger.log(`Assinatura cancelada para user ${user.id}`);
+    await this.mail.sendSubscriptionCanceled(user.email, user.name);
   }
 
   private async onInvoice(
@@ -106,6 +116,10 @@ export class HandleStripeWebhookUseCase {
       subscriptionStatus: status,
     });
     this.logger.log(`Invoice ${type} → ${status} para user ${user.id}`);
+
+    if (type === 'invoice.payment_failed') {
+      await this.mail.sendPaymentFailed(user.email, user.name);
+    }
   }
 
   /** Sincroniza status + período a partir de um objeto Subscription do Stripe. */
