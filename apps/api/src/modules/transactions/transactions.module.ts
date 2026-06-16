@@ -14,6 +14,7 @@ import { CategoriesModule } from '../categories/categories.module';
 import { FamiliesModule } from '../families/families.module';
 import { RecurringModule } from '../recurring/recurring.module';
 import { CardsModule } from '../cards/cards.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { CardsModule } from '../cards/cards.module';
     FamiliesModule,
     CardsModule,
     forwardRef(() => RecurringModule),
+    BillingEnforcementModule,
   ],
   controllers: [TransactionsController],
   providers: [

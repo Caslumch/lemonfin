@@ -23,6 +23,8 @@ import {
   PendingConfirmation,
   HistoryEntry,
 } from '../repositories/conversation.repository';
+import { PremiumAccessService } from '../../billing/services/premium-access.service';
+import { BillingConfigService } from '../../../common/billing/billing-config.service';
 
 interface IncomingMessage {
   from: string;
@@ -49,6 +51,8 @@ export class WhatsappService {
     private readonly listGoals: ListGoalsUseCase,
     private readonly chatCompletion: ChatCompletionUseCase,
     private readonly conversation: ConversationRepository,
+    private readonly premiumAccess: PremiumAccessService,
+    private readonly billingConfig: BillingConfigService,
   ) {}
 
   async handleIncomingMessage({ from, content, sessionId }: IncomingMessage) {
@@ -71,6 +75,27 @@ export class WhatsappService {
       // });
       this.logger.log(`Ignoring message from unregistered phone: ${phone}`);
       return;
+    }
+
+    // Paywall hard (no-op enquanto BILLING_ENFORCEMENT != 'on'). Sem acesso
+    // premium efetivo (considerando a família), qualquer mensagem responde com
+    // o link para assinar — o WhatsApp não tem como exibir tela.
+    if (this.billingConfig.enforcementEnabled) {
+      const hasAccess = await this.premiumAccess.hasAccess(user.id);
+      if (!hasAccess) {
+        const appUrl =
+          process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Seu acesso ao LemonFin expirou. Para continuar registrando e ' +
+            `consultando suas finanças por aqui, assine em: ${appUrl}/assinar`,
+        });
+        this.logger.log(
+          `Blocked WhatsApp message from user ${user.id} (no access)`,
+        );
+        return;
+      }
     }
 
     const phoneKey = this.normalizePhone(from);

@@ -6,9 +6,10 @@ import { CreateCategoryUseCase } from './use-cases/create-category.use-case';
 import { UpdateCategoryUseCase } from './use-cases/update-category.use-case';
 import { DeleteCategoryUseCase } from './use-cases/delete-category.use-case';
 import { FamiliesModule } from '../families/families.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
-  imports: [FamiliesModule],
+  imports: [FamiliesModule, BillingEnforcementModule],
   controllers: [CategoriesController],
   providers: [
     CategoriesRepository,

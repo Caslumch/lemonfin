@@ -9,6 +9,7 @@ import {
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
+import { SkipPremium } from '../../../common/billing/skip-premium.decorator';
 import { CreateFamilyUseCase } from '../use-cases/create-family.use-case';
 import { GetMyFamilyUseCase } from '../use-cases/get-my-family.use-case';
 import { JoinFamilyUseCase } from '../use-cases/join-family.use-case';
@@ -20,6 +21,10 @@ import {
   type JoinFamilyInput,
 } from '../dtos/family.dto';
 
+// Entrar/sair de família é gestão de conta — fica acessível sem assinatura
+// (um membro coberto pode querer sair; um usuário pode querer entrar numa
+// família premium justamente para recuperar acesso).
+@SkipPremium()
 @Controller('families')
 @UseGuards(JwtAuthGuard)
 export class FamiliesController {

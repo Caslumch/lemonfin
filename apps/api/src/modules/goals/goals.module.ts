@@ -8,9 +8,15 @@ import { DeleteGoalUseCase } from './use-cases/delete-goal.use-case';
 import { CategoriesModule } from '../categories/categories.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { FamiliesModule } from '../families/families.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
-  imports: [CategoriesModule, TransactionsModule, FamiliesModule],
+  imports: [
+    CategoriesModule,
+    TransactionsModule,
+    FamiliesModule,
+    BillingEnforcementModule,
+  ],
   controllers: [GoalsController],
   providers: [
     GoalsRepository,

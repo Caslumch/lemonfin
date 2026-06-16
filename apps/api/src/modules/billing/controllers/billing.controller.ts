@@ -2,12 +2,15 @@ import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
+import { SkipPremium } from '../../../common/billing/skip-premium.decorator';
 import { createCheckoutSchema } from '../dtos/billing.dto';
 import type { CreateCheckoutInput } from '../dtos/billing.dto';
 import { CreateCheckoutSessionUseCase } from '../use-cases/create-checkout-session.use-case';
 import { CreatePortalSessionUseCase } from '../use-cases/create-portal-session.use-case';
 import { GetSubscriptionStatusUseCase } from '../use-cases/get-subscription-status.use-case';
 
+// Billing precisa continuar acessível para um usuário SEM acesso poder pagar.
+@SkipPremium()
 @Controller('billing')
 @UseGuards(JwtAuthGuard)
 export class BillingController {

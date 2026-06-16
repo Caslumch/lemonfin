@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PremiumGuard } from '../../../common/billing/premium.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CreateGoalUseCase } from '../use-cases/create-goal.use-case';
@@ -25,7 +26,7 @@ import type {
 } from '../dtos/goal.dto';
 
 @Controller('goals')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PremiumGuard)
 export class GoalsController {
   constructor(
     private readonly createGoal: CreateGoalUseCase,

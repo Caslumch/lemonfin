@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PremiumGuard } from '../../../common/billing/premium.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CreateCardUseCase } from '../use-cases/create-card.use-case';
@@ -24,7 +25,7 @@ import {
 import type { CreateCardInput, UpdateCardInput } from '../dtos/card.dto';
 
 @Controller('cards')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PremiumGuard)
 export class CardsController {
   constructor(
     private readonly createCard: CreateCardUseCase,
