@@ -54,7 +54,7 @@ export function DeleteCardModal({
             <p className="text-sm text-fg-secondary">
               Tem certeza que deseja remover
               {cardName ? (
-                <> o cartão <strong>"{cardName}"</strong></>
+                <> o cartão <strong>&ldquo;{cardName}&rdquo;</strong></>
               ) : (
                 " este cartão"
               )}

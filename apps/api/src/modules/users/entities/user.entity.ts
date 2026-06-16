@@ -7,7 +7,9 @@ export class UserEntity {
   createdAt: Date;
 
   constructor(partial: Partial<UserEntity & { passwordHash?: string }>) {
-    const { passwordHash: _, ...rest } = partial as Record<string, unknown>;
+    // Remove passwordHash antes de copiar — nunca expor o hash na entidade.
+    const rest = { ...(partial as Record<string, unknown>) };
+    delete rest.passwordHash;
     Object.assign(this, rest);
   }
 }
