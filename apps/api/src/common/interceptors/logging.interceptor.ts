@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
+import * as Sentry from '@sentry/nestjs';
 import type { Request, Response } from 'express';
 
 @Injectable()
@@ -15,8 +16,15 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest<Request>();
     const { method, originalUrl } = req;
-    const userId = (req as any).user?.id;
+    const user = (req as { user?: { id?: string; email?: string } }).user;
+    const userId = user?.id;
     const now = Date.now();
+
+    // Anexa o usuário ao escopo do Sentry para correlacionar erros (no-op sem
+    // DSN). id + email — decisão de produto (facilita identificar afetados).
+    if (userId) {
+      Sentry.setUser({ id: userId, email: user?.email });
+    }
 
     const userInfo = userId ? ` [user:${userId}]` : '';
     this.logger.log(`→ ${method} ${originalUrl}${userInfo}`);
