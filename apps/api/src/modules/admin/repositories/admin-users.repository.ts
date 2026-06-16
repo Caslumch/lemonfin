@@ -12,6 +12,7 @@ export interface AdminUserRow {
   currentPeriodEnd: Date | null;
   isSuperAdmin: boolean;
   emailVerifiedAt: Date | null;
+  lastSeenAt: Date | null;
   createdAt: Date;
 }
 
@@ -54,6 +55,7 @@ export class AdminUsersRepository {
           currentPeriodEnd: true,
           isSuperAdmin: true,
           emailVerifiedAt: true,
+          lastSeenAt: true,
           createdAt: true,
         },
       }),
