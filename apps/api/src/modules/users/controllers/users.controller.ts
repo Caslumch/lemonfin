@@ -60,6 +60,7 @@ export class UsersController {
       emailVerifiedAt: found.emailVerifiedAt,
       trialEndsAt: found.trialEndsAt,
       twoFactorEnabled: found.twoFactorEnabled,
+      isSuperAdmin: found.isSuperAdmin,
       subscriptionStatus: found.subscriptionStatus,
       currentPeriodEnd: found.currentPeriodEnd,
       // Acesso efetivo já derivado (self). A cobertura por família entra num

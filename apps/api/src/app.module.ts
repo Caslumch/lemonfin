@@ -20,6 +20,7 @@ import { ReservesModule } from './modules/reserves/reserves.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { HealthController } from './health.controller';
 import { KeepAliveService } from './keep-alive.service';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -55,6 +56,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     RecurringModule,
     BudgetsModule,
     BillingModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [

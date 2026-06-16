@@ -4,6 +4,7 @@ import { useAtom } from "jotai";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   Home,
   ArrowUpDown,
@@ -20,10 +21,12 @@ import {
   X,
   Moon,
   Sun,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { LemonLogo } from "@/components/ui/lemon-logo";
+import { useApi } from "@/hooks/use-api";
 import { sidebarCollapsedAtom, sidebarMobileOpenAtom } from "@/store/sidebar";
 import { themeAtom } from "@/store/theme";
 
@@ -45,6 +48,24 @@ export function Sidebar() {
   const [theme, setTheme] = useAtom(themeAtom);
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { fetchApi, token } = useApi();
+
+  // Link "Admin" só aparece para super-admin (flag do /users/me).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    fetchApi<{ isSuperAdmin?: boolean }>("/users/me")
+      .then((p) => active && setIsAdmin(!!p.isSuperAdmin))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [fetchApi, token]);
+
+  const items = isAdmin
+    ? [...navItems, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    : navItems;
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -72,7 +93,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-1">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
