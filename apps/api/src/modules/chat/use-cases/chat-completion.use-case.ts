@@ -7,8 +7,10 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from 'openai/resources/chat/completions';
+import { AiFeature } from '@prisma/client';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
+import { AiUsageService } from '../../ai-usage/ai-usage.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
 
 // O contexto financeiro (resumo do mês, breakdown, evolução, últimas
@@ -125,6 +127,7 @@ export class ChatCompletionUseCase {
     private readonly config: ConfigService,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly familyContext: FamilyContextService,
+    private readonly aiUsage: AiUsageService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {
     this.openai = new OpenAI({
@@ -170,6 +173,10 @@ export class ChatCompletionUseCase {
     // Loop to support chained tool calls. Each turn streams text to the user;
     // if the model requests tool calls, we execute them, append the results,
     // and loop again until the model produces a final answer with no tool calls.
+    // Acumula tokens de todos os turnos (cada turno é uma chamada à OpenAI).
+    let promptTokens = 0;
+    let completionTokens = 0;
+
     const MAX_TURNS = 5;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const stream = await this.openai.chat.completions.create({
@@ -177,6 +184,9 @@ export class ChatCompletionUseCase {
         messages,
         tools,
         stream: true,
+        // No streaming, usage só vem se pedirmos explicitamente — chega num
+        // chunk final com choices vazio.
+        stream_options: { include_usage: true },
       });
 
       let content = '';
@@ -187,6 +197,11 @@ export class ChatCompletionUseCase {
       }[] = [];
 
       for await (const chunk of stream) {
+        // O chunk final (com include_usage) traz usage e choices vazio.
+        if (chunk.usage) {
+          promptTokens += chunk.usage.prompt_tokens ?? 0;
+          completionTokens += chunk.usage.completion_tokens ?? 0;
+        }
         const delta = chunk.choices[0]?.delta;
         if (!delta) continue;
 
@@ -250,6 +265,15 @@ export class ChatCompletionUseCase {
     }
 
     this.logger.log('Stream completed');
+
+    // Registra o consumo acumulado de IA (falha graciosa).
+    await this.aiUsage.record({
+      userId,
+      feature: AiFeature.CHAT,
+      model: MODEL,
+      promptTokens,
+      completionTokens,
+    });
   }
 
   private async executeFunctionCall(

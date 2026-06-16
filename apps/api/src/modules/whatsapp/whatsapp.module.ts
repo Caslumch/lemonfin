@@ -16,6 +16,7 @@ import { GoalsModule } from '../goals/goals.module';
 import { ChatModule } from '../chat/chat.module';
 import { BillingModule } from '../billing/billing.module';
 import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
+import { AiUsageModule } from '../ai-usage/ai-usage.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     ChatModule,
     BillingModule,
     BillingEnforcementModule,
+    AiUsageModule,
   ],
   controllers: [WebhookController],
   providers: [
