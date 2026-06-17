@@ -21,6 +21,39 @@ const txInclude = {
   user: { select: { id: true, name: true } },
 } as const;
 
+// Fuso do usuário (Brasil, UTC-3). As datas de filtro chegam como "YYYY-MM-DD"
+// (sem hora). Interpretá-las direto com `new Date("YYYY-MM-DD")` cai em meia-
+// noite UTC, o que (a) joga o fim do dia para o COMEÇO do dia — excluindo todas
+// as transações daquele dia — e (b) desalinha o "dia" do usuário do dia UTC.
+// Por isso ancoramos o início no começo do dia e o fim no FIM do dia, ambos em
+// horário de Brasília. Datas com hora explícita (contendo "T") passam direto.
+const BR_OFFSET = '-03:00';
+
+function startOfDayBR(date: string): Date {
+  return new Date(
+    date.includes('T') ? date : `${date}T00:00:00.000${BR_OFFSET}`,
+  );
+}
+
+function endOfDayBR(date: string): Date {
+  return new Date(
+    date.includes('T') ? date : `${date}T23:59:59.999${BR_OFFSET}`,
+  );
+}
+
+// Monta o filtro Prisma de intervalo de datas (gte/lte) já com a correção de
+// fuso/fim-de-dia. Retorna undefined quando não há nenhuma ponta (sem filtro).
+function dateRangeFilter(
+  startDate?: string,
+  endDate?: string,
+): Prisma.DateTimeFilter | undefined {
+  if (!startDate && !endDate) return undefined;
+  const range: Prisma.DateTimeFilter = {};
+  if (startDate) range.gte = startOfDayBR(startDate);
+  if (endDate) range.lte = endOfDayBR(endDate);
+  return range;
+}
+
 @Injectable()
 export class TransactionsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -110,11 +143,8 @@ export class TransactionsRepository {
         contains: options.search,
         mode: 'insensitive',
       };
-    if (options.startDate || options.endDate) {
-      where.date = {};
-      if (options.startDate) where.date.gte = new Date(options.startDate);
-      if (options.endDate) where.date.lte = new Date(options.endDate);
-    }
+    const dateRange = dateRangeFilter(options.startDate, options.endDate);
+    if (dateRange) where.date = dateRange;
 
     const orderBy = { [options.orderBy || 'date']: options.order || 'desc' };
 
@@ -152,8 +182,7 @@ export class TransactionsRepository {
     if (data.date !== undefined) updateData.date = new Date(data.date);
     if (data.categoryId !== undefined)
       updateData.category = { connect: { id: data.categoryId } };
-    if (data.cardId === null)
-      updateData.card = { disconnect: true };
+    if (data.cardId === null) updateData.card = { disconnect: true };
     else if (data.cardId !== undefined)
       updateData.card = { connect: { id: data.cardId } };
 
@@ -229,7 +258,10 @@ export class TransactionsRepository {
       select: { amount: true, type: true, date: true, cardId: true },
     });
 
-    const map = new Map<string, { income: number; expense: number; cardExpense: number }>();
+    const map = new Map<
+      string,
+      { income: number; expense: number; cardExpense: number }
+    >();
 
     // Initialize all months
     for (let i = 0; i < months; i++) {
@@ -265,13 +297,17 @@ export class TransactionsRepository {
       }));
   }
 
-  async getCategoryBreakdown(userIds: string[], startDate?: string, endDate?: string) {
-    const where: Prisma.TransactionWhereInput = { userId: { in: userIds }, type: 'EXPENSE' };
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
-    }
+  async getCategoryBreakdown(
+    userIds: string[],
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const where: Prisma.TransactionWhereInput = {
+      userId: { in: userIds },
+      type: 'EXPENSE',
+    };
+    const dateRange = dateRangeFilter(startDate, endDate);
+    if (dateRange) where.date = dateRange;
 
     const result = await this.prisma.transaction.groupBy({
       by: ['categoryId'],
@@ -319,29 +355,28 @@ export class TransactionsRepository {
 
   async getSummary(userIds: string[], startDate?: string, endDate?: string) {
     const where: Prisma.TransactionWhereInput = { userId: { in: userIds } };
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
-    }
+    const dateRange = dateRangeFilter(startDate, endDate);
+    if (dateRange) where.date = dateRange;
 
-    const [income, expenseNoCard, expenseCard] = await this.prisma.$transaction([
-      this.prisma.transaction.aggregate({
-        where: { ...where, type: 'INCOME' },
-        _sum: { amount: true },
-        _count: true,
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...where, type: 'EXPENSE', cardId: null },
-        _sum: { amount: true },
-        _count: true,
-      }),
-      this.prisma.transaction.aggregate({
-        where: { ...where, type: 'EXPENSE', cardId: { not: null } },
-        _sum: { amount: true },
-        _count: true,
-      }),
-    ]);
+    const [income, expenseNoCard, expenseCard] = await this.prisma.$transaction(
+      [
+        this.prisma.transaction.aggregate({
+          where: { ...where, type: 'INCOME' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.prisma.transaction.aggregate({
+          where: { ...where, type: 'EXPENSE', cardId: null },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.prisma.transaction.aggregate({
+          where: { ...where, type: 'EXPENSE', cardId: { not: null } },
+          _sum: { amount: true },
+          _count: true,
+        }),
+      ],
+    );
 
     const totalIncome = income._sum.amount?.toNumber() ?? 0;
     const totalExpenseNoCard = expenseNoCard._sum.amount?.toNumber() ?? 0;
@@ -371,11 +406,8 @@ export class TransactionsRepository {
       cardId,
       type: 'EXPENSE',
     };
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
-    }
+    const dateRange = dateRangeFilter(startDate, endDate);
+    if (dateRange) where.date = dateRange;
 
     const agg = await this.prisma.transaction.aggregate({
       where,
