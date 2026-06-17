@@ -122,11 +122,12 @@ export class WhatsappService {
         return;
       }
       this.logger.log(`Áudio transcrito de ${from}: ${text}`);
-      // Ecoa o que foi ouvido — voz erra mais que digitação, então confirmar a
-      // transcrição evita registrar algo errado silenciosamente.
+      // Aviso natural do que foi entendido (voz erra mais que digitação, então
+      // ainda mostramos a transcrição) — mas com tom humano e variado, não o
+      // robótico "Ouvi: X". A resposta final (registro/consulta) vem em seguida.
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `🎤 Ouvi: _${text}_`,
+        content: this.buildAudioAck(text),
       });
       content = text;
     }
@@ -2047,5 +2048,20 @@ export class WhatsappService {
 
   private normalizePhone(phone: string): string {
     return phone.replace(/\D/g, '');
+  }
+
+  // Aviso humano e variado do que foi entendido a partir do áudio. Mostra a
+  // transcrição (voz erra mais que texto, então vale confirmar), mas com tom
+  // de conversa — alterna entre algumas aberturas pra não soar robótico.
+  private buildAudioAck(text: string): string {
+    const openers = [
+      'Boa, entendi assim',
+      'Beleza, captei',
+      'Show, é isso',
+      'Certo, ouvi aqui',
+      'Perfeito, peguei',
+    ];
+    const opener = openers[Math.floor(Math.random() * openers.length)];
+    return `🎤 ${opener}: _${text}_`;
   }
 }
