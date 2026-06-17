@@ -314,6 +314,7 @@ model Reserve {
 enum AiFeature {
   CHAT
   WHATSAPP_PARSER
+  WHATSAPP_TRANSCRIPTION
 }
 
 model AiUsage {

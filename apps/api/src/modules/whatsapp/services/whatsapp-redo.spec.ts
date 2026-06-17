@@ -52,6 +52,7 @@ function buildService(overrides: {
     cardsRepository as never,
     familyContext as never,
     {} as never, // parser
+    {} as never, // transcription
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring
@@ -60,6 +61,8 @@ function buildService(overrides: {
     {} as never, // listGoals
     {} as never, // chat
     conversation as never,
+    {} as never, // premiumAccess
+    {} as never, // billingConfig
   );
 
   return {
