@@ -10,6 +10,7 @@ import {
   ParseResult,
   BatchItem,
 } from './message-parser.service';
+import { TranscriptionService } from './transcription.service';
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
@@ -30,6 +31,9 @@ interface IncomingMessage {
   from: string;
   content: string;
   sessionId: string;
+  // Presente quando a mensagem é um áudio do WhatsApp (base64 + mimetype vindos
+  // do WMode). Transcrito para texto antes do parsing.
+  audio?: { data: string; mimetype?: string };
 }
 
 @Injectable()
@@ -43,6 +47,7 @@ export class WhatsappService {
     private readonly cardsRepository: CardsRepository,
     private readonly familyContext: FamilyContextService,
     private readonly messageParser: MessageParserService,
+    private readonly transcription: TranscriptionService,
     private readonly wmodeClient: WmodeClientService,
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
@@ -55,8 +60,8 @@ export class WhatsappService {
     private readonly billingConfig: BillingConfigService,
   ) {}
 
-  async handleIncomingMessage({ from, content }: IncomingMessage) {
-    this.logger.log(`Message from ${from}: ${content}`);
+  async handleIncomingMessage({ from, content, audio }: IncomingMessage) {
+    this.logger.log(`Message from ${from}: ${audio ? '[áudio]' : content}`);
 
     const phone = this.normalizePhone(from);
     const phoneWithout55 = phone.startsWith('55') ? phone.slice(2) : phone;
@@ -96,6 +101,34 @@ export class WhatsappService {
         );
         return;
       }
+    }
+
+    // Áudio: transcreve para texto (Whisper) e segue o fluxo normal a partir
+    // daqui — todo o resto opera sobre `content` como se fosse texto digitado.
+    if (audio) {
+      const buffer = Buffer.from(audio.data, 'base64');
+      const text = await this.transcription.transcribe({
+        buffer,
+        mimetype: audio.mimetype,
+        userId: user.id,
+      });
+      if (!text) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Não consegui entender o áudio 😕. Pode tentar de novo falando ' +
+            'mais devagar, ou mandar por texto? Ex: _"Gastei 50 no mercado"_.',
+        });
+        return;
+      }
+      this.logger.log(`Áudio transcrito de ${from}: ${text}`);
+      // Ecoa o que foi ouvido — voz erra mais que digitação, então confirmar a
+      // transcrição evita registrar algo errado silenciosamente.
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `🎤 Ouvi: _${text}_`,
+      });
+      content = text;
     }
 
     const phoneKey = this.normalizePhone(from);

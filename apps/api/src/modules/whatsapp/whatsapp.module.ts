@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { WebhookController } from './controllers/webhook.controller';
 import { WmodeClientService } from './services/wmode-client.service';
 import { MessageParserService } from './services/message-parser.service';
+import { TranscriptionService } from './services/transcription.service';
 import { WhatsappService } from './services/whatsapp.service';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { WebhookSignatureGuard } from './guards/webhook-signature.guard';
@@ -37,6 +38,7 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
   providers: [
     WmodeClientService,
     MessageParserService,
+    TranscriptionService,
     WhatsappService,
     ConversationRepository,
     WebhookSignatureGuard,

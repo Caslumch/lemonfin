@@ -10,13 +10,30 @@ import { Throttle } from '@nestjs/throttler';
 import { WebhookSignatureGuard } from '../guards/webhook-signature.guard';
 import { WhatsappService } from '../services/whatsapp.service';
 
+// Mídia embutida no webhook da WMode (base64). Para áudio, `data` traz o buffer
+// em base64; ausente quando a mídia excedeu o limite inline (`truncated: true`).
+interface WebhookMedia {
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+  mimetype?: string;
+  seconds?: number;
+  ptt?: boolean;
+  fileName?: string;
+  bytes?: number;
+  data?: string;
+  truncated?: boolean;
+}
+
 interface WebhookPayload {
   event: string;
   payload: {
     sessionId: string;
     messageId: string;
     from: string;
+    // Para áudio/mídia, `content` vem como placeholder ("[áudio]"); o conteúdo
+    // real está em `media`.
     content: string;
+    type?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+    media?: WebhookMedia;
     timestamp: number;
   };
   timestamp: string;
@@ -41,9 +58,18 @@ export class WebhookController {
       return { received: true, processed: false };
     }
 
-    const { from, content, sessionId, messageId } = body.payload;
+    const { from, content, sessionId, messageId, type, media } = body.payload;
 
-    if (!from || !content) {
+    // Quando é áudio com mídia embutida, monta o payload de áudio (base64 +
+    // mimetype) para transcrição. `data` definido aqui implica áudio válido.
+    const audio =
+      type === 'AUDIO' && media?.data
+        ? { data: media.data, mimetype: media.mimetype }
+        : undefined;
+
+    // Texto exige `content`; áudio exige a mídia (o `content` vem só como
+    // placeholder "[áudio]"). Sem nenhum dos dois, não há o que processar.
+    if (!from || (!content && !audio)) {
       return { received: true, processed: false };
     }
 
@@ -61,7 +87,7 @@ export class WebhookController {
 
     // Process async to respond to webhook quickly
     this.whatsappService
-      .handleIncomingMessage({ from, content, sessionId })
+      .handleIncomingMessage({ from, content, sessionId, audio })
       .catch((error) => {
         this.logger.error(`Error processing message: ${error}`);
       });
