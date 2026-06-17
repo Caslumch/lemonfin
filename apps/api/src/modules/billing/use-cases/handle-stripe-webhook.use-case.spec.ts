@@ -36,6 +36,7 @@ describe('HandleStripeWebhookUseCase', () => {
     stripeCustomerId: 'cus_1',
     email: 'u1@example.com',
     name: 'Fulano de Tal',
+    subscriptionStatus: SubscriptionStatus.TRIALING,
   };
 
   beforeEach(() => {
@@ -60,13 +61,24 @@ describe('HandleStripeWebhookUseCase', () => {
     );
   });
 
-  it('sincroniza ACTIVE em customer.subscription.updated', async () => {
+  it('sincroniza ACTIVE em customer.subscription.updated e zera o trial', async () => {
     await useCase.execute(event('customer.subscription.updated', sub()));
     expect(billing.updateSubscription).toHaveBeenCalledWith('u1', {
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       stripeSubscriptionId: 'sub_1',
       currentPeriodEnd: new Date(1_750_000_000 * 1000),
+      trialEndsAt: null,
     });
+  });
+
+  it('NÃO mexe no trialEndsAt se o usuário já estava ACTIVE', async () => {
+    const active = { ...user, subscriptionStatus: SubscriptionStatus.ACTIVE };
+    billing.findByStripeCustomerId.mockResolvedValue(active);
+    await useCase.execute(event('customer.subscription.updated', sub()));
+    expect(billing.updateSubscription).toHaveBeenCalledWith(
+      'u1',
+      expect.not.objectContaining({ trialEndsAt: expect.anything() }),
+    );
   });
 
   it('mapeia past_due → PAST_DUE', async () => {

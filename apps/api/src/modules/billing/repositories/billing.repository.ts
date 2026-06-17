@@ -40,6 +40,7 @@ export class BillingRepository {
       subscriptionStatus: SubscriptionStatus;
       stripeSubscriptionId?: string | null;
       currentPeriodEnd?: Date | null;
+      trialEndsAt?: Date | null;
     },
   ): Promise<void> {
     await this.prisma.user.update({ where: { id: userId }, data });

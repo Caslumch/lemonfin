@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Clock, X } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
 
-interface Profile {
+interface BillingStatus {
+  subscriptionStatus: "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
   trialEndsAt: string | null;
 }
 
@@ -25,16 +26,18 @@ function daysUntil(date: Date, now: Date): number {
 export function TrialBanner() {
   const { fetchApi, token } = useApi();
   const [endsAt, setEndsAt] = useState<Date | null>(null);
+  const [isTrialing, setIsTrialing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (!token) return;
     let active = true;
-    fetchApi<Profile>("/users/me")
-      .then((p) => {
+    fetchApi<BillingStatus>("/billing/status")
+      .then((s) => {
         if (!active) return;
-        setEndsAt(p.trialEndsAt ? new Date(p.trialEndsAt) : null);
+        setIsTrialing(s.subscriptionStatus === "TRIALING");
+        setEndsAt(s.trialEndsAt ? new Date(s.trialEndsAt) : null);
         setLoaded(true);
       })
       .catch(() => {
@@ -45,7 +48,10 @@ export function TrialBanner() {
     };
   }, [fetchApi, token]);
 
-  if (!loaded || !endsAt || dismissed) return null;
+  // Só faz sentido avisar do trial quem ainda está em TRIALING. Quem já
+  // assinou (ACTIVE) — ou cancelou — não deve ver o aviso, mesmo que um
+  // trialEndsAt antigo tenha sobrado no registro.
+  if (!loaded || !isTrialing || !endsAt || dismissed) return null;
 
   const days = daysUntil(endsAt, new Date());
   const expired = days <= 0;

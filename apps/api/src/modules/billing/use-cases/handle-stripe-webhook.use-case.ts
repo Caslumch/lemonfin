@@ -114,6 +114,11 @@ export class HandleStripeWebhookUseCase {
         : SubscriptionStatus.ACTIVE;
     await this.billing.updateSubscription(user.id, {
       subscriptionStatus: status,
+      // Pagamento confirmado vindo de trial: limpa o trialEndsAt órfão.
+      ...(status === SubscriptionStatus.ACTIVE &&
+      user.subscriptionStatus !== SubscriptionStatus.ACTIVE
+        ? { trialEndsAt: null }
+        : {}),
     });
     this.logger.log(`Invoice ${type} → ${status} para user ${user.id}`);
 
@@ -137,10 +142,17 @@ export class HandleStripeWebhookUseCase {
       );
       return;
     }
+    const status = this.mapStatus(subscription.status);
     await this.billing.updateSubscription(user.id, {
-      subscriptionStatus: this.mapStatus(subscription.status),
+      subscriptionStatus: status,
       stripeSubscriptionId: subscription.id,
       currentPeriodEnd: this.periodEnd(subscription),
+      // Trial virou assinatura paga: zera trialEndsAt para não deixar a data
+      // órfã (senão o banner de trial segue avisando mesmo com plano ACTIVE).
+      ...(status === SubscriptionStatus.ACTIVE &&
+      user.subscriptionStatus !== SubscriptionStatus.ACTIVE
+        ? { trialEndsAt: null }
+        : {}),
     });
     this.logger.log(
       `Subscription ${subscription.id} → ${subscription.status} para user ${user.id}`,
