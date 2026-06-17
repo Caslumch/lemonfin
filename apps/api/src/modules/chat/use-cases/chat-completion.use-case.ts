@@ -38,9 +38,10 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 
 ## Funcoes disponiveis:
 - Voce tem acesso a funcoes para consultar transacoes, resumos e gastos por categoria em qualquer periodo
-- Quando o usuario mencionar periodos como "hoje", "ontem", "semana passada", "mes passado", "janeiro", etc., use as funcoes para buscar os dados do periodo especifico
-- Use a data de hoje como referencia: ela sera informada no contexto
-- Sempre chame as funcoes quando o usuario perguntar sobre periodos especificos que nao estao no contexto ja fornecido`;
+- O "Contexto financeiro atual" abaixo cobre APENAS o mes corrente inteiro. Ele NAO serve para responder sobre um dia, uma semana ou qualquer recorte mais especifico — nesses casos os numeros do mes estao errados para a pergunta.
+- Por isso, quando o usuario pedir QUALQUER recorte que nao seja "o mes inteiro" — incluindo "hoje", "ontem", "essa semana", "semana passada", "ontem", uma data, um intervalo, um mes diferente do atual — voce DEVE chamar a funcao apropriada (getSummaryByPeriod / queryTransactions / getCategoryBreakdownByPeriod) com as datas certas. NUNCA responda esses recortes com os numeros do mes do contexto, nem derive o dia a partir do total do mes.
+- "resumo do dia" / "como foi meu dia" / "gastei com o que hoje" => use as funcoes com startDate=endDate=hoje. Para "hoje", startDate e endDate sao a data de hoje informada abaixo.
+- So responda direto do contexto (sem funcao) quando a pergunta for claramente sobre o mes inteiro corrente ou um panorama geral.`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -155,7 +156,11 @@ export class ChatCompletionUseCase {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const context = await this.getFinancialContext(userIds);
 
-    const today = new Date().toISOString().split('T')[0];
+    // "Hoje" no fuso do usuario (Brasil) — toISOString() daria a data em UTC,
+    // que vira o dia seguinte a partir das 21h locais. en-CA formata YYYY-MM-DD.
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    });
     const nameLine = userName ? `\nNome do usuario: ${userName}` : '';
     const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}${nameLine}\n\n## Contexto financeiro atual do usuario:\n${context}`;
 
