@@ -122,14 +122,12 @@ export class WhatsappService {
         return;
       }
       this.logger.log(`Áudio transcrito de ${from}: ${text}`);
-      // Ecoa o que foi ouvido — voz erra mais que digitação, então confirmar a
-      // transcrição evita registrar algo errado silenciosamente.
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: `🎤 Ouvi: _${text}_`,
-      });
       content = text;
     }
+    // Quando a mensagem veio por áudio, mandamos um aviso natural do que foi
+    // entendido ANTES da resposta final — mas só depois do parse, para a frase
+    // refletir a ação ("vou registrar...") em vez de ecoar a transcrição crua.
+    const wasAudio = !!audio;
 
     const phoneKey = this.normalizePhone(from);
 
@@ -170,6 +168,14 @@ export class WhatsappService {
     await this.conversation.appendHistory(phoneKey, [
       { role: 'user', text: content },
     ]);
+
+    // Áudio: aviso natural do que foi entendido, antes da resposta final.
+    if (wasAudio) {
+      const ack = this.buildAudioAck(result);
+      if (ack) {
+        await this.wmodeClient.sendMessage({ to: from, content: ack });
+      }
+    }
 
     switch (result.intent) {
       case 'transaction':
@@ -2047,5 +2053,58 @@ export class WhatsappService {
 
   private normalizePhone(phone: string): string {
     return phone.replace(/\D/g, '');
+  }
+
+  // Aviso humano do que foi entendido a partir de um áudio, mandado ANTES da
+  // resposta final. Descreve a AÇÃO (não ecoa a transcrição crua) e varia a
+  // abertura pra não soar robótico. Retorna null quando não vale anunciar
+  // (mensagem não entendida) — nesse caso a própria resposta final basta.
+  private buildAudioAck(result: ParseResult): string | null {
+    const open = ['Beleza', 'Boa', 'Show', 'Certo', 'Perfeito'][
+      Math.floor(Math.random() * 5)
+    ];
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const verb = (t: 'INCOME' | 'EXPENSE') =>
+      t === 'INCOME' ? 'recebeu' : 'gastou';
+
+    switch (result.intent) {
+      case 'transaction': {
+        const { amount, type, description } = result.data;
+        const what = description ? ` com ${description}` : '';
+        return `🎤 ${open}, você ${verb(type)} ${fmt(amount)}${what}, vou registrar 👍`;
+      }
+      case 'installment': {
+        const { amount, installments, description } = result.data;
+        const what = description ? ` com ${description}` : '';
+        return `🎤 ${open}, ${fmt(amount)}${what} em ${installments}x, vou parcelar 👍`;
+      }
+      case 'recurring': {
+        const { amount, type, description } = result.data;
+        const what = description ? ` de ${description}` : '';
+        return `🎤 ${open}, vou anotar a recorrência${what} de ${fmt(amount)} (${verb(type)}) 👍`;
+      }
+      case 'batch':
+        return `🎤 ${open}, vou registrar esses lançamentos 👍`;
+      case 'reserve_create':
+        return `🎤 ${open}, vou criar essa reserva pra você 👍`;
+      case 'reserve_contribution':
+        return `🎤 ${open}, vou guardar ${fmt(result.amount)} 👍`;
+      case 'goal_create':
+        return `🎤 ${open}, vou definir essa meta 👍`;
+      case 'cancel':
+        return `🎤 ${open}, vou cancelar o último lançamento 👍`;
+      case 'correction':
+      case 'correction_card':
+      case 'redo':
+        return `🎤 ${open}, já ajusto isso pra você 👍`;
+      case 'query':
+        return `🎤 ${open}, deixa eu ver isso aqui 👀`;
+      case 'advice':
+        return `🎤 ${open}, deixa eu analisar 👀`;
+      default:
+        // unknown: a própria resposta de erro/orientação já basta.
+        return null;
+    }
   }
 }
