@@ -12,6 +12,8 @@ export interface SubscriptionStatusView {
   accessSource: 'self' | 'family' | 'none';
   // Tem customer no Stripe → pode abrir o portal.
   canManage: boolean;
+  // Nome do dono quando o acesso vem da família (accessSource === 'family').
+  familyOwnerName: string | null;
 }
 
 @Injectable()
@@ -27,6 +29,7 @@ export class GetSubscriptionStatusUseCase {
       hasPremium: a.hasPremium,
       accessSource: a.source,
       canManage: a.canManage,
+      familyOwnerName: a.familyOwnerName,
     };
   }
 }

@@ -128,6 +128,37 @@ export class MailService {
     });
   }
 
+  // ---- Família ----
+
+  /** Boas-vindas ao novo membro que acabou de entrar numa família. */
+  async sendFamilyWelcome(
+    to: string,
+    name: string,
+    familyName: string,
+  ): Promise<boolean> {
+    const firstName = name.split(' ')[0];
+    const appUrl = this.appUrl();
+    return this.resend.send({
+      to,
+      subject: `Você entrou na família ${familyName} 🍋`,
+      text:
+        `Olá, ${firstName}!\n\n` +
+        `Você agora faz parte da família "${familyName}" no LemonFin. ` +
+        `Vocês compartilham as finanças e, se a família tem Premium, você já ` +
+        `aproveita também.\n\n` +
+        `Acesse: ${appUrl}`,
+      html: this.messageTemplate({
+        title: 'Bem-vindo à família! 🍋',
+        greeting: `Olá, ${firstName}!`,
+        paragraphs: [
+          `Você agora faz parte da família <strong>${familyName}</strong> no LemonFin.`,
+          'Vocês compartilham as finanças — transações, cartões e metas ficam visíveis para a família. Se ela tem Premium ativo, você já aproveita tudo também.',
+        ],
+        cta: { label: 'Abrir o LemonFin', url: appUrl },
+      }),
+    });
+  }
+
   private appUrl(): string {
     // Reusa FRONTEND_URL (mesma var usada pelo billing/CORS).
     return process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
