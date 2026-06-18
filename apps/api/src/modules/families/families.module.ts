@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { FamiliesController } from './controllers/families.controller';
 import { FamiliesRepository } from './repositories/families.repository';
 import { FamilyContextService } from './services/family-context.service';
@@ -11,7 +11,10 @@ import { MailModule } from '../mail/mail.module';
 import { WmodeModule } from '../whatsapp/wmode.module';
 
 @Module({
-  imports: [UsersModule, MailModule, WmodeModule],
+  // forwardRef no UsersModule: há um ciclo indireto (Users → Recurring/Categories
+  // → Families → Users). Sem o forwardRef, UsersModule resolve como `undefined`
+  // ao carregar o FamiliesModule. MailModule/WmodeModule são folhas, sem ciclo.
+  imports: [forwardRef(() => UsersModule), MailModule, WmodeModule],
   controllers: [FamiliesController],
   providers: [
     FamiliesRepository,
