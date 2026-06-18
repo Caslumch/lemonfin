@@ -68,11 +68,17 @@ export class PremiumAccessService {
       familyOwnerName: null,
     };
 
-    if (hasPremiumAccess(user, now)) {
+    // Assinatura PRÓPRIA paga (ACTIVE) tem prioridade — quem paga sozinho é
+    // sempre 'self', nunca aparece como coberto pela família.
+    if (user.subscriptionStatus === 'ACTIVE') {
       return { ...base, hasPremium: true, source: 'self' };
     }
 
-    // Sem acesso próprio: tenta a cobertura pelo dono da família.
+    // Cobertura pela família vem ANTES do trial próprio: se o dono tem acesso,
+    // o membro herda (source 'family') mesmo estando no próprio trial — assim a
+    // UI mostra "Premium herdado de X" em vez de oferecer planos a quem já está
+    // coberto. Decisão: dono pagante cobre toda a família, qualquer que seja o
+    // estado individual do membro.
     const family = await this.families.findByUserId(userId);
     if (family && family.ownerId !== userId) {
       const owner = await this.billing.findById(family.ownerId);
@@ -88,6 +94,12 @@ export class PremiumAccessService {
           familyOwnerName: ownerName,
         };
       }
+    }
+
+    // Sem assinatura paga própria e sem cobertura da família: o trial próprio
+    // (se válido) ainda dá acesso 'self'.
+    if (hasPremiumAccess(user, now)) {
+      return { ...base, hasPremium: true, source: 'self' };
     }
 
     return { ...base, hasPremium: false, source: 'none' };
