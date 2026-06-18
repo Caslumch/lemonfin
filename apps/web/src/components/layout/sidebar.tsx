@@ -31,7 +31,7 @@ import { sidebarCollapsedAtom, sidebarMobileOpenAtom } from "@/store/sidebar";
 import { themeAtom } from "@/store/theme";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/", label: "Início", icon: Home },
   { href: "/transacoes", label: "Transações", icon: ArrowUpDown },
   { href: "/categorias", label: "Categorias", icon: Layers },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
