@@ -468,9 +468,9 @@ export default function ConfiguracoesPage() {
                 </span>
               </div>
               <p className="text-sm text-fg-secondary">
-                Sua família tem o Premium ativo, então você já aproveita o
-                LemonFin completo. A assinatura é gerenciada pelo dono da
-                família.
+                {billing.familyOwnerName
+                  ? `Você herdou o Premium da assinatura de ${billing.familyOwnerName}, dono da sua família — então já aproveita o LemonFin completo. A assinatura é gerenciada por ${billing.familyOwnerName}.`
+                  : "Sua família tem o Premium ativo, então você já aproveita o LemonFin completo. A assinatura é gerenciada pelo dono da família."}
               </p>
             </div>
           ) : billing?.subscriptionStatus === "ACTIVE" ? (

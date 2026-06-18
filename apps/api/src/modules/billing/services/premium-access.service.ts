@@ -16,6 +16,9 @@ export interface EffectiveAccess {
   trialEndsAt: Date | null;
   // Tem customer no Stripe → pode abrir o portal.
   canManage: boolean;
+  // Nome do dono da família, presente só quando source === 'family' — para a UI
+  // dizer "Premium herdado de <nome>".
+  familyOwnerName: string | null;
 }
 
 /**
@@ -53,6 +56,7 @@ export class PremiumAccessService {
         currentPeriodEnd: null,
         trialEndsAt: null,
         canManage: false,
+        familyOwnerName: null,
       };
     }
 
@@ -61,6 +65,7 @@ export class PremiumAccessService {
       currentPeriodEnd: user.currentPeriodEnd,
       trialEndsAt: user.trialEndsAt,
       canManage: Boolean(user.stripeCustomerId),
+      familyOwnerName: null,
     };
 
     if (hasPremiumAccess(user, now)) {
@@ -72,7 +77,16 @@ export class PremiumAccessService {
     if (family && family.ownerId !== userId) {
       const owner = await this.billing.findById(family.ownerId);
       if (owner && hasPremiumAccess(owner, now)) {
-        return { ...base, hasPremium: true, source: 'family' };
+        // Nome do dono vem da própria família (members já inclui user.name).
+        const ownerName =
+          family.members.find((m) => m.user.id === family.ownerId)?.user.name ??
+          null;
+        return {
+          ...base,
+          hasPremium: true,
+          source: 'family',
+          familyOwnerName: ownerName,
+        };
       }
     }
 

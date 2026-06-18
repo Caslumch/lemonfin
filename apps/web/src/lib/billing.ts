@@ -20,6 +20,8 @@ export interface BillingStatus {
   accessSource: "self" | "family" | "none";
   // Tem customer no Stripe → pode abrir o portal de gerenciamento.
   canManage: boolean;
+  // Nome do dono quando o acesso vem da família (accessSource === 'family').
+  familyOwnerName: string | null;
 }
 
 export const PRICE_LABEL: Record<BillingCycle, string> = {

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { WebhookController } from './controllers/webhook.controller';
-import { WmodeClientService } from './services/wmode-client.service';
+import { WmodeModule } from './wmode.module';
 import { MessageParserService } from './services/message-parser.service';
 import { TranscriptionService } from './services/transcription.service';
 import { WhatsappService } from './services/whatsapp.service';
@@ -33,16 +33,16 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
     BillingModule,
     BillingEnforcementModule,
     AiUsageModule,
+    WmodeModule,
   ],
   controllers: [WebhookController],
   providers: [
-    WmodeClientService,
     MessageParserService,
     TranscriptionService,
     WhatsappService,
     ConversationRepository,
     WebhookSignatureGuard,
   ],
-  exports: [WmodeClientService],
+  exports: [WmodeModule],
 })
 export class WhatsappModule {}

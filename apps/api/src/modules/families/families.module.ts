@@ -6,8 +6,12 @@ import { CreateFamilyUseCase } from './use-cases/create-family.use-case';
 import { GetMyFamilyUseCase } from './use-cases/get-my-family.use-case';
 import { JoinFamilyUseCase } from './use-cases/join-family.use-case';
 import { LeaveFamilyUseCase } from './use-cases/leave-family.use-case';
+import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
+import { WmodeModule } from '../whatsapp/wmode.module';
 
 @Module({
+  imports: [UsersModule, MailModule, WmodeModule],
   controllers: [FamiliesController],
   providers: [
     FamiliesRepository,
