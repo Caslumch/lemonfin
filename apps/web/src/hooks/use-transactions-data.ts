@@ -41,7 +41,9 @@ export function useTransactionsList(filters: TransactionFilters) {
   return useQuery<PaginatedResponse<Transaction>>({
     queryKey: queryKeys.transactions(filters),
     enabled: Boolean(token),
-    refetchInterval: 30_000,
+    // 60s (alinhado ao dashboard): transação via WhatsApp não precisa aparecer
+    // na lista em 30s. `refetchOnWindowFocus` cobre o caso de voltar à aba.
+    refetchInterval: 60_000,
     queryFn: () =>
       fetchApi<PaginatedResponse<Transaction>>(
         `/transactions?${buildListParams(filters)}`,
@@ -56,7 +58,7 @@ export function useTransactionsSummary(range: { start: string; end: string }) {
   return useQuery<TransactionSummary>({
     queryKey: queryKeys.transactionsSummary(range),
     enabled: Boolean(token),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     queryFn: () => {
       const qs = new URLSearchParams({
         startDate: range.start,
