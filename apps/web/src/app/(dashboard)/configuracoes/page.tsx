@@ -510,6 +510,22 @@ export default function ConfiguracoesPage() {
           ) : (
             /* Trial, expirado ou cancelado → oferecer planos */
             <div className="space-y-5">
+              {billing?.subscriptionStatus === "TRIALING" &&
+                billing.trialEndsAt && (
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-lima/15 text-lima">
+                      <Sparkles size={14} />
+                      Trial ativo
+                    </span>
+                    <p className="text-sm text-fg-secondary">
+                      Você está no período de teste, que vai até{" "}
+                      <span className="font-medium text-fg">
+                        {formatDate(billing.trialEndsAt)}
+                      </span>
+                      . Assine para continuar com o Premium depois disso.
+                    </p>
+                  </div>
+                )}
               {billing?.subscriptionStatus === "PAST_DUE" && (
                 <p className="text-sm text-danger">
                   Houve um problema com seu pagamento. Atualize sua forma de
