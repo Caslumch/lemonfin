@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
@@ -12,7 +12,9 @@ import { TransactionList } from "@/components/transactions/transaction-list";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { DeleteModal } from "@/components/transactions/delete-modal";
 import { FiltersBar } from "@/components/transactions/filters-bar";
+import { MemberFilter } from "@/components/filters/member-filter";
 import { useApi } from "@/hooks/use-api";
+import { useMemberFilter } from "@/hooks/use-member-filter";
 import {
   useTransactionsList,
   useTransactionsSummary,
@@ -24,8 +26,18 @@ import { logApiError } from "@/lib/log-error";
 import type { Transaction } from "@/types/transaction";
 
 export default function TransacoesPage() {
+  // useMemberFilter lê a URL (useSearchParams) — precisa de um boundary Suspense.
+  return (
+    <Suspense fallback={null}>
+      <TransacoesPageInner />
+    </Suspense>
+  );
+}
+
+function TransacoesPageInner() {
   const { fetchApi } = useApi();
   const queryClient = useQueryClient();
+  const { memberId } = useMemberFilter();
 
   // Filters
   const [type, setType] = useState("ALL");
@@ -47,6 +59,15 @@ export default function TransacoesPage() {
     }, 350);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Trocar o membro filtrado (via URL) volta para a página 1. Ajuste de state
+  // durante o render (padrão do React) — alinhado ao restante da tela, que
+  // também reseta a página fora de effects para evitar render em cascata.
+  const [prevMemberId, setPrevMemberId] = useState(memberId);
+  if (memberId !== prevMemberId) {
+    setPrevMemberId(memberId);
+    setPage(1);
+  }
 
   // Mudar tipo/categoria/mês também volta para a página 1. Fazemos isso nos
   // próprios setters (não num effect) para evitar render em cascata.
@@ -86,6 +107,7 @@ export default function TransacoesPage() {
     search: debouncedSearch,
     startDate: monthRange.start,
     endDate: monthRange.end,
+    memberId,
   };
   const listQuery = useTransactionsList(filters);
   const summaryQuery = useTransactionsSummary(monthRange);
@@ -198,17 +220,21 @@ export default function TransacoesPage() {
         <SummaryCards summary={summary} month={month} loading={summaryLoading} />
 
         {/* Filters */}
-        <FiltersBar
-          type={type}
-          onTypeChange={changeType}
-          categoryId={categoryId}
-          onCategoryChange={changeCategory}
-          month={month}
-          onMonthChange={changeMonth}
-          search={search}
-          onSearchChange={setSearch}
-          categories={categories}
-        />
+        <div className="flex flex-col gap-3">
+          <FiltersBar
+            type={type}
+            onTypeChange={changeType}
+            categoryId={categoryId}
+            onCategoryChange={changeCategory}
+            month={month}
+            onMonthChange={changeMonth}
+            search={search}
+            onSearchChange={setSearch}
+            categories={categories}
+          />
+          {/* Só renderiza algo quando o usuário está em família com 2+ membros. */}
+          <MemberFilter />
+        </div>
 
         {/* Transaction list */}
         <TransactionList

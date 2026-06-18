@@ -26,6 +26,9 @@ export const listTransactionsQuerySchema = z.object({
   search: z.string().trim().min(1).max(100).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
+  // Quando informado, restringe a listagem a um único membro da família.
+  // Validado no use-case (precisa pertencer à família do solicitante).
+  memberId: z.string().cuid().optional(),
   orderBy: z.enum(['date', 'amount', 'createdAt']).default('date'),
   order: z.enum(['asc', 'desc']).default('desc'),
 });
