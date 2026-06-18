@@ -48,7 +48,9 @@ const BRAND_THEMES: Record<string, BrandTheme> = {
   },
 };
 
-function themeFor(brand?: string | null): BrandTheme {
+// Exportado para a pilha pintar a lombada de trás com a cor real do cartão que
+// virá a seguir (mesma paleta por bandeira do cartão da frente).
+export function themeFor(brand?: string | null): BrandTheme {
   if (!brand) return BRAND_THEMES.default;
   const key = brand.trim().toLowerCase();
   return BRAND_THEMES[key] ?? BRAND_THEMES.default;
