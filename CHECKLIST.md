@@ -120,6 +120,15 @@ BILLING_ENFORCEMENT=on (ver `docs/billing-stripe.md` secao 6).
 - [x] Implementar fallback: "Nao entendi. Ex: 'Gastei 50 no mercado'"
 - [ ] Logar mensagens nao reconhecidas para analise
 
+**Mensagens de voz (audio) — PR #60/#61**
+
+- [x] WMode entrega audio no webhook (base64 + mimetype, evento message.received)
+- [x] Transcricao via OpenAI Whisper (whisper-1, pt-BR) no backend LemonFin
+- [x] Audio segue o mesmo fluxo de texto (parser, registro, confirmacao)
+- [x] Custo rastreado em AiUsage (feature WHATSAPP_TRANSCRIPTION)
+- [x] Aviso natural do que foi entendido antes da resposta final
+- [x] Fallback amigavel quando a transcricao falha/vem vazia
+
 **Backend — Modulo Transacoes**
 
 - [x] Criar modulo `transactions/` no NestJS
