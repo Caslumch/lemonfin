@@ -66,6 +66,36 @@ describe('PremiumAccessService', () => {
     expect(a.subscriptionStatus).toBe(SubscriptionStatus.CANCELED);
   });
 
+  it('membro em trial próprio herda do dono ACTIVE (family tem prioridade sobre o trial)', async () => {
+    // Caso real: membro TRIALING (acesso próprio válido) numa família cujo dono
+    // paga. A cobertura da família deve prevalecer → source 'family', com o nome
+    // do dono — senão a UI ofereceria planos a quem já está coberto.
+    const member = mkUser({
+      id: 'u1',
+      subscriptionStatus: SubscriptionStatus.TRIALING,
+      trialEndsAt: future,
+    });
+    const owner = mkUser({
+      id: 'owner',
+      name: 'Lucas',
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+    });
+    billing.findById.mockImplementation((id: string) =>
+      Promise.resolve(id === 'owner' ? owner : member),
+    );
+    families.findByUserId.mockResolvedValue({
+      ownerId: 'owner',
+      members: [
+        { user: { id: 'u1', name: 'Membro' } },
+        { user: { id: 'owner', name: 'Lucas' } },
+      ],
+    });
+
+    const a = await svc.resolve('u1', now);
+    expect(a).toMatchObject({ hasPremium: true, source: 'family' });
+    expect(a.familyOwnerName).toBe('Lucas');
+  });
+
   it('source=none quando nem o usuário nem o dono têm acesso', async () => {
     const member = mkUser({ id: 'u1' });
     const owner = mkUser({
