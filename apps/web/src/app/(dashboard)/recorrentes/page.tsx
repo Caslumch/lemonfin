@@ -44,10 +44,14 @@ function RecorrentesPageInner() {
   const { memberId } = useMemberFilter();
   const [page, setPage] = useState(1);
 
-  // Trocar o membro filtrado (via URL) volta para a página 1.
-  useEffect(() => {
+  // Trocar o membro filtrado (via URL) volta para a página 1. Ajuste de state
+  // durante o render (padrão do React) em vez de effect, para não disparar
+  // render em cascata.
+  const [prevMemberId, setPrevMemberId] = useState(memberId);
+  if (memberId !== prevMemberId) {
+    setPrevMemberId(memberId);
     setPage(1);
-  }, [memberId]);
+  }
 
   const recurringQuery = useRecurring({ page, memberId });
   const items = recurringQuery.data?.data ?? [];

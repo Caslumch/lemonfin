@@ -60,10 +60,14 @@ function TransacoesPageInner() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Trocar o membro filtrado (via URL) volta para a página 1.
-  useEffect(() => {
+  // Trocar o membro filtrado (via URL) volta para a página 1. Ajuste de state
+  // durante o render (padrão do React) — alinhado ao restante da tela, que
+  // também reseta a página fora de effects para evitar render em cascata.
+  const [prevMemberId, setPrevMemberId] = useState(memberId);
+  if (memberId !== prevMemberId) {
+    setPrevMemberId(memberId);
     setPage(1);
-  }, [memberId]);
+  }
 
   // Mudar tipo/categoria/mês também volta para a página 1. Fazemos isso nos
   // próprios setters (não num effect) para evitar render em cascata.
