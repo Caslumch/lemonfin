@@ -11,7 +11,10 @@ export class ListTransactionsUseCase {
   ) {}
 
   async execute(userId: string, query: ListTransactionsQuery) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+    const userIds = await this.familyContext.resolveScopedUserIds(
+      userId,
+      query.memberId,
+    );
     const skip = (query.page - 1) * query.perPage;
 
     const { data, total } = await this.transactionsRepository.findMany({

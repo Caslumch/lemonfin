@@ -18,6 +18,7 @@ export interface TransactionFilters {
   search: string;
   startDate: string;
   endDate: string;
+  memberId?: string;
 }
 
 function buildListParams(f: TransactionFilters) {
@@ -29,6 +30,7 @@ function buildListParams(f: TransactionFilters) {
   if (f.search) params.set("search", f.search);
   params.set("startDate", f.startDate);
   params.set("endDate", f.endDate);
+  if (f.memberId) params.set("memberId", f.memberId);
   return params.toString();
 }
 

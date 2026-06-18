@@ -31,6 +31,7 @@ export const queryKeys = {
   reserves: ["reserves"] as const,
   recurring: ["recurring"] as const,
   insights: ["insights"] as const,
+  family: ["family"] as const,
 };
 
 /**
