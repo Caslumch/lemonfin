@@ -1,38 +1,31 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { SummaryCards } from "@/components/transactions/summary-cards";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { DeleteModal } from "@/components/transactions/delete-modal";
 import { FiltersBar } from "@/components/transactions/filters-bar";
 import { useApi } from "@/hooks/use-api";
+import {
+  useTransactionsList,
+  useTransactionsSummary,
+  useCategories,
+  useCards,
+} from "@/hooks/use-transactions-data";
+import { invalidateTransactionData } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
-import type {
-  Transaction,
-  TransactionSummary,
-  Category,
-  PaginatedResponse,
-} from "@/types/transaction";
-import type { Card } from "@/types/card";
+import type { Transaction } from "@/types/transaction";
 
 export default function TransacoesPage() {
   const { fetchApi } = useApi();
-
-  // Data
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<TransactionSummary | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
-
-  // Loading
-  const [loading, setLoading] = useState(true);
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Filters
   const [type, setType] = useState("ALL");
@@ -45,11 +38,30 @@ export default function TransacoesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  // Debounce search input so we don't fire a request per keystroke
+  // Debounce search input so we don't fire a request per keystroke.
+  // Voltar para a página 1 ao mudar a busca acompanha o debounce.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Mudar tipo/categoria/mês também volta para a página 1. Fazemos isso nos
+  // próprios setters (não num effect) para evitar render em cascata.
+  function changeType(value: string) {
+    setType(value);
+    setPage(1);
+  }
+  function changeCategory(value: string) {
+    setCategoryId(value);
+    setPage(1);
+  }
+  function changeMonth(value: Date) {
+    setMonth(value);
+    setPage(1);
+  }
 
   // Start/end of the selected month as ISO (local boundaries)
   const monthRange = useMemo(() => {
@@ -66,110 +78,42 @@ export default function TransacoesPage() {
     return { start: start.toISOString(), end: end.toISOString() };
   }, [month]);
 
+  // Data (React Query) — cache por combinação de filtros, com revalidação
+  const filters = {
+    page,
+    type,
+    categoryId,
+    search: debouncedSearch,
+    startDate: monthRange.start,
+    endDate: monthRange.end,
+  };
+  const listQuery = useTransactionsList(filters);
+  const summaryQuery = useTransactionsSummary(monthRange);
+  const { data: categories = [] } = useCategories();
+  const { data: cards = [] } = useCards();
+
+  const transactions = listQuery.data?.data ?? [];
+  const meta = listQuery.data?.meta ?? { total: 0, page: 1, totalPages: 1 };
+  const summary = summaryQuery.data ?? null;
+  const loading = listQuery.isPending;
+  const summaryLoading = summaryQuery.isPending;
+  const isFetching = listQuery.isFetching || summaryQuery.isFetching;
+
+  useEffect(() => {
+    if (listQuery.error) logApiError("load:transactions", listQuery.error);
+    if (summaryQuery.error) logApiError("load:summary", summaryQuery.error);
+  }, [listQuery.error, summaryQuery.error]);
+
+  function refresh() {
+    invalidateTransactionData(queryClient);
+  }
+
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
 
-  // Fetch categories and cards once
-  useEffect(() => {
-    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
-    fetchApi<Card[]>("/cards").then(setCards).catch((error) => logApiError("load:cards", error));
-  }, [fetchApi]);
-
-  // Build query params (shared between fetch and poll)
-  const buildTransactionParams = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("perPage", "20");
-    if (type !== "ALL") params.set("type", type);
-    if (categoryId) params.set("categoryId", categoryId);
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    params.set("startDate", monthRange.start);
-    params.set("endDate", monthRange.end);
-    return params;
-  }, [page, type, categoryId, debouncedSearch, monthRange]);
-
-  const buildSummaryParams = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set("startDate", monthRange.start);
-    params.set("endDate", monthRange.end);
-    return params;
-  }, [monthRange]);
-
-  // Fetch transactions
-  const fetchTransactions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = buildTransactionParams();
-      const res = await fetchApi<PaginatedResponse<Transaction>>(
-        `/transactions?${params.toString()}`,
-      );
-      setTransactions(res.data);
-      setMeta(res.meta);
-    } catch (error) {
-      logApiError("load:transactions", error);
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi, buildTransactionParams]);
-
-  // Fetch summary
-  const fetchSummary = useCallback(async () => {
-    setSummaryLoading(true);
-    try {
-      const qs = buildSummaryParams().toString();
-      const res = await fetchApi<TransactionSummary>(
-        `/transactions/summary${qs ? `?${qs}` : ""}`,
-      );
-      setSummary(res);
-    } catch (error) {
-      logApiError("load:summary", error);
-      setSummary(null);
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [fetchApi, buildSummaryParams]);
-
-  useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
-
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
-
-  // Silent polling every 30s — updates data without showing loading spinners
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const params = buildTransactionParams();
-        const res = await fetchApi<PaginatedResponse<Transaction>>(
-          `/transactions?${params.toString()}`,
-        );
-        setTransactions(res.data);
-        setMeta(res.meta);
-
-        const qs = buildSummaryParams().toString();
-        const summaryRes = await fetchApi<TransactionSummary>(
-          `/transactions/summary${qs ? `?${qs}` : ""}`,
-        );
-        setSummary(summaryRes);
-      } catch (error) {
-        logApiError("poll:transactions", error);
-      }
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [fetchApi, buildTransactionParams, buildSummaryParams]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [type, categoryId, debouncedSearch, month]);
-
-  // Handlers
+  // Handlers — toda mutação invalida lista, resumo E painel.
   async function handleCreate(data: {
     amount: number;
     type: "INCOME" | "EXPENSE";
@@ -184,8 +128,7 @@ export default function TransacoesPage() {
         body: JSON.stringify(data),
       });
       toast.success("Transação criada com sucesso");
-      fetchTransactions();
-      fetchSummary();
+      invalidateTransactionData(queryClient);
     } catch {
       toast.error("Erro ao criar transação");
       throw new Error("create failed");
@@ -208,8 +151,7 @@ export default function TransacoesPage() {
       });
       setEditingTx(null);
       toast.success("Transação atualizada");
-      fetchTransactions();
-      fetchSummary();
+      invalidateTransactionData(queryClient);
     } catch {
       toast.error("Erro ao atualizar transação");
       throw new Error("update failed");
@@ -227,8 +169,7 @@ export default function TransacoesPage() {
       toast.success(
         scope === "group" ? "Parcelas excluídas" : "Transação excluída",
       );
-      fetchTransactions();
-      fetchSummary();
+      invalidateTransactionData(queryClient);
     } catch (error) {
       toast.error("Erro ao excluir transação");
       // Re-lança para o modal NÃO fechar em caso de falha (mantém aberto para
@@ -242,10 +183,13 @@ export default function TransacoesPage() {
       <ContentHeader
         title="Transações"
         actions={
-          <Button onClick={() => setModalOpen(true)} className="gap-1.5">
-            <Plus size={18} />
-            Nova transação
-          </Button>
+          <>
+            <RefreshButton onRefresh={refresh} refreshing={isFetching} />
+            <Button onClick={() => setModalOpen(true)} className="gap-1.5">
+              <Plus size={18} />
+              Nova transação
+            </Button>
+          </>
         }
       />
 
@@ -256,11 +200,11 @@ export default function TransacoesPage() {
         {/* Filters */}
         <FiltersBar
           type={type}
-          onTypeChange={setType}
+          onTypeChange={changeType}
           categoryId={categoryId}
-          onCategoryChange={setCategoryId}
+          onCategoryChange={changeCategory}
           month={month}
-          onMonthChange={setMonth}
+          onMonthChange={changeMonth}
           search={search}
           onSearchChange={setSearch}
           categories={categories}

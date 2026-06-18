@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Target, Pencil, Trash2 } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { GoalModal } from "@/components/goals/goal-modal";
 import { DeleteGoalModal } from "@/components/goals/delete-goal-modal";
 import { useApi } from "@/hooks/use-api";
+import { useGoals } from "@/hooks/use-resource-queries";
+import { useCategories } from "@/hooks/use-transactions-data";
+import { invalidateGoals } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Goal } from "@/types/goal";
-import type { Category } from "@/types/transaction";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -46,32 +50,20 @@ function ProgressBar({
 
 export default function MetasPage() {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
 
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const goalsQuery = useGoals();
+  const goals = goalsQuery.data ?? [];
+  const loading = goalsQuery.isPending;
+  const { data: categories = [] } = useCategories();
+
+  useEffect(() => {
+    if (goalsQuery.error) logApiError("load:goals", goalsQuery.error);
+  }, [goalsQuery.error]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null);
-
-  const fetchGoals = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<Goal[]>("/goals");
-      setGoals(data);
-    } catch (error) {
-      logApiError("load:goals", error);
-      setGoals([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
-
-  useEffect(() => {
-    fetchGoals();
-    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
-  }, [fetchGoals, fetchApi]);
 
   async function handleCreate(data: {
     name: string;
@@ -85,7 +77,7 @@ export default function MetasPage() {
         body: JSON.stringify(data),
       });
       toast.success("Meta criada com sucesso");
-      fetchGoals();
+      invalidateGoals(queryClient);
     } catch {
       toast.error("Erro ao criar meta");
       throw new Error("create failed");
@@ -110,7 +102,7 @@ export default function MetasPage() {
       });
       setEditingGoal(null);
       toast.success("Meta atualizada");
-      fetchGoals();
+      invalidateGoals(queryClient);
     } catch {
       toast.error("Erro ao atualizar meta");
       throw new Error("update failed");
@@ -123,7 +115,7 @@ export default function MetasPage() {
       await fetchApi(`/goals/${deletingGoal.id}`, { method: "DELETE" });
       setDeletingGoal(null);
       toast.success("Meta removida");
-      fetchGoals();
+      invalidateGoals(queryClient);
     } catch {
       toast.error("Erro ao remover meta");
     }
@@ -136,9 +128,15 @@ export default function MetasPage() {
       <ContentHeader
         title="Metas"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova meta
-          </Button>
+          <>
+            <RefreshButton
+              onRefresh={() => invalidateGoals(queryClient)}
+              refreshing={goalsQuery.isFetching}
+            />
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              + Nova meta
+            </Button>
+          </>
         }
       />
 

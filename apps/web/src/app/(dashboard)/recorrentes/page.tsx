@@ -1,21 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Repeat, Pencil, Trash2, CreditCard } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import {
   RecurringModal,
   type RecurringFormData,
 } from "@/components/recurring/recurring-modal";
 import { DeleteRecurringModal } from "@/components/recurring/delete-recurring-modal";
 import { useApi } from "@/hooks/use-api";
+import { useRecurring } from "@/hooks/use-resource-queries";
+import { useCategories, useCards } from "@/hooks/use-transactions-data";
+import { invalidateRecurring } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Recurring } from "@/types/recurring";
-import type { Category } from "@/types/transaction";
-import type { Card } from "@/types/card";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -26,34 +29,22 @@ function formatBRL(value: number) {
 
 export default function RecorrentesPage() {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
 
-  const [items, setItems] = useState<Recurring[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [loading, setLoading] = useState(true);
+  const recurringQuery = useRecurring();
+  const items = recurringQuery.data ?? [];
+  const loading = recurringQuery.isPending;
+  const { data: categories = [] } = useCategories();
+  const { data: cards = [] } = useCards();
+
+  useEffect(() => {
+    if (recurringQuery.error)
+      logApiError("load:recurring", recurringQuery.error);
+  }, [recurringQuery.error]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [deleting, setDeleting] = useState<Recurring | null>(null);
-
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<Recurring[]>("/recurring");
-      setItems(data);
-    } catch (error) {
-      logApiError("load:recurring", error);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
-
-  useEffect(() => {
-    fetchItems();
-    fetchApi<Category[]>("/categories").then(setCategories).catch((error) => logApiError("load:categories", error));
-    fetchApi<Card[]>("/cards").then(setCards).catch((error) => logApiError("load:cards", error));
-  }, [fetchItems, fetchApi]);
 
   async function handleCreate(data: RecurringFormData) {
     try {
@@ -62,7 +53,7 @@ export default function RecorrentesPage() {
         body: JSON.stringify(data),
       });
       toast.success("Recorrência criada com sucesso");
-      fetchItems();
+      invalidateRecurring(queryClient);
     } catch {
       toast.error("Erro ao criar recorrência");
       throw new Error("create failed");
@@ -78,7 +69,7 @@ export default function RecorrentesPage() {
       });
       setEditing(null);
       toast.success("Recorrência atualizada");
-      fetchItems();
+      invalidateRecurring(queryClient);
     } catch {
       toast.error("Erro ao atualizar recorrência");
       throw new Error("update failed");
@@ -91,7 +82,7 @@ export default function RecorrentesPage() {
         method: "PATCH",
         body: JSON.stringify({ active: !item.active }),
       });
-      fetchItems();
+      invalidateRecurring(queryClient);
     } catch {
       toast.error("Erro ao atualizar recorrência");
     }
@@ -103,7 +94,7 @@ export default function RecorrentesPage() {
       await fetchApi(`/recurring/${deleting.id}`, { method: "DELETE" });
       setDeleting(null);
       toast.success("Recorrência removida");
-      fetchItems();
+      invalidateRecurring(queryClient);
     } catch {
       toast.error("Erro ao remover recorrência");
     }
@@ -121,15 +112,21 @@ export default function RecorrentesPage() {
       <ContentHeader
         title="Recorrentes"
         actions={
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            + Nova recorrente
-          </Button>
+          <>
+            <RefreshButton
+              onRefresh={() => invalidateRecurring(queryClient)}
+              refreshing={recurringQuery.isFetching}
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+            >
+              + Nova recorrente
+            </Button>
+          </>
         }
       />
 

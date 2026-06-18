@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -22,27 +23,18 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { BudgetCard } from "@/components/dashboard/budget-card";
 import { BudgetModal } from "@/components/dashboard/budget-modal";
 import { CardStack } from "@/components/dashboard/card-stack";
 import { useApi } from "@/hooks/use-api";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
+import { queryKeys } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import { sidebarMobileOpenAtom } from "@/store/sidebar";
-import type {
-  Transaction,
-  TransactionSummary,
-  MonthlyBreakdown,
-  CategoryBreakdown as CategoryBreakdownType,
-  PaginatedResponse,
-  InsightsData,
-  SpendingAlert,
-} from "@/types/transaction";
-import type { Goal } from "@/types/goal";
-import type { Forecast } from "@/types/forecast";
-import type { BudgetStatus } from "@/types/budget";
-import type { Card } from "@/types/card";
+import type { MonthlyBreakdown } from "@/types/transaction";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -81,108 +73,25 @@ function WelcomeToast() {
 export default function DashboardPage() {
   const { fetchApi } = useApi();
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [, setMobileOpen] = useAtom(sidebarMobileOpenAtom);
-
-  const [summary, setSummary] = useState<TransactionSummary | null>(null);
-  const [monthly, setMonthly] = useState<MonthlyBreakdown[]>([]);
-  const [categories, setCategories] = useState<CategoryBreakdownType[]>([]);
-  const [recent, setRecent] = useState<Transaction[]>([]);
-  const [alerts, setAlerts] = useState<SpendingAlert[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [forecast, setForecast] = useState<Forecast | null>(null);
-  const [budget, setBudget] = useState<BudgetStatus | null>(null);
-  const [cards, setCards] = useState<Card[]>([]);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  const fetchDashboard = useCallback(async () => {
-    try {
-      const [
-        summaryRes,
-        monthlyRes,
-        categoryRes,
-        recentRes,
-        insightsRes,
-        goalsRes,
-        forecastRes,
-        budgetRes,
-        cardsRes,
-      ] = await Promise.all([
-        fetchApi<TransactionSummary>("/transactions/summary"),
-        fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
-        fetchApi<CategoryBreakdownType[]>("/transactions/by-category"),
-        fetchApi<PaginatedResponse<Transaction>>(
-          "/transactions?perPage=5&page=1",
-        ),
-        fetchApi<InsightsData>("/transactions/insights").catch(() => null),
-        fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
-        fetchApi<Forecast>("/transactions/forecast").catch(() => null),
-        fetchApi<BudgetStatus>("/budgets").catch(() => null),
-        fetchApi<Card[]>("/cards").catch(() => [] as Card[]),
-      ]);
-
-      setSummary(summaryRes);
-      setMonthly(monthlyRes);
-      setCategories(categoryRes);
-      setRecent(recentRes.data);
-      if (insightsRes) setAlerts(insightsRes.alerts);
-      setGoals(goalsRes);
-      setForecast(forecastRes);
-      setBudget(budgetRes);
-      setCards(cardsRes);
-    } catch (error) {
-      logApiError("load:dashboard", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
+  const { data, isPending: loading, isFetching, error, refetch } =
+    useDashboardData();
 
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    if (error) logApiError("load:dashboard", error);
+  }, [error]);
 
-  // Silent polling every 60s
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const [
-          summaryRes,
-          monthlyRes,
-          categoryRes,
-          recentRes,
-          insightsRes,
-          goalsRes,
-          forecastRes,
-          budgetRes,
-          cardsRes,
-        ] = await Promise.all([
-          fetchApi<TransactionSummary>("/transactions/summary"),
-          fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
-          fetchApi<CategoryBreakdownType[]>("/transactions/by-category"),
-          fetchApi<PaginatedResponse<Transaction>>(
-            "/transactions?perPage=5&page=1",
-          ),
-          fetchApi<InsightsData>("/transactions/insights").catch(() => null),
-          fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
-          fetchApi<Forecast>("/transactions/forecast").catch(() => null),
-          fetchApi<BudgetStatus>("/budgets").catch(() => null),
-          fetchApi<Card[]>("/cards").catch(() => [] as Card[]),
-        ]);
-        setSummary(summaryRes);
-        setMonthly(monthlyRes);
-        setCategories(categoryRes);
-        setRecent(recentRes.data);
-        if (insightsRes) setAlerts(insightsRes.alerts);
-        setGoals(goalsRes);
-        setBudget(budgetRes);
-        setForecast(forecastRes);
-        setCards(cardsRes);
-      } catch (error) {
-        logApiError("poll:dashboard", error);
-      }
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, [fetchApi]);
+  const summary = data?.summary ?? null;
+  const monthly = data?.monthly ?? [];
+  const recent = data?.recent ?? [];
+  const alerts = data?.insights?.alerts ?? [];
+  const goals = data?.goals ?? [];
+  const forecast = data?.forecast ?? null;
+  const budget = data?.budget ?? null;
+  const cards = data?.cards ?? [];
 
   // Calculate month-over-month variation from monthly breakdown
   const currentMonthData = monthly.length > 0 ? monthly[monthly.length - 1] : null;
@@ -203,7 +112,9 @@ export default function DashboardPage() {
         body: JSON.stringify({ month, amount }),
       });
       toast.success("Orçamento atualizado");
-      fetchDashboard();
+      // Revalida o painel: o React Query refaz a busca e atualiza todos os
+      // cards que dependem do orçamento.
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     } catch (error) {
       logApiError("save:budget", error);
       toast.error("Erro ao salvar orçamento");
@@ -252,7 +163,13 @@ export default function DashboardPage() {
                   <p className="mt-1.5 text-sm text-fg-secondary">Painel</p>
                 </div>
               </div>
-              <Avatar name={userName} size="lg" />
+              <div className="flex items-center gap-2">
+                <RefreshButton
+                  onRefresh={() => refetch()}
+                  refreshing={isFetching}
+                />
+                <Avatar name={userName} size="lg" />
+              </div>
             </div>
 
             {/* Stat row */}

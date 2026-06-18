@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Trash2, Layers } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { CategoryModal } from "@/components/categories/category-modal";
 import { DeleteCategoryModal } from "@/components/categories/delete-category-modal";
 import { useApi } from "@/hooks/use-api";
+import { useManagedCategories } from "@/hooks/use-resource-queries";
+import { invalidateCategories } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { ManagedCategory, ColorPresetKey } from "@/types/category";
 
@@ -60,30 +64,20 @@ function CategoryCard({
 
 export default function CategoriasPage() {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
 
-  const [categories, setCategories] = useState<ManagedCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const categoriesQuery = useManagedCategories();
+  const categories = categoriesQuery.data ?? [];
+  const loading = categoriesQuery.isPending;
+
+  useEffect(() => {
+    if (categoriesQuery.error)
+      logApiError("load:categories", categoriesQuery.error);
+  }, [categoriesQuery.error]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedCategory | null>(null);
   const [deleting, setDeleting] = useState<ManagedCategory | null>(null);
-
-  const fetchCategories = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<ManagedCategory[]>("/categories");
-      setCategories(data);
-    } catch (error) {
-      logApiError("load:categories", error);
-      setCategories([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
 
   async function handleCreate(data: {
     name: string;
@@ -96,7 +90,7 @@ export default function CategoriasPage() {
         body: JSON.stringify(data),
       });
       toast.success("Categoria criada");
-      fetchCategories();
+      invalidateCategories(queryClient);
     } catch {
       toast.error("Erro ao criar categoria");
       throw new Error("create failed");
@@ -116,7 +110,7 @@ export default function CategoriasPage() {
       });
       setEditing(null);
       toast.success("Categoria atualizada");
-      fetchCategories();
+      invalidateCategories(queryClient);
     } catch {
       toast.error("Erro ao atualizar categoria");
       throw new Error("update failed");
@@ -129,7 +123,7 @@ export default function CategoriasPage() {
       await fetchApi(`/categories/${deleting.id}`, { method: "DELETE" });
       setDeleting(null);
       toast.success("Categoria removida");
-      fetchCategories();
+      invalidateCategories(queryClient);
     } catch {
       toast.error("Erro ao remover categoria");
     }
@@ -143,9 +137,15 @@ export default function CategoriasPage() {
       <ContentHeader
         title="Categorias"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova categoria
-          </Button>
+          <>
+            <RefreshButton
+              onRefresh={() => invalidateCategories(queryClient)}
+              refreshing={categoriesQuery.isFetching}
+            />
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              + Nova categoria
+            </Button>
+          </>
         }
       />
 

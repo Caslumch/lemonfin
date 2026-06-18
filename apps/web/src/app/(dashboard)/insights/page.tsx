@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -14,7 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
-import { useApi } from "@/hooks/use-api";
+import { RefreshButton } from "@/components/ui/refresh-button";
+import { useInsights } from "@/hooks/use-resource-queries";
 import { logApiError } from "@/lib/log-error";
 import type {
   InsightsData,
@@ -30,28 +31,25 @@ function formatCurrency(value: number) {
 }
 
 export default function InsightsPage() {
-  const { fetchApi } = useApi();
-  const [data, setData] = useState<InsightsData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchInsights = useCallback(async () => {
-    try {
-      const res = await fetchApi<InsightsData>("/transactions/insights");
-      setData(res);
-    } catch (error) {
-      logApiError("load:insights", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
+  const insightsQuery = useInsights();
+  const data = insightsQuery.data ?? null;
+  const loading = insightsQuery.isPending;
 
   useEffect(() => {
-    fetchInsights();
-  }, [fetchInsights]);
+    if (insightsQuery.error) logApiError("load:insights", insightsQuery.error);
+  }, [insightsQuery.error]);
 
   return (
     <>
-      <ContentHeader title="Insights" />
+      <ContentHeader
+        title="Insights"
+        actions={
+          <RefreshButton
+            onRefresh={() => insightsQuery.refetch()}
+            refreshing={insightsQuery.isFetching}
+          />
+        }
+      />
 
       <div className="px-5 pb-8 pt-2 md:px-8 space-y-6">
         {/* Month comparison header */}

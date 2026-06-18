@@ -1,23 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CreditCard, Pencil, Trash2 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { CardModal } from "@/components/cards/card-modal";
 import { DeleteCardModal } from "@/components/cards/delete-card-modal";
 import { InvoiceView } from "@/components/cards/invoice-view";
 import { CreditCardVisual } from "@/components/dashboard/credit-card-visual";
 import { useApi } from "@/hooks/use-api";
+import { useCards } from "@/hooks/use-transactions-data";
+import { invalidateCards } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Card } from "@/types/card";
 
 export default function CartoesPage() {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
 
-  const [cards, setCards] = useState<Card[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cardsQuery = useCards();
+  const cards = cardsQuery.data ?? [];
+  const loading = cardsQuery.isPending;
+
+  useEffect(() => {
+    if (cardsQuery.error) logApiError("load:cards", cardsQuery.error);
+  }, [cardsQuery.error]);
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
@@ -26,23 +36,6 @@ export default function CartoesPage() {
 
   // Invoice view
   const [viewingCard, setViewingCard] = useState<Card | null>(null);
-
-  const fetchCards = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<Card[]>("/cards");
-      setCards(data);
-    } catch (error) {
-      logApiError("load:cards", error);
-      setCards([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
-
-  useEffect(() => {
-    fetchCards();
-  }, [fetchCards]);
 
   async function handleCreate(data: {
     name: string;
@@ -57,7 +50,7 @@ export default function CartoesPage() {
         body: JSON.stringify(data),
       });
       toast.success("Cartão criado com sucesso");
-      fetchCards();
+      invalidateCards(queryClient);
     } catch {
       toast.error("Erro ao criar cartão");
       throw new Error("create failed");
@@ -79,7 +72,7 @@ export default function CartoesPage() {
       });
       setEditingCard(null);
       toast.success("Cartão atualizado");
-      fetchCards();
+      invalidateCards(queryClient);
     } catch {
       toast.error("Erro ao atualizar cartão");
       throw new Error("update failed");
@@ -94,7 +87,7 @@ export default function CartoesPage() {
       });
       setDeletingCard(null);
       toast.success("Cartão removido");
-      fetchCards();
+      invalidateCards(queryClient);
     } catch {
       toast.error("Erro ao remover cartão");
     }
@@ -121,9 +114,15 @@ export default function CartoesPage() {
       <ContentHeader
         title="Cartões"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Novo cartão
-          </Button>
+          <>
+            <RefreshButton
+              onRefresh={() => invalidateCards(queryClient)}
+              refreshing={cardsQuery.isFetching}
+            />
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              + Novo cartão
+            </Button>
+          </>
         }
       />
 

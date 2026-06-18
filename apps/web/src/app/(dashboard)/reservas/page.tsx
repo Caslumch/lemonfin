@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PiggyBank, Pencil, Trash2, Check } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { ReserveModal } from "@/components/reserves/reserve-modal";
 import { DeleteReserveModal } from "@/components/reserves/delete-reserve-modal";
 import { useApi } from "@/hooks/use-api";
+import { useReserves } from "@/hooks/use-resource-queries";
+import { invalidateReserves } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Reserve } from "@/types/reserve";
 
@@ -127,30 +131,19 @@ function ReserveCard({
 
 export default function ReservasPage() {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
 
-  const [reserves, setReserves] = useState<Reserve[]>([]);
-  const [loading, setLoading] = useState(true);
+  const reservesQuery = useReserves();
+  const reserves = reservesQuery.data ?? [];
+  const loading = reservesQuery.isPending;
+
+  useEffect(() => {
+    if (reservesQuery.error) logApiError("load:reserves", reservesQuery.error);
+  }, [reservesQuery.error]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Reserve | null>(null);
   const [deleting, setDeleting] = useState<Reserve | null>(null);
-
-  const fetchReserves = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchApi<Reserve[]>("/reserves");
-      setReserves(data);
-    } catch (error) {
-      logApiError("load:reserves", error);
-      setReserves([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchApi]);
-
-  useEffect(() => {
-    fetchReserves();
-  }, [fetchReserves]);
 
   async function handleCreate(data: {
     name: string;
@@ -163,7 +156,7 @@ export default function ReservasPage() {
         body: JSON.stringify(data),
       });
       toast.success("Reserva criada com sucesso");
-      fetchReserves();
+      invalidateReserves(queryClient);
     } catch {
       toast.error("Erro ao criar reserva");
       throw new Error("create failed");
@@ -183,7 +176,7 @@ export default function ReservasPage() {
       });
       setEditing(null);
       toast.success("Reserva atualizada");
-      fetchReserves();
+      invalidateReserves(queryClient);
     } catch {
       toast.error("Erro ao atualizar reserva");
       throw new Error("update failed");
@@ -196,7 +189,7 @@ export default function ReservasPage() {
       await fetchApi(`/reserves/${deleting.id}`, { method: "DELETE" });
       setDeleting(null);
       toast.success("Reserva removida");
-      fetchReserves();
+      invalidateReserves(queryClient);
     } catch {
       toast.error("Erro ao remover reserva");
     }
@@ -210,9 +203,15 @@ export default function ReservasPage() {
       <ContentHeader
         title="Reservas"
         actions={
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Nova reserva
-          </Button>
+          <>
+            <RefreshButton
+              onRefresh={() => invalidateReserves(queryClient)}
+              refreshing={reservesQuery.isFetching}
+            />
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              + Nova reserva
+            </Button>
+          </>
         }
       />
 
