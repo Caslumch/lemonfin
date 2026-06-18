@@ -1,0 +1,89 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { useApi } from "@/hooks/use-api";
+import { queryKeys } from "@/lib/query-keys";
+import type {
+  Transaction,
+  TransactionSummary,
+  MonthlyBreakdown,
+  CategoryBreakdown,
+  PaginatedResponse,
+  InsightsData,
+} from "@/types/transaction";
+import type { Goal } from "@/types/goal";
+import type { Forecast } from "@/types/forecast";
+import type { BudgetStatus } from "@/types/budget";
+import type { Card } from "@/types/card";
+
+export interface DashboardData {
+  summary: TransactionSummary;
+  monthly: MonthlyBreakdown[];
+  categories: CategoryBreakdown[];
+  recent: Transaction[];
+  insights: InsightsData | null;
+  goals: Goal[];
+  forecast: Forecast | null;
+  budget: BudgetStatus | null;
+  cards: Card[];
+}
+
+/**
+ * Carrega todos os dados do painel via React Query.
+ *
+ * - Cache compartilhado: navegar entre telas e voltar mostra os dados na hora
+ *   (enquanto revalida em segundo plano), em vez de tela em branco + refetch.
+ * - `refetchInterval` substitui o polling manual de 60s. Quando o canal SSE de
+ *   "mudou algo na conta" existir, dá pra trocar isso por
+ *   `queryClient.invalidateQueries({ queryKey: ["dashboard"] })` no evento e
+ *   baixar/desligar o intervalo.
+ * - `refetchOnWindowFocus` (default do provider) já cobre o caso do usuário
+ *   lançar um gasto no WhatsApp e voltar pra aba do navegador.
+ */
+export function useDashboardData() {
+  const { fetchApi, token } = useApi();
+
+  return useQuery<DashboardData>({
+    queryKey: queryKeys.dashboard,
+    // Só busca quando já temos o token da sessão.
+    enabled: Boolean(token),
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const [
+        summary,
+        monthly,
+        categories,
+        recentRes,
+        insights,
+        goals,
+        forecast,
+        budget,
+        cards,
+      ] = await Promise.all([
+        fetchApi<TransactionSummary>("/transactions/summary"),
+        fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
+        fetchApi<CategoryBreakdown[]>("/transactions/by-category"),
+        fetchApi<PaginatedResponse<Transaction>>(
+          "/transactions?perPage=5&page=1",
+        ),
+        fetchApi<InsightsData>("/transactions/insights").catch(() => null),
+        fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
+        fetchApi<Forecast>("/transactions/forecast").catch(() => null),
+        fetchApi<BudgetStatus>("/budgets").catch(() => null),
+        fetchApi<Card[]>("/cards").catch(() => [] as Card[]),
+      ]);
+
+      return {
+        summary,
+        monthly,
+        categories,
+        recent: recentRes.data,
+        insights,
+        goals,
+        forecast,
+        budget,
+        cards,
+      };
+    },
+  });
+}

@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { outfit, dmSans, jetbrainsMono } from "@/lib/fonts";
 import { AuthProvider } from "@/providers/auth-provider";
 import { JotaiProvider } from "@/providers/jotai-provider";
+import { QueryProvider } from "@/providers/query-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import "./globals.css";
 
@@ -38,17 +39,19 @@ export default function RootLayout({
       <body className="min-h-full">
         <AuthProvider>
           <JotaiProvider>
-            <ThemeProvider>
-              {children}
-              <Toaster
-                position="top-right"
-                richColors
-                duration={3000}
-                toastOptions={{
-                  style: { fontFamily: "var(--font-body)" },
-                }}
-              />
-            </ThemeProvider>
+            <QueryProvider>
+              <ThemeProvider>
+                {children}
+                <Toaster
+                  position="top-right"
+                  richColors
+                  duration={3000}
+                  toastOptions={{
+                    style: { fontFamily: "var(--font-body)" },
+                  }}
+                />
+              </ThemeProvider>
+            </QueryProvider>
           </JotaiProvider>
         </AuthProvider>
       </body>
