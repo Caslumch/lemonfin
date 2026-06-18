@@ -49,6 +49,11 @@ export function useDashboardData() {
     enabled: Boolean(token),
     refetchInterval: 60_000,
     queryFn: async () => {
+      // "Últimas transações" = lançamentos até hoje. Sem esse teto, as parcelas
+      // futuras de compras parceladas (cada parcela é uma transação com data no
+      // mês seguinte) ficam no topo do `date desc` e roubam o lugar das reais.
+      const recentEndDate = new Date().toISOString();
+
       const [
         summary,
         monthly,
@@ -64,7 +69,7 @@ export function useDashboardData() {
         fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
         fetchApi<CategoryBreakdown[]>("/transactions/by-category"),
         fetchApi<PaginatedResponse<Transaction>>(
-          "/transactions?perPage=5&page=1",
+          `/transactions?perPage=5&page=1&endDate=${encodeURIComponent(recentEndDate)}`,
         ),
         fetchApi<InsightsData>("/transactions/insights").catch(() => null),
         fetchApi<Goal[]>("/goals").catch(() => [] as Goal[]),
