@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Repeat, Pencil, Trash2, CreditCard } from "lucide-react";
@@ -8,12 +8,14 @@ import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { MemberFilter } from "@/components/filters/member-filter";
 import {
   RecurringModal,
   type RecurringFormData,
 } from "@/components/recurring/recurring-modal";
 import { DeleteRecurringModal } from "@/components/recurring/delete-recurring-modal";
 import { useApi } from "@/hooks/use-api";
+import { useMemberFilter } from "@/hooks/use-member-filter";
 import { useRecurring } from "@/hooks/use-resource-queries";
 import { useCategories, useCards } from "@/hooks/use-transactions-data";
 import { invalidateRecurring } from "@/lib/query-keys";
@@ -28,11 +30,33 @@ function formatBRL(value: number) {
 }
 
 export default function RecorrentesPage() {
+  // useMemberFilter lê a URL (useSearchParams) — precisa de um boundary Suspense.
+  return (
+    <Suspense fallback={null}>
+      <RecorrentesPageInner />
+    </Suspense>
+  );
+}
+
+function RecorrentesPageInner() {
   const { fetchApi } = useApi();
   const queryClient = useQueryClient();
+  const { memberId } = useMemberFilter();
+  const [page, setPage] = useState(1);
 
-  const recurringQuery = useRecurring();
-  const items = recurringQuery.data ?? [];
+  // Trocar o membro filtrado (via URL) volta para a página 1.
+  useEffect(() => {
+    setPage(1);
+  }, [memberId]);
+
+  const recurringQuery = useRecurring({ page, memberId });
+  const items = recurringQuery.data?.data ?? [];
+  const meta = recurringQuery.data?.meta ?? {
+    total: 0,
+    totalPages: 1,
+    monthlyExpense: 0,
+    monthlyIncome: 0,
+  };
   const loading = recurringQuery.isPending;
   const { data: categories = [] } = useCategories();
   const { data: cards = [] } = useCards();
@@ -100,12 +124,10 @@ export default function RecorrentesPage() {
     }
   }
 
-  const monthlyExpense = items
-    .filter((i) => i.active && i.type === "EXPENSE")
-    .reduce((sum, i) => sum + i.amount, 0);
-  const monthlyIncome = items
-    .filter((i) => i.active && i.type === "INCOME")
-    .reduce((sum, i) => sum + i.amount, 0);
+  // Totais vêm agregados do backend (todas as ativas, não só a página atual),
+  // para continuarem corretos com a lista paginada.
+  const monthlyExpense = meta.monthlyExpense;
+  const monthlyIncome = meta.monthlyIncome;
 
   return (
     <>
@@ -113,6 +135,8 @@ export default function RecorrentesPage() {
         title="Recorrentes"
         actions={
           <>
+            {/* Só aparece em família com 2+ membros. */}
+            <MemberFilter />
             <RefreshButton
               onRefresh={() => invalidateRecurring(queryClient)}
               refreshing={recurringQuery.isFetching}
@@ -237,6 +261,36 @@ export default function RecorrentesPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Paginação (mesmo padrão da tela de transações) */}
+        {meta.totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-xs text-fg-muted">
+              {meta.total} {meta.total === 1 ? "recorrente" : "recorrentes"}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Anterior
+              </Button>
+              <span className="flex items-center text-sm text-fg-secondary px-2">
+                {page} / {meta.totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= meta.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próximo
+              </Button>
+            </div>
           </div>
         )}
       </div>

@@ -52,6 +52,50 @@ export class RecurringRepository {
     });
   }
 
+  // Versão paginada usada pela listagem da tela web (GET /recurring).
+  async findManyPaginated(
+    userIds: string[],
+    options: { skip: number; take: number; activeOnly?: boolean },
+  ) {
+    const where: Prisma.RecurringTransactionWhereInput = {
+      userId: { in: userIds },
+      ...(options.activeOnly && { active: true }),
+    };
+
+    // Totais mensais (ativas) agregados sobre TODA a coleção — não só a página —
+    // para os cards de resumo da tela ficarem corretos com paginação.
+    const activeWhere: Prisma.RecurringTransactionWhereInput = {
+      ...where,
+      active: true,
+    };
+
+    const [data, total, expenseAgg, incomeAgg] = await Promise.all([
+      this.prisma.recurringTransaction.findMany({
+        where,
+        include: recurringInclude,
+        orderBy: { dayOfMonth: 'asc' },
+        skip: options.skip,
+        take: options.take,
+      }),
+      this.prisma.recurringTransaction.count({ where }),
+      this.prisma.recurringTransaction.aggregate({
+        where: { ...activeWhere, type: 'EXPENSE' },
+        _sum: { amount: true },
+      }),
+      this.prisma.recurringTransaction.aggregate({
+        where: { ...activeWhere, type: 'INCOME' },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      data,
+      total,
+      monthlyExpense: expenseAgg._sum.amount?.toNumber() ?? 0,
+      monthlyIncome: incomeAgg._sum.amount?.toNumber() ?? 0,
+    };
+  }
+
   // All active recurrences that should be materialized on the given day-of-month.
   // Used by the materialization cron.
   async findActiveForDay(dayOfMonth: number) {

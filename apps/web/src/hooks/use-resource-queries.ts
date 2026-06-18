@@ -6,7 +6,7 @@ import { queryKeys } from "@/lib/query-keys";
 import type { InsightsData } from "@/types/transaction";
 import type { ManagedCategory } from "@/types/category";
 import type { Goal } from "@/types/goal";
-import type { Recurring } from "@/types/recurring";
+import type { RecurringListResponse } from "@/types/recurring";
 import type { Reserve } from "@/types/reserve";
 
 /**
@@ -35,12 +35,21 @@ export function useGoals() {
   });
 }
 
-export function useRecurring() {
+/** Recorrentes paginadas, com filtro opcional por membro da família. */
+export function useRecurring(params?: { page?: number; memberId?: string }) {
   const { fetchApi, token } = useApi();
-  return useQuery<Recurring[]>({
-    queryKey: queryKeys.recurring,
+  const page = params?.page ?? 1;
+  const memberId = params?.memberId;
+  return useQuery<RecurringListResponse>({
+    // page/memberId entram na chave para cache por combinação; invalidar pelo
+    // prefixo ["recurring"] continua atingindo todas as combinações.
+    queryKey: [...queryKeys.recurring, page, memberId ?? null],
     enabled: Boolean(token),
-    queryFn: () => fetchApi<Recurring[]>("/recurring"),
+    queryFn: () => {
+      const qs = new URLSearchParams({ page: String(page), perPage: "20" });
+      if (memberId) qs.set("memberId", memberId);
+      return fetchApi<RecurringListResponse>(`/recurring?${qs.toString()}`);
+    },
   });
 }
 

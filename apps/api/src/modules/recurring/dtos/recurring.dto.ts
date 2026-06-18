@@ -19,5 +19,13 @@ export const updateRecurringSchema = z.object({
   active: z.boolean().optional(),
 });
 
+export const listRecurringQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  perPage: z.coerce.number().int().positive().max(100).default(20),
+  // Quando informado, restringe a um único membro da família (validado no use-case).
+  memberId: z.string().cuid().optional(),
+});
+
 export type CreateRecurringInput = z.infer<typeof createRecurringSchema>;
 export type UpdateRecurringInput = z.infer<typeof updateRecurringSchema>;
+export type ListRecurringQuery = z.infer<typeof listRecurringQuerySchema>;

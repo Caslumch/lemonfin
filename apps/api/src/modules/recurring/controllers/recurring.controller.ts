@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -19,10 +20,12 @@ import { DeleteRecurringUseCase } from '../use-cases/delete-recurring.use-case';
 import {
   createRecurringSchema,
   updateRecurringSchema,
+  listRecurringQuerySchema,
 } from '../dtos/recurring.dto';
 import type {
   CreateRecurringInput,
   UpdateRecurringInput,
+  ListRecurringQuery,
 } from '../dtos/recurring.dto';
 
 @Controller('recurring')
@@ -44,8 +47,12 @@ export class RecurringController {
   }
 
   @Get()
-  list(@CurrentUser() user: { id: string }) {
-    return this.listRecurring.execute(user.id);
+  list(
+    @CurrentUser() user: { id: string },
+    @Query(new ZodValidationPipe(listRecurringQuerySchema))
+    query: ListRecurringQuery,
+  ) {
+    return this.listRecurring.execute(user.id, query);
   }
 
   @Patch(':id')

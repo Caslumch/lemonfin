@@ -20,3 +20,16 @@ export interface Recurring {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface RecurringListResponse {
+  data: Recurring[];
+  meta: {
+    total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
+    // Somas mensais de todas as recorrentes ATIVAS (não só a página atual).
+    monthlyExpense: number;
+    monthlyIncome: number;
+  };
+}
