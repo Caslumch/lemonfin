@@ -75,13 +75,17 @@ export class WhatsappService {
     );
 
     if (!user) {
-      // await this.wmodeClient.sendMessage({
-      //   to: from,
-      //   content:
-      //     'Olá! Você ainda não tem uma conta no LemonFin vinculada a este número. ' +
-      //     'Acesse o app e cadastre seu telefone nas configurações para começar a registrar transações pelo WhatsApp!',
-      // });
-      this.logger.log(`Ignoring message from unregistered phone: ${phone}`);
+      // Convida quem ainda não tem conta vinculada a este número, com o link do
+      // app. Sem isso, a mensagem caía no vazio (só log) — perdendo um lead.
+      const appUrl = process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Olá! 👋 Este número ainda não tem uma conta no LemonFin. ' +
+          `Crie a sua e cadastre seu telefone nas configurações para registrar ` +
+          `e consultar suas finanças por aqui: ${appUrl}`,
+      });
+      this.logger.log(`Replied invite to unregistered phone: ${phone}`);
       return;
     }
 
