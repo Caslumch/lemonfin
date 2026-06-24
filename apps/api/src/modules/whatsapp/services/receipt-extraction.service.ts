@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { AiFeature } from '@prisma/client';
 import OpenAI from 'openai';
 import { AiUsageService } from '../../ai-usage/ai-usage.service';
-import { ParsedTransaction } from './message-parser.service';
+import {
+  ParsedTransaction,
+  buildCategoryList,
+} from './message-parser.service';
 
 // gpt-4o-mini é multimodal: aceita a imagem na mesma chamada de chat e devolve
 // JSON estruturado. É a opção mais barata da stack OpenAI já integrada (Whisper,
@@ -129,27 +132,28 @@ export class ReceiptExtractionService {
   private buildPrompt(
     customCategories: { slug: string; name: string }[],
   ): string {
-    const extra =
-      customCategories.length > 0
-        ? `\n\nO usuário tem estas categorias personalizadas. Use uma delas APENAS ` +
-          `quando o gasto se encaixar claramente — NUNCA como chute quando não ` +
-          `souber a categoria:\n` +
-          customCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n')
-        : '';
+    // Mesmo mapa de categorias (com palavras-chave) que o parser de texto usa,
+    // para o modelo classificar igual — ex: "padaria" → alimentacao. Sem isso o
+    // modelo inventava slugs livres ("padaria") que não batem com nenhuma
+    // categoria e caíam em confirmação.
+    const categories = buildCategoryList(customCategories);
 
     return `Você lê comprovantes de pagamento e notas fiscais de uma foto e extrai a transação.
 
 Responda APENAS com JSON, sem markdown, neste formato:
 {"amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string}
 
+CATEGORIAS DISPONÍVEIS (escolha o categorySlug EXATAMENTE da lista abaixo, nunca invente um slug fora dela):
+${categories}
+
 Regras:
 - amount: valor TOTAL pago, em reais (apenas o número, ex: 47.90).
 - type: quase sempre "EXPENSE" (é um comprovante de pagamento). Só use "INCOME" se for claramente um recebimento.
-- categorySlug: a categoria que melhor descreve o gasto, inferida pelo nome do estabelecimento/itens. Use um slug curto em minúsculas (ex: "mercado", "transporte", "restaurante", "saude", "lazer", "outros").
-- IMPORTANTE: o nome do estabelecimento muitas vezes NÃO indica o tipo de gasto (ex: nome de pessoa física, sigla, razão social genérica). Quando você NÃO conseguir inferir a categoria com segurança, use "outros" com categoryConfidence baixo (< 0.6). NUNCA escolha uma categoria aleatória só para preencher — é melhor "outros" com confiança baixa, que o app confirma com o usuário.
-- categoryConfidence: 0 a 1, quão confiante você está na categoria. Seja honesto: se o estabelecimento não deixa claro o tipo de gasto, use um valor < 0.6.
+- categorySlug: o slug da lista acima que melhor descreve o gasto, inferido pelo nome do estabelecimento/itens (ex: uma padaria → "alimentacao"; um posto → "transporte"). Use SEMPRE um slug que existe na lista.
+- Se o estabelecimento NÃO indicar o tipo de gasto (nome de pessoa física, sigla, razão social genérica) e você não conseguir classificar com segurança, use "outros" com categoryConfidence baixo (< 0.6) — o app confirma com o usuário. NUNCA escolha uma categoria aleatória só para preencher.
+- categoryConfidence: 0 a 1, quão confiante você está na categoria. Quando o estabelecimento deixa claro o ramo (padaria, posto, farmácia...), use confiança alta (>= 0.8). Só use < 0.6 quando realmente estiver em dúvida.
 - description: nome do estabelecimento, ou um resumo curto do que foi comprado.
 
-Se a imagem NÃO for um comprovante/nota legível (foto borrada, sem valor visível, ou não é um comprovante), responda exatamente: {"notReceipt": true}${extra}`;
+Se a imagem NÃO for um comprovante/nota legível (foto borrada, sem valor visível, ou não é um comprovante), responda exatamente: {"notReceipt": true}`;
   }
 }

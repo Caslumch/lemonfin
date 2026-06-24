@@ -130,8 +130,11 @@ const SYSTEM_CATEGORY_LINES = [
 const OUTROS_LINE = '- outros: quando não se encaixa em nenhuma categoria';
 
 // Categorias personalizadas vão ANTES de "outros" (catch-all) para terem
-// prioridade na escolha do modelo.
-function buildCategoryList(custom: { slug: string; name: string }[]): string {
+// prioridade na escolha do modelo. Exportada para o fluxo de imagem
+// (receipt-extraction) usar exatamente o mesmo mapa de categorias.
+export function buildCategoryList(
+  custom: { slug: string; name: string }[],
+): string {
   const lines = [...SYSTEM_CATEGORY_LINES];
   for (const c of custom) {
     lines.push(`- ${c.slug}: ${c.name} (categoria personalizada do usuário)`);
