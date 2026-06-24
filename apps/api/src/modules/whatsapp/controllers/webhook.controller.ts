@@ -67,9 +67,17 @@ export class WebhookController {
         ? { data: media.data, mimetype: media.mimetype }
         : undefined;
 
-    // Texto exige `content`; áudio exige a mídia (o `content` vem só como
-    // placeholder "[áudio]"). Sem nenhum dos dois, não há o que processar.
-    if (!from || (!content && !audio)) {
+    // Imagem (comprovante/nota): mesma forma do áudio. `data` definido aqui
+    // implica imagem válida embutida. `truncated: true` (mídia grande cortada
+    // do base64) cai como ausente — o fluxo responde com fallback.
+    const image =
+      type === 'IMAGE' && media?.data
+        ? { data: media.data, mimetype: media.mimetype }
+        : undefined;
+
+    // Texto exige `content`; áudio/imagem exigem a mídia (o `content` vem só
+    // como placeholder, ex "[áudio]"/"[imagem]"). Sem nenhum, nada a processar.
+    if (!from || (!content && !audio && !image)) {
       return { received: true, processed: false };
     }
 
@@ -87,7 +95,7 @@ export class WebhookController {
 
     // Process async to respond to webhook quickly
     this.whatsappService
-      .handleIncomingMessage({ from, content, sessionId, audio })
+      .handleIncomingMessage({ from, content, sessionId, audio, image })
       .catch((error) => {
         this.logger.error(`Error processing message: ${error}`);
       });

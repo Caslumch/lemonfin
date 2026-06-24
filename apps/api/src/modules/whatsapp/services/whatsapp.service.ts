@@ -8,8 +8,10 @@ import {
   MessageParserService,
   ParseResult,
   BatchItem,
+  ParsedTransaction,
 } from './message-parser.service';
 import { TranscriptionService } from './transcription.service';
+import { ReceiptExtractionService } from './receipt-extraction.service';
 import { WmodeClientService } from './wmode-client.service';
 import { phoneCandidates } from './phone-candidates';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
@@ -35,6 +37,10 @@ interface IncomingMessage {
   // Presente quando a mensagem é um áudio do WhatsApp (base64 + mimetype vindos
   // do WMode). Transcrito para texto antes do parsing.
   audio?: { data: string; mimetype?: string };
+  // Presente quando a mensagem é uma imagem (comprovante/nota). Lida por visão
+  // (gpt-4o-mini) e convertida direto em transação, sem passar pelo parser de
+  // texto.
+  image?: { data: string; mimetype?: string };
 }
 
 @Injectable()
@@ -50,6 +56,7 @@ export class WhatsappService {
     private readonly createInstallmentsUseCase: CreateInstallmentsUseCase,
     private readonly messageParser: MessageParserService,
     private readonly transcription: TranscriptionService,
+    private readonly receiptExtraction: ReceiptExtractionService,
     private readonly wmodeClient: WmodeClientService,
     private readonly getForecast: GetForecastUseCase,
     private readonly recurringRepository: RecurringRepository,
@@ -62,8 +69,15 @@ export class WhatsappService {
     private readonly billingConfig: BillingConfigService,
   ) {}
 
-  async handleIncomingMessage({ from, content, audio }: IncomingMessage) {
-    this.logger.log(`Message from ${from}: ${audio ? '[áudio]' : content}`);
+  async handleIncomingMessage({
+    from,
+    content,
+    audio,
+    image,
+  }: IncomingMessage) {
+    this.logger.log(
+      `Message from ${from}: ${audio ? '[áudio]' : image ? '[imagem]' : content}`,
+    );
 
     const phone = this.normalizePhone(from);
     // Casa por qualquer forma equivalente do número (com/sem nono dígito,
@@ -131,6 +145,48 @@ export class WhatsappService {
       this.logger.log(`Áudio transcrito de ${from}: ${text}`);
       content = text;
     }
+
+    // Imagem (comprovante/nota): lida por visão e convertida direto em
+    // transação. Não passa pelo parser de texto nem pelo fluxo de pendências —
+    // a foto já produz o lançamento. Os demais intents (query, batch, etc.) não
+    // fazem sentido para uma foto de comprovante.
+    if (image) {
+      const phoneKey = this.normalizePhone(from);
+      const userIds = await this.familyContext.resolveUserIds(user.id);
+      const customCategories = (
+        await this.categoriesRepository.findForUser(userIds)
+      )
+        .filter((c) => c.userId !== null)
+        .map((c) => ({ slug: c.slug, name: c.name }));
+
+      const buffer = Buffer.from(image.data, 'base64');
+      const data = await this.receiptExtraction.extract({
+        buffer,
+        mimetype: image.mimetype,
+        userId: user.id,
+        customCategories,
+      });
+
+      if (!data) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Não consegui ler esse comprovante 😕. Pode mandar uma foto mais ' +
+            'nítida, ou digitar? Ex: _"Gastei 50 no mercado"_.',
+        });
+        return;
+      }
+
+      const result: ParseResult = { intent: 'transaction', data };
+      // Aviso natural do que foi entendido, antes de registrar/confirmar.
+      const ack = this.buildImageAck(data);
+      if (ack) {
+        await this.wmodeClient.sendMessage({ to: from, content: ack });
+      }
+      await this.handleTransaction(from, user.id, result, phoneKey);
+      return;
+    }
+
     // Quando a mensagem veio por áudio, mandamos um aviso natural do que foi
     // entendido ANTES da resposta final — mas só depois do parse, para a frase
     // refletir a ação ("vou registrar...") em vez de ecoar a transcrição crua.
@@ -2074,5 +2130,19 @@ export class WhatsappService {
         // unknown: a própria resposta de erro/orientação já basta.
         return null;
     }
+  }
+
+  // Aviso humano do que foi lido de um comprovante (imagem), mandado ANTES de
+  // registrar/confirmar. Espelha o buildAudioAck, mas com emoji de recibo e a
+  // partir da transação já estruturada pela visão.
+  private buildImageAck(data: ParsedTransaction): string {
+    const open = ['Beleza', 'Boa', 'Show', 'Certo', 'Perfeito'][
+      Math.floor(Math.random() * 5)
+    ];
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const verb = data.type === 'INCOME' ? 'recebeu' : 'gastou';
+    const what = data.description ? ` com ${data.description}` : '';
+    return `🧾 ${open}, li o comprovante: você ${verb} ${fmt(data.amount)}${what}, vou registrar 👍`;
   }
 }
