@@ -54,10 +54,33 @@ export function TransactionModal({
   const [isParcelado, setIsParcelado] = useState(false);
   const [installments, setInstallments] = useState(2);
   const [parcelasOpen, setParcelasOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const parcelasRef = useRef<HTMLDivElement>(null);
+  const parcelasTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Altura máxima da lista (px) — mantém em sincronia com max-h-52 (13rem).
+  const PARCELAS_MENU_MAX_H = 208;
+
+  // Abre a lista decidindo a direção: se não couber abaixo do gatilho dentro da
+  // viewport, abre para cima. Evita o dropdown ser "comido" pela borda inferior.
+  function toggleParcelas() {
+    if (parcelasOpen) {
+      setParcelasOpen(false);
+      return;
+    }
+    const rect = parcelasTriggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropUp(
+        spaceBelow < PARCELAS_MENU_MAX_H + 16 && spaceAbove > spaceBelow,
+      );
+    }
+    setParcelasOpen(true);
+  }
 
   const isEditing = !!transaction;
 
@@ -148,9 +171,9 @@ export function TransactionModal({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface rounded-[24px] shadow-xl">
+        <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-[24px] bg-surface shadow-xl">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-border">
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
               {isEditing ? "Editar transação" : "Nova transação"}
             </h2>
@@ -163,7 +186,10 @@ export function TransactionModal({
           </div>
 
           {/* Body */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex-1 overflow-y-auto p-6 space-y-4"
+          >
             {/* Type tabs */}
             <Tabs
               value={type}
@@ -281,8 +307,9 @@ export function TransactionModal({
                 {isParcelado && (
                   <div className="relative mt-3" ref={parcelasRef}>
                     <button
+                      ref={parcelasTriggerRef}
                       type="button"
-                      onClick={() => setParcelasOpen((o) => !o)}
+                      onClick={toggleParcelas}
                       className="flex w-full items-center justify-between rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
                     >
                       <span>{installments}x</span>
@@ -297,7 +324,9 @@ export function TransactionModal({
                     {parcelasOpen && (
                       <ul
                         role="listbox"
-                        className="absolute z-10 mt-1.5 max-h-52 w-full overflow-y-auto rounded-md border-[1.5px] border-border bg-surface py-1 shadow-lg"
+                        className={`absolute z-20 max-h-52 w-full overflow-y-auto rounded-md border-[1.5px] border-border bg-surface py-1 shadow-lg ${
+                          dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5"
+                        }`}
                       >
                         {Array.from({ length: 47 }, (_, i) => i + 2).map((n) => (
                           <li key={n}>
