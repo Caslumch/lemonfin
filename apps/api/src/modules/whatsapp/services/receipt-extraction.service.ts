@@ -131,7 +131,9 @@ export class ReceiptExtractionService {
   ): string {
     const extra =
       customCategories.length > 0
-        ? `\n\nCategorias personalizadas do usuário (use o slug):\n` +
+        ? `\n\nO usuário tem estas categorias personalizadas. Use uma delas APENAS ` +
+          `quando o gasto se encaixar claramente — NUNCA como chute quando não ` +
+          `souber a categoria:\n` +
           customCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n')
         : '';
 
@@ -143,8 +145,9 @@ Responda APENAS com JSON, sem markdown, neste formato:
 Regras:
 - amount: valor TOTAL pago, em reais (apenas o número, ex: 47.90).
 - type: quase sempre "EXPENSE" (é um comprovante de pagamento). Só use "INCOME" se for claramente um recebimento.
-- categorySlug: a categoria que melhor descreve o gasto, pelo nome do estabelecimento/itens. Use um slug curto em minúsculas (ex: "mercado", "transporte", "restaurante", "saude", "lazer", "outros").
-- categoryConfidence: 0 a 1, quão confiante você está na categoria. Use < 0.6 quando estiver em dúvida.
+- categorySlug: a categoria que melhor descreve o gasto, inferida pelo nome do estabelecimento/itens. Use um slug curto em minúsculas (ex: "mercado", "transporte", "restaurante", "saude", "lazer", "outros").
+- IMPORTANTE: o nome do estabelecimento muitas vezes NÃO indica o tipo de gasto (ex: nome de pessoa física, sigla, razão social genérica). Quando você NÃO conseguir inferir a categoria com segurança, use "outros" com categoryConfidence baixo (< 0.6). NUNCA escolha uma categoria aleatória só para preencher — é melhor "outros" com confiança baixa, que o app confirma com o usuário.
+- categoryConfidence: 0 a 1, quão confiante você está na categoria. Seja honesto: se o estabelecimento não deixa claro o tipo de gasto, use um valor < 0.6.
 - description: nome do estabelecimento, ou um resumo curto do que foi comprado.
 
 Se a imagem NÃO for um comprovante/nota legível (foto borrada, sem valor visível, ou não é um comprovante), responda exatamente: {"notReceipt": true}${extra}`;
