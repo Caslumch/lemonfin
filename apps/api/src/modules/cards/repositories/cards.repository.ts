@@ -92,8 +92,7 @@ export class CardsRepository {
       const { start, end } = this.currentCycleRange(card.closingDay, now);
       const spent = transactions
         .filter(
-          (tx) =>
-            tx.cardId === card.id && tx.date >= start && tx.date <= end,
+          (tx) => tx.cardId === card.id && tx.date >= start && tx.date <= end,
         )
         .reduce((sum, tx) => sum + tx.amount.toNumber(), 0);
       result[card.id] = spent;

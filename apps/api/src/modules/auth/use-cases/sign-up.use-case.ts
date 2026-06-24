@@ -29,7 +29,8 @@ export class SignUpUseCase {
     const normalizedPhone = input.phone || undefined;
 
     if (normalizedPhone) {
-      const phoneExists = await this.usersRepository.findByPhone(normalizedPhone);
+      const phoneExists =
+        await this.usersRepository.findByPhone(normalizedPhone);
       if (phoneExists) {
         throw new ConflictException('Telefone ja vinculado a outra conta');
       }

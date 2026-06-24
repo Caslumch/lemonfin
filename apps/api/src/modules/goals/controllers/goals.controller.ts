@@ -16,14 +16,8 @@ import { CreateGoalUseCase } from '../use-cases/create-goal.use-case';
 import { ListGoalsUseCase } from '../use-cases/list-goals.use-case';
 import { UpdateGoalUseCase } from '../use-cases/update-goal.use-case';
 import { DeleteGoalUseCase } from '../use-cases/delete-goal.use-case';
-import {
-  createGoalSchema,
-  updateGoalSchema,
-} from '../dtos/goal.dto';
-import type {
-  CreateGoalInput,
-  UpdateGoalInput,
-} from '../dtos/goal.dto';
+import { createGoalSchema, updateGoalSchema } from '../dtos/goal.dto';
+import type { CreateGoalInput, UpdateGoalInput } from '../dtos/goal.dto';
 
 @Controller('goals')
 @UseGuards(JwtAuthGuard, PremiumGuard)
@@ -58,10 +52,7 @@ export class GoalsController {
   }
 
   @Delete(':id')
-  remove(
-    @CurrentUser() user: { id: string },
-    @Param('id') id: string,
-  ) {
+  remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.deleteGoal.execute(id, user.id);
   }
 }

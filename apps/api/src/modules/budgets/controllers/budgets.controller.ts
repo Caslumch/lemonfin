@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Put,
-  Body,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Put, Body, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PremiumGuard } from '../../../common/billing/premium.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -24,10 +17,7 @@ export class BudgetsController {
   ) {}
 
   @Get()
-  get(
-    @CurrentUser() user: { id: string },
-    @Query('month') month?: string,
-  ) {
+  get(@CurrentUser() user: { id: string }, @Query('month') month?: string) {
     return this.getBudget.execute(user.id, month);
   }
 

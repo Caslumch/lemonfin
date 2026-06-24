@@ -18,7 +18,10 @@ describe('hasPremiumAccess', () => {
   it('libera durante o trial (TRIALING e trialEndsAt no futuro)', () => {
     expect(
       hasPremiumAccess(
-        { subscriptionStatus: SubscriptionStatus.TRIALING, trialEndsAt: future },
+        {
+          subscriptionStatus: SubscriptionStatus.TRIALING,
+          trialEndsAt: future,
+        },
         now,
       ),
     ).toBe(true);
@@ -45,13 +48,19 @@ describe('hasPremiumAccess', () => {
   it('bloqueia PAST_DUE e CANCELED', () => {
     expect(
       hasPremiumAccess(
-        { subscriptionStatus: SubscriptionStatus.PAST_DUE, trialEndsAt: future },
+        {
+          subscriptionStatus: SubscriptionStatus.PAST_DUE,
+          trialEndsAt: future,
+        },
         now,
       ),
     ).toBe(false);
     expect(
       hasPremiumAccess(
-        { subscriptionStatus: SubscriptionStatus.CANCELED, trialEndsAt: future },
+        {
+          subscriptionStatus: SubscriptionStatus.CANCELED,
+          trialEndsAt: future,
+        },
         now,
       ),
     ).toBe(false);

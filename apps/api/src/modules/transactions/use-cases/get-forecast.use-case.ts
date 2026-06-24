@@ -34,7 +34,10 @@ export class GetForecastUseCase {
     private readonly familyContext: FamilyContextService,
   ) {}
 
-  async execute(userId: string, now: Date = new Date()): Promise<ForecastResult> {
+  async execute(
+    userId: string,
+    now: Date = new Date(),
+  ): Promise<ForecastResult> {
     const userIds = await this.familyContext.resolveUserIds(userId);
 
     const year = now.getFullYear();
@@ -104,13 +107,22 @@ export class GetForecastUseCase {
     // diária de despesas variáveis "em dinheiro" dos últimos meses completos.
     // Cartão fica de fora (não afeta saldo até a fatura) e recorrências também
     // (já estão em pendingExpense), então não há dupla contagem.
-    const histStart = new Date(year, month - VARIABLE_HISTORY_MONTHS, 1, 0, 0, 0, 0);
-    const histEnd = monthStart; // exclui o mês corrente
-    const histVariable = await this.transactionsRepository.getVariableExpenseTotal(
-      userIds,
-      histStart,
-      histEnd,
+    const histStart = new Date(
+      year,
+      month - VARIABLE_HISTORY_MONTHS,
+      1,
+      0,
+      0,
+      0,
+      0,
     );
+    const histEnd = monthStart; // exclui o mês corrente
+    const histVariable =
+      await this.transactionsRepository.getVariableExpenseTotal(
+        userIds,
+        histStart,
+        histEnd,
+      );
     const histDays = Math.round(
       (histEnd.getTime() - histStart.getTime()) / 86_400_000,
     );
@@ -134,7 +146,10 @@ export class GetForecastUseCase {
     );
 
     const projectedBalance = round2(
-      summary.balance + pendingIncome - pendingExpense - estimatedVariableExpense,
+      summary.balance +
+        pendingIncome -
+        pendingExpense -
+        estimatedVariableExpense,
     );
 
     return {

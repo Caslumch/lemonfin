@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { GoalsRepository } from '../repositories/goals.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
@@ -19,9 +23,14 @@ export class CreateGoalUseCase {
     }
 
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const existing = await this.goalsRepository.findByCategory(userIds, input.categoryId);
+    const existing = await this.goalsRepository.findByCategory(
+      userIds,
+      input.categoryId,
+    );
     if (existing) {
-      throw new ConflictException('Ja existe uma meta ativa para esta categoria');
+      throw new ConflictException(
+        'Ja existe uma meta ativa para esta categoria',
+      );
     }
 
     return this.goalsRepository.create({ ...input, userId });

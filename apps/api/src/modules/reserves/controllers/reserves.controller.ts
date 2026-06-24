@@ -16,10 +16,7 @@ import { CreateReserveUseCase } from '../use-cases/create-reserve.use-case';
 import { ListReservesUseCase } from '../use-cases/list-reserves.use-case';
 import { UpdateReserveUseCase } from '../use-cases/update-reserve.use-case';
 import { DeleteReserveUseCase } from '../use-cases/delete-reserve.use-case';
-import {
-  createReserveSchema,
-  updateReserveSchema,
-} from '../dtos/reserve.dto';
+import { createReserveSchema, updateReserveSchema } from '../dtos/reserve.dto';
 import type {
   CreateReserveInput,
   UpdateReserveInput,

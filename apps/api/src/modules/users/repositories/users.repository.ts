@@ -36,6 +36,17 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { phone } });
   }
 
+  // Procura o usuário por qualquer uma das formas equivalentes do número (com/sem
+  // o nono dígito, com/sem 55). O WhatsApp entrega a mesma pessoa em formas
+  // diferentes, e não há heurística que diga qual é a "certa" — então passamos
+  // todas as variações plausíveis e o banco decide qual existe.
+  async findByPhoneCandidates(candidates: string[]) {
+    if (candidates.length === 0) return null;
+    return this.prisma.user.findFirst({
+      where: { phone: { in: candidates } },
+    });
+  }
+
   async findAllWithPhone() {
     return this.prisma.user.findMany({
       where: { phone: { not: null } },

@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { FamiliesRepository } from '../repositories/families.repository';
 
 @Injectable()
@@ -13,7 +17,9 @@ export class LeaveFamilyUseCase {
 
     const role = await this.familiesRepository.getMemberRole(family.id, userId);
     if (role === 'OWNER') {
-      throw new ForbiddenException('O dono da familia nao pode sair. Transfira a posse primeiro.');
+      throw new ForbiddenException(
+        'O dono da familia nao pode sair. Transfira a posse primeiro.',
+      );
     }
 
     await this.familiesRepository.removeMember(family.id, userId);

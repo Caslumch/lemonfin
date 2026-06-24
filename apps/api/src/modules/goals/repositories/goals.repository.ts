@@ -58,15 +58,19 @@ export class GoalsRepository {
     });
   }
 
-  async update(id: string, data: {
-    name?: string;
-    amount?: number;
-    period?: 'MONTHLY' | 'WEEKLY';
-    active?: boolean;
-  }) {
+  async update(
+    id: string,
+    data: {
+      name?: string;
+      amount?: number;
+      period?: 'MONTHLY' | 'WEEKLY';
+      active?: boolean;
+    },
+  ) {
     const updateData: Prisma.GoalUpdateInput = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.amount !== undefined) updateData.amount = new Prisma.Decimal(data.amount);
+    if (data.amount !== undefined)
+      updateData.amount = new Prisma.Decimal(data.amount);
     if (data.period !== undefined) updateData.period = data.period;
     if (data.active !== undefined) updateData.active = data.active;
 

@@ -23,7 +23,11 @@ const colorPresetSchema = z.enum(
 );
 
 export const createCategorySchema = z.object({
-  name: z.string().trim().min(1, 'Nome e obrigatorio').max(30, 'Nome muito longo'),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Nome e obrigatorio')
+    .max(30, 'Nome muito longo'),
   // Emoji (pode ser multi-codepoint com ZWJ); limite generoso.
   icon: z.string().trim().min(1, 'Escolha um emoji').max(16),
   colorPreset: colorPresetSchema,

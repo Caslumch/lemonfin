@@ -20,13 +20,16 @@ export class ListGoalsUseCase {
       goals.map(async (goal) => {
         const { startDate, endDate } = this.getPeriodDates(goal.period, now);
 
-        const breakdown = await this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          startDate.toISOString(),
-          endDate.toISOString(),
-        );
+        const breakdown =
+          await this.transactionsRepository.getCategoryBreakdown(
+            userIds,
+            startDate.toISOString(),
+            endDate.toISOString(),
+          );
 
-        const categorySpend = breakdown.find((b) => b.categoryId === goal.categoryId);
+        const categorySpend = breakdown.find(
+          (b) => b.categoryId === goal.categoryId,
+        );
         const spent = categorySpend?.total ?? 0;
         const limit = goal.amount.toNumber();
         const percentage = limit > 0 ? Math.round((spent / limit) * 100) : 0;
@@ -67,7 +70,15 @@ export class ListGoalsUseCase {
 
     // MONTHLY
     const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const endDate = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
     return { startDate, endDate };
   }
 }

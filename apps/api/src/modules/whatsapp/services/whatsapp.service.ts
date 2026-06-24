@@ -11,6 +11,7 @@ import {
 } from './message-parser.service';
 import { TranscriptionService } from './transcription.service';
 import { WmodeClientService } from './wmode-client.service';
+import { phoneCandidates } from './phone-candidates';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { CreateInstallmentsUseCase } from '../../transactions/use-cases/create-installments.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
@@ -65,12 +66,13 @@ export class WhatsappService {
     this.logger.log(`Message from ${from}: ${audio ? '[áudio]' : content}`);
 
     const phone = this.normalizePhone(from);
-    const phoneWithout55 = phone.startsWith('55') ? phone.slice(2) : phone;
-    const phoneWith55 = phone.startsWith('55') ? phone : `55${phone}`;
-    const user =
-      (await this.usersRepository.findByPhone(phone)) ??
-      (await this.usersRepository.findByPhone(phoneWithout55)) ??
-      (await this.usersRepository.findByPhone(phoneWith55));
+    // Casa por qualquer forma equivalente do número (com/sem nono dígito,
+    // com/sem 55). O WhatsApp entrega a mesma pessoa ora com 9, ora sem — quem
+    // se cadastra com 9 pode responder sem 9 (e vice-versa). Sem isso, a resposta
+    // do cliente caía como "unregistered".
+    const user = await this.usersRepository.findByPhoneCandidates(
+      phoneCandidates(phone),
+    );
 
     if (!user) {
       // await this.wmodeClient.sendMessage({

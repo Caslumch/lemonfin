@@ -9,7 +9,10 @@ const MAX_ATTEMPTS = 5;
 
 export type VerifyResult =
   | { ok: true; userId: string | null }
-  | { ok: false; reason: 'NOT_FOUND' | 'EXPIRED' | 'TOO_MANY_ATTEMPTS' | 'INVALID' };
+  | {
+      ok: false;
+      reason: 'NOT_FOUND' | 'EXPIRED' | 'TOO_MANY_ATTEMPTS' | 'INVALID';
+    };
 
 /**
  * Geração e verificação dos OTPs (6 dígitos) usados na confirmação de email e no

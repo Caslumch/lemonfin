@@ -41,7 +41,8 @@ export class RecurringController {
   @Post()
   create(
     @CurrentUser() user: { id: string },
-    @Body(new ZodValidationPipe(createRecurringSchema)) body: CreateRecurringInput,
+    @Body(new ZodValidationPipe(createRecurringSchema))
+    body: CreateRecurringInput,
   ) {
     return this.createRecurring.execute(user.id, body);
   }
@@ -59,7 +60,8 @@ export class RecurringController {
   update(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateRecurringSchema)) body: UpdateRecurringInput,
+    @Body(new ZodValidationPipe(updateRecurringSchema))
+    body: UpdateRecurringInput,
   ) {
     return this.updateRecurring.execute(id, user.id, body);
   }
