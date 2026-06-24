@@ -40,6 +40,7 @@ function buildService(overrides: {
     {} as never, // createInstallments
     {} as never, // parser
     {} as never, // transcription
+    {} as never, // receiptExtraction
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring

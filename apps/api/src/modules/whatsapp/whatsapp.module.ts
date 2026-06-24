@@ -3,6 +3,7 @@ import { WebhookController } from './controllers/webhook.controller';
 import { WmodeModule } from './wmode.module';
 import { MessageParserService } from './services/message-parser.service';
 import { TranscriptionService } from './services/transcription.service';
+import { ReceiptExtractionService } from './services/receipt-extraction.service';
 import { WhatsappService } from './services/whatsapp.service';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { WebhookSignatureGuard } from './guards/webhook-signature.guard';
@@ -39,6 +40,7 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
   providers: [
     MessageParserService,
     TranscriptionService,
+    ReceiptExtractionService,
     WhatsappService,
     ConversationRepository,
     WebhookSignatureGuard,

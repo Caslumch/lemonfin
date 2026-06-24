@@ -95,6 +95,7 @@ function buildService(overrides: {
     createInstallmentsUseCase as never,
     {} as never, // parser
     {} as never, // transcription
+    {} as never, // receiptExtraction
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring

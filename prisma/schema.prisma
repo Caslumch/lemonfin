@@ -315,6 +315,7 @@ enum AiFeature {
   CHAT
   WHATSAPP_PARSER
   WHATSAPP_TRANSCRIPTION
+  WHATSAPP_RECEIPT
 }
 
 model AiUsage {
