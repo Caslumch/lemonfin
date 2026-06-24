@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Check, ChevronDown } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
 import type { Transaction, Category } from "@/types/transaction";
 import type { Card } from "@/types/card";
 
@@ -50,9 +51,13 @@ export function TransactionModal({
   const [date, setDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [cardId, setCardId] = useState("");
-  const [installments, setInstallments] = useState(1);
+  const [isParcelado, setIsParcelado] = useState(false);
+  const [installments, setInstallments] = useState(2);
+  const [parcelasOpen, setParcelasOpen] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const parcelasRef = useRef<HTMLDivElement>(null);
 
   const isEditing = !!transaction;
 
@@ -64,7 +69,8 @@ export function TransactionModal({
       setDate(transaction.date.slice(0, 10));
       setCategoryId(transaction.categoryId);
       setCardId(transaction.cardId || "");
-      setInstallments(1);
+      setIsParcelado(false);
+      setInstallments(2);
     } else {
       setType("EXPENSE");
       setAmount("");
@@ -72,10 +78,24 @@ export function TransactionModal({
       setDate(new Date().toISOString().slice(0, 10));
       setCategoryId(categories[0]?.id || "");
       setCardId("");
-      setInstallments(1);
+      setIsParcelado(false);
+      setInstallments(2);
     }
+    setParcelasOpen(false);
     setError("");
   }, [transaction, open, categories]);
+
+  // Fecha o dropdown de parcelas ao clicar fora dele.
+  useEffect(() => {
+    if (!parcelasOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (parcelasRef.current && !parcelasRef.current.contains(e.target as Node)) {
+        setParcelasOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [parcelasOpen]);
 
   if (!open) return null;
 
@@ -83,8 +103,9 @@ export function TransactionModal({
     e.preventDefault();
     setError("");
 
-    // Parcelamento só vale para despesa na criação; 1x = à vista (não envia).
-    const isInstallment = !isEditing && type === "EXPENSE" && installments >= 2;
+    // Parcelamento só vale para despesa na criação, com o switch ligado.
+    const isInstallment =
+      !isEditing && type === "EXPENSE" && isParcelado && installments >= 2;
 
     const result = transactionSchema.safeParse({
       amount: parseFloat(amount),
@@ -239,47 +260,95 @@ export function TransactionModal({
             {/* Parcelamento — só em despesas e só ao criar (não na edição) */}
             {type === "EXPENSE" && !isEditing && (
               <div className="w-full">
-                <label
-                  htmlFor="installments"
-                  className="block text-sm font-medium text-fg mb-1.5"
-                >
-                  Parcelas
-                </label>
-                <select
-                  id="installments"
-                  value={installments}
-                  onChange={(e) => setInstallments(Number(e.target.value))}
-                  className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-                >
-                  <option value={1}>À vista (1x)</option>
-                  {Array.from({ length: 47 }, (_, i) => i + 2).map((n) => (
-                    <option key={n} value={n}>
-                      {n}x
-                    </option>
-                  ))}
-                </select>
-                {installments >= 2 &&
-                  (() => {
-                    const total = parseFloat(amount);
-                    const per =
-                      Number.isFinite(total) && total > 0
-                        ? total / installments
-                        : 0;
-                    return (
-                      <p className="mt-1.5 text-xs text-fg-muted">
-                        {per > 0
-                          ? `${installments}x de ${per.toLocaleString("pt-BR", {
-                              style: "currency",
-                              currency: "BRL",
-                            })} (total ${total.toLocaleString("pt-BR", {
-                              style: "currency",
-                              currency: "BRL",
-                            })}).`
-                          : `Valor é o total da compra, dividido em ${installments}x.`}{" "}
-                        A 1ª parcela cai na <strong>data</strong> informada acima.
-                      </p>
-                    );
-                  })()}
+                {/* Switch "Parcelar" */}
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="parcelar-switch"
+                    className="text-sm font-medium text-fg cursor-pointer"
+                  >
+                    Parcelar
+                  </label>
+                  <Toggle
+                    checked={isParcelado}
+                    onCheckedChange={(v) => {
+                      setIsParcelado(v);
+                      setParcelasOpen(false);
+                    }}
+                  />
+                </div>
+
+                {/* Dropdown de parcelas — só quando o switch está ligado */}
+                {isParcelado && (
+                  <div className="relative mt-3" ref={parcelasRef}>
+                    <button
+                      type="button"
+                      onClick={() => setParcelasOpen((o) => !o)}
+                      className="flex w-full items-center justify-between rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
+                    >
+                      <span>{installments}x</span>
+                      <ChevronDown
+                        size={16}
+                        className={`text-fg-muted transition-transform duration-150 ${
+                          parcelasOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {parcelasOpen && (
+                      <ul
+                        role="listbox"
+                        className="absolute z-10 mt-1.5 max-h-52 w-full overflow-y-auto rounded-md border-[1.5px] border-border bg-surface py-1 shadow-lg"
+                      >
+                        {Array.from({ length: 47 }, (_, i) => i + 2).map((n) => (
+                          <li key={n}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={installments === n}
+                              onClick={() => {
+                                setInstallments(n);
+                                setParcelasOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between px-3.5 py-2 text-sm transition-colors hover:bg-muted ${
+                                installments === n
+                                  ? "font-medium text-fg"
+                                  : "text-fg-muted"
+                              }`}
+                            >
+                              <span>{n}x</span>
+                              {installments === n && (
+                                <Check size={15} className="text-lima" />
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {(() => {
+                      const total = parseFloat(amount);
+                      const per =
+                        Number.isFinite(total) && total > 0
+                          ? total / installments
+                          : 0;
+                      return (
+                        <p className="mt-1.5 text-xs text-fg-muted">
+                          {per > 0
+                            ? `${installments}x de ${per.toLocaleString("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              })} (total ${total.toLocaleString("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              })}).`
+                            : `O valor é o total da compra, dividido em ${installments}x.`}{" "}
+                          A 1ª parcela cai na <strong>data</strong> informada
+                          acima.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 
