@@ -2,6 +2,7 @@
 // app (instrumentação de erros/performance depende disso).
 import './instrument';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
@@ -9,7 +10,16 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   // rawBody: true expõe req.rawBody preservando o parse JSON normal das demais
   // rotas. O webhook do Stripe precisa do corpo cru para validar a assinatura.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
+
+  // O webhook do WhatsApp (WMode) entrega mídia embutida em base64 — uma foto de
+  // comprovante passa fácil do default de 100 KB do body parser (resultava em
+  // 413 PayloadTooLarge antes de chegar ao controller). Sobe o limite para 5 MB.
+  // useBodyParser preserva o rawBody do Stripe configurado acima.
+  app.useBodyParser('json', { limit: '5mb' });
+  app.useBodyParser('urlencoded', { limit: '5mb', extended: true });
 
   // Headers de segurança (CSP, HSTS, etc.) e gzip nas respostas.
   app.use(helmet());
