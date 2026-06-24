@@ -30,6 +30,47 @@ function buildService(overrides: {
   const cardsRepository = {
     findByName: jest.fn().mockResolvedValue(overrides.cardByName ?? null),
   };
+  // Mock fiel do use-case de parcelas: cria N transações pela repo (como o real),
+  // para que as asserções sobre transactionsRepository.create continuem valendo.
+  const createInstallmentsUseCase = {
+    execute: jest
+      .fn()
+      .mockImplementation(
+        async (params: {
+          amount: number;
+          installments: number;
+          description: string;
+          userId: string;
+          categoryId: string;
+          cardId?: string;
+          source?: string;
+        }) => {
+          const perInstallment =
+            Math.round((params.amount / params.installments) * 100) / 100;
+          const transactionIds: string[] = [];
+          for (let i = 0; i < params.installments; i++) {
+            const tx = (await transactionsRepository.create({
+              amount: perInstallment,
+              type: 'EXPENSE',
+              description: `${params.description} (${i + 1}/${params.installments})`,
+              source: params.source ?? 'MANUAL',
+              userId: params.userId,
+              categoryId: params.categoryId,
+              cardId: params.cardId,
+              installmentGroupId: 'grp1',
+              installmentNumber: i + 1,
+              installmentTotal: params.installments,
+            })) as { id: string };
+            transactionIds.push(tx.id);
+          }
+          return {
+            perInstallment,
+            installmentGroupId: 'grp1',
+            transactionIds,
+          };
+        },
+      ),
+  };
   const categoriesRepository = {
     findBySlug: jest
       .fn()
@@ -51,6 +92,7 @@ function buildService(overrides: {
     transactionsRepository as never,
     cardsRepository as never,
     familyContext as never,
+    createInstallmentsUseCase as never,
     {} as never, // parser
     {} as never, // transcription
     wmodeClient as never,

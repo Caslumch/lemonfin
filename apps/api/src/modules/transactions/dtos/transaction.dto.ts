@@ -7,6 +7,10 @@ export const createTransactionSchema = z.object({
   date: z.string().datetime().optional(),
   categoryId: z.string().cuid(),
   cardId: z.string().cuid().optional(),
+  // Parcelamento: quando >= 2, `amount` é o valor TOTAL da compra e o backend
+  // cria N parcelas (uma por mês a partir de `date`). Ausente/1 = transação
+  // avulsa. Só vale para EXPENSE (validado no use-case).
+  installments: z.number().int().min(2).max(48).optional(),
 });
 
 export const updateTransactionSchema = z.object({

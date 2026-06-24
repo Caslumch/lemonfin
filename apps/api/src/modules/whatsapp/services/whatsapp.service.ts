@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
@@ -13,6 +12,7 @@ import {
 import { TranscriptionService } from './transcription.service';
 import { WmodeClientService } from './wmode-client.service';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
+import { CreateInstallmentsUseCase } from '../../transactions/use-cases/create-installments.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
 import { computeReserveProgress } from '../../reserves/reserve-progress';
@@ -46,6 +46,7 @@ export class WhatsappService {
     private readonly transactionsRepository: TransactionsRepository,
     private readonly cardsRepository: CardsRepository,
     private readonly familyContext: FamilyContextService,
+    private readonly createInstallmentsUseCase: CreateInstallmentsUseCase,
     private readonly messageParser: MessageParserService,
     private readonly transcription: TranscriptionService,
     private readonly wmodeClient: WmodeClientService,
@@ -1181,54 +1182,6 @@ export class WhatsappService {
     );
   }
 
-  // Cria as N parcelas de uma compra: vincula todas pelo mesmo grupo (permite
-  // excluir o grupo inteiro depois), uma por mês a partir de hoje. Retorna o
-  // valor de cada parcela, o grupo e os ids criados (para a mensagem e para
-  // registrar a "última ação").
-  private async createInstallments(params: {
-    amount: number;
-    installments: number;
-    description: string;
-    userId: string;
-    categoryId: string;
-    cardId?: string;
-  }): Promise<{
-    perInstallment: number;
-    installmentGroupId: string;
-    transactionIds: string[];
-  }> {
-    const perInstallment =
-      Math.round((params.amount / params.installments) * 100) / 100;
-    const now = new Date();
-    const installmentGroupId = randomUUID();
-    const transactionIds: string[] = [];
-
-    for (let i = 0; i < params.installments; i++) {
-      const installmentDate = new Date(
-        now.getFullYear(),
-        now.getMonth() + i,
-        now.getDate(),
-      );
-
-      const tx = await this.transactionsRepository.create({
-        amount: perInstallment,
-        type: 'EXPENSE',
-        description: `${params.description} (${i + 1}/${params.installments})`,
-        date: installmentDate.toISOString(),
-        source: 'WHATSAPP',
-        userId: params.userId,
-        categoryId: params.categoryId,
-        cardId: params.cardId,
-        installmentGroupId,
-        installmentNumber: i + 1,
-        installmentTotal: params.installments,
-      });
-      transactionIds.push(tx.id);
-    }
-
-    return { perInstallment, installmentGroupId, transactionIds };
-  }
-
   private async handleInstallment(
     from: string,
     userId: string,
@@ -1277,13 +1230,17 @@ export class WhatsappService {
     }
 
     const { perInstallment, installmentGroupId, transactionIds } =
-      await this.createInstallments({
+      await this.createInstallmentsUseCase.execute({
         amount: data.amount,
         installments: data.installments,
         description: data.description,
         userId,
         categoryId: category.id,
         cardId,
+        // Data da compra captada do texto (ex: "comprei mês passado"); sem
+        // menção, o use-case usa hoje.
+        startDate: data.purchaseDate,
+        source: 'WHATSAPP',
       });
 
     const totalFormatted = data.amount.toLocaleString('pt-BR', {
@@ -1854,13 +1811,16 @@ export class WhatsappService {
         .replace(/\s*\(\d+\/\d+\)\s*$/, '')
         .trim();
       const { perInstallment, installmentGroupId, transactionIds } =
-        await this.createInstallments({
+        await this.createInstallmentsUseCase.execute({
           amount: total,
           installments: adjust.installments,
           description: baseDescription,
           userId,
           categoryId: prev[0].categoryId,
           cardId,
+          // Re-parcelar mantém a data de compra original da ação anterior.
+          startDate: prev[0].date,
+          source: 'WHATSAPP',
         });
       newTransactionIds.push(...transactionIds);
       newGroupIds.push(installmentGroupId);
@@ -1978,13 +1938,15 @@ export class WhatsappService {
     if (item.intent === 'installment') {
       const { data } = item;
       const { perInstallment, installmentGroupId, transactionIds } =
-        await this.createInstallments({
+        await this.createInstallmentsUseCase.execute({
           amount: data.amount,
           installments: data.installments,
           description: data.description,
           userId,
           categoryId: category.id,
           cardId,
+          startDate: data.purchaseDate,
+          source: 'WHATSAPP',
         });
       return {
         line: `🛍️ ${data.description || category.name}: ${data.installments}x de ${fmt(perInstallment)}`,
