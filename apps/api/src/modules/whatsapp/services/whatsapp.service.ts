@@ -165,6 +165,9 @@ export class WhatsappService {
         mimetype: image.mimetype,
         userId: user.id,
         customCategories,
+        // `content` numa mensagem de imagem é a legenda que o usuário escreveu
+        // junto da foto (ex: "no cartão Bradesco") — vai como contexto.
+        caption: content,
       });
 
       if (!data) {
