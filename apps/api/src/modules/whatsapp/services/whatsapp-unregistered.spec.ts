@@ -26,6 +26,7 @@ function buildService(overrides: { user?: unknown }) {
     {} as never, // createInstallments
     {} as never, // parser
     {} as never, // transcription
+    {} as never, // receiptExtraction
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring
