@@ -143,6 +143,7 @@ function TransacoesPageInner() {
     date?: string;
     categoryId: string;
     cardId?: string;
+    installments?: number;
   }) {
     try {
       await fetchApi("/transactions", {

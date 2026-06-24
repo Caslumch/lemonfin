@@ -5,10 +5,12 @@ import { FamilyContextService } from '../../families/services/family-context.ser
 
 describe('DeleteTransactionUseCase', () => {
   let useCase: DeleteTransactionUseCase;
-  let repo: jest.Mocked<Pick<
-    TransactionsRepository,
-    'findById' | 'delete' | 'deleteByInstallmentGroup'
-  >>;
+  let repo: jest.Mocked<
+    Pick<
+      TransactionsRepository,
+      'findById' | 'delete' | 'deleteByInstallmentGroup'
+    >
+  >;
   let familyContext: jest.Mocked<Pick<FamilyContextService, 'resolveUserIds'>>;
 
   const userIds = ['u1', 'u2'];

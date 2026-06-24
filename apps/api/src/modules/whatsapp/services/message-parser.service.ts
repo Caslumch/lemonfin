@@ -20,6 +20,10 @@ export interface ParsedInstallment {
   description: string;
   categorySlug: string;
   cardName?: string;
+  // Data da compra (= 1ª parcela), ISO 'YYYY-MM-DD'. Só quando o usuário
+  // menciona ("mês passado", "dia 5", "ontem"). Aceita passado (compra
+  // retroativa); o validador descarta datas inválidas/no futuro. Ausente = hoje.
+  purchaseDate?: string;
 }
 
 export interface ParsedRecurring {
@@ -127,9 +131,7 @@ const OUTROS_LINE = '- outros: quando não se encaixa em nenhuma categoria';
 
 // Categorias personalizadas vão ANTES de "outros" (catch-all) para terem
 // prioridade na escolha do modelo.
-function buildCategoryList(
-  custom: { slug: string; name: string }[],
-): string {
+function buildCategoryList(custom: { slug: string; name: string }[]): string {
   const lines = [...SYSTEM_CATEGORY_LINES];
   for (const c of custom) {
     lines.push(`- ${c.slug}: ${c.name} (categoria personalizada do usuário)`);
@@ -140,8 +142,11 @@ function buildCategoryList(
 
 function buildSystemPrompt(
   custom: { slug: string; name: string }[],
+  today: string,
 ): string {
   return `Você é o LemonFin, um assistente financeiro inteligente via WhatsApp. Você ajuda usuários a registrar transações, consultar gastos e dar dicas financeiras.
+
+Hoje é ${today}. Use esta data como referência para resolver expressões de tempo relativas ("mês passado", "ontem", "dia 5", "até dezembro").
 
 Analise a mensagem do usuário e identifique a INTENÇÃO. Responda APENAS com JSON válido (sem markdown, sem backticks, sem explicações).
 
@@ -202,10 +207,11 @@ Responda: {"intent": "correction", "newAmount": number}
 Quando o usuário menciona uma compra parcelada (em X vezes, Xx, parcelas).
 Exemplos: "comprei tênis de 300 em 3x", "comprei geladeira de 2400 em 12x no Nubank", "parcelei 600 em 6x"
 
-Responda: {"intent": "installment", "amount": number, "installments": number, "description": string, "categorySlug": string, "cardName": string | null}
+Responda: {"intent": "installment", "amount": number, "installments": number, "description": string, "categorySlug": string, "cardName": string | null, "purchaseDate": string | null}
 - amount: valor TOTAL da compra
 - installments: número de parcelas
 - cardName: nome do cartão se mencionado, senão null
+- purchaseDate: data da COMPRA (quando a 1ª parcela cai), no formato ISO "YYYY-MM-DD", SOMENTE se o usuário mencionar quando comprou ("mês passado", "mês retrasado", "dia 5", "ontem", "semana passada", "em janeiro"). Resolva a expressão relativa usando a data de HOJE informada acima. Se NÃO houver menção de data, retorne null (vai usar hoje). Não invente datas.
 
 ### 6. RECURRING — Conta fixa / recorrência mensal
 Quando o usuário descreve um gasto ou receita que se repete TODO MÊS num dia fixo.
@@ -361,10 +367,15 @@ export class MessageParserService {
         });
       }
 
+      // Data de hoje (YYYY-MM-DD) para ancorar expressões relativas no prompt.
+      const today = new Date().toISOString().slice(0, 10);
       const completion = await this.openai.chat.completions.create({
         model: MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(customCategories) },
+          {
+            role: 'system',
+            content: buildSystemPrompt(customCategories, today),
+          },
           ...userTurns,
           { role: 'user', content: `MENSAGEM ATUAL: ${message}` },
         ],
@@ -567,8 +578,28 @@ export class MessageParserService {
         description: (json.description as string) || '',
         categorySlug: json.categorySlug as string,
         cardName: (json.cardName as string) || undefined,
+        purchaseDate: this.normalizePurchaseDate(
+          json.purchaseDate as string | null | undefined,
+        ),
       },
     };
+  }
+
+  // Normaliza a data da compra de um parcelamento. Aceita datas no passado
+  // (compra retroativa). Descarta o que não der pra usar como data de compra:
+  // ausente, inválida, ou no futuro (compra futura não faz sentido) — nesses
+  // casos retorna undefined e o use-case usa hoje como base.
+  private normalizePurchaseDate(
+    raw: string | null | undefined,
+  ): string | undefined {
+    if (!raw) return undefined;
+    const parsed = new Date(raw);
+    // Tolerância de 1 dia no futuro para fuso/horário; além disso, descarta.
+    const maxFuture = Date.now() + 24 * 60 * 60 * 1000;
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() > maxFuture) {
+      return undefined;
+    }
+    return parsed.toISOString();
   }
 
   private parseRecurringItem(

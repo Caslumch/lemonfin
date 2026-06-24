@@ -9,11 +9,7 @@ export class GetSummaryUseCase {
     private readonly familyContext: FamilyContextService,
   ) {}
 
-  async execute(
-    userId: string,
-    startDate?: string,
-    endDate?: string,
-  ) {
+  async execute(userId: string, startDate?: string, endDate?: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     return this.transactionsRepository.getSummary(userIds, startDate, endDate);
   }

@@ -51,7 +51,8 @@ export class TransactionsController {
   @Post()
   create(
     @CurrentUser() user: { id: string },
-    @Body(new ZodValidationPipe(createTransactionSchema)) body: CreateTransactionInput,
+    @Body(new ZodValidationPipe(createTransactionSchema))
+    body: CreateTransactionInput,
   ) {
     return this.createTransaction.execute(user.id, body);
   }

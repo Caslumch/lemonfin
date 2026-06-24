@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TransactionsController } from './controllers/transactions.controller';
 import { TransactionsRepository } from './repositories/transactions.repository';
 import { CreateTransactionUseCase } from './use-cases/create-transaction.use-case';
+import { CreateInstallmentsUseCase } from './use-cases/create-installments.use-case';
 import { ListTransactionsUseCase } from './use-cases/list-transactions.use-case';
 import { UpdateTransactionUseCase } from './use-cases/update-transaction.use-case';
 import { DeleteTransactionUseCase } from './use-cases/delete-transaction.use-case';
@@ -28,6 +29,7 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
   providers: [
     TransactionsRepository,
     CreateTransactionUseCase,
+    CreateInstallmentsUseCase,
     ListTransactionsUseCase,
     UpdateTransactionUseCase,
     DeleteTransactionUseCase,
@@ -37,6 +39,10 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     GetInsightsUseCase,
     GetForecastUseCase,
   ],
-  exports: [TransactionsRepository, GetForecastUseCase],
+  exports: [
+    TransactionsRepository,
+    GetForecastUseCase,
+    CreateInstallmentsUseCase,
+  ],
 })
 export class TransactionsModule {}

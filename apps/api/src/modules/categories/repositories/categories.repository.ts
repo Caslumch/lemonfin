@@ -96,7 +96,12 @@ export class CategoriesRepository {
 
   async update(
     id: string,
-    data: { name?: string; icon?: string; colorBg?: string; colorText?: string },
+    data: {
+      name?: string;
+      icon?: string;
+      colorBg?: string;
+      colorText?: string;
+    },
   ): Promise<Category> {
     return this.prisma.category.update({ where: { id }, data });
   }

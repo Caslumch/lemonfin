@@ -55,37 +55,55 @@ export class GetInsightsUseCase {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const currentEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
     const previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const previousEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+    );
 
     const daysRemaining = Math.ceil(
       (currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    const [currentSummary, previousSummary, currentCategories, previousCategories] =
-      await Promise.all([
-        this.transactionsRepository.getSummary(
-          userIds,
-          currentStart.toISOString(),
-          currentEnd.toISOString(),
-        ),
-        this.transactionsRepository.getSummary(
-          userIds,
-          previousStart.toISOString(),
-          previousEnd.toISOString(),
-        ),
-        this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          currentStart.toISOString(),
-          currentEnd.toISOString(),
-        ),
-        this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          previousStart.toISOString(),
-          previousEnd.toISOString(),
-        ),
-      ]);
+    const [
+      currentSummary,
+      previousSummary,
+      currentCategories,
+      previousCategories,
+    ] = await Promise.all([
+      this.transactionsRepository.getSummary(
+        userIds,
+        currentStart.toISOString(),
+        currentEnd.toISOString(),
+      ),
+      this.transactionsRepository.getSummary(
+        userIds,
+        previousStart.toISOString(),
+        previousEnd.toISOString(),
+      ),
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        currentStart.toISOString(),
+        currentEnd.toISOString(),
+      ),
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        previousStart.toISOString(),
+        previousEnd.toISOString(),
+      ),
+    ]);
 
     const previousMap = new Map(
       previousCategories.map((c) => [c.categoryId, c]),

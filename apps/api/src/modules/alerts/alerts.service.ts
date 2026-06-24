@@ -166,7 +166,10 @@ export class AlertsService {
       'Quer que eu lance automaticamente todo mês? Cadastre em *Recorrentes* no app, ou me diga aqui: _"todo dia X pago Y de Z"_.',
     ];
 
-    await this.wmodeClient.sendMessage({ to: phone, content: lines.join('\n') });
+    await this.wmodeClient.sendMessage({
+      to: phone,
+      content: lines.join('\n'),
+    });
     this.logger.log(
       `Sent ${subscriptions.length} subscription suggestion(s) to ${phone}`,
     );

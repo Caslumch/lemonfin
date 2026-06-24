@@ -118,7 +118,8 @@ export class RecurringRepository {
     },
   ) {
     const updateData: Prisma.RecurringTransactionUpdateInput = {};
-    if (data.description !== undefined) updateData.description = data.description;
+    if (data.description !== undefined)
+      updateData.description = data.description;
     if (data.amount !== undefined)
       updateData.amount = new Prisma.Decimal(data.amount);
     if (data.type !== undefined) updateData.type = data.type;

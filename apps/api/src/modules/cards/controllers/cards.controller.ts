@@ -18,10 +18,7 @@ import { ListCardsUseCase } from '../use-cases/list-cards.use-case';
 import { UpdateCardUseCase } from '../use-cases/update-card.use-case';
 import { DeleteCardUseCase } from '../use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from '../use-cases/get-card-invoice.use-case';
-import {
-  createCardSchema,
-  updateCardSchema,
-} from '../dtos/card.dto';
+import { createCardSchema, updateCardSchema } from '../dtos/card.dto';
 import type { CreateCardInput, UpdateCardInput } from '../dtos/card.dto';
 
 @Controller('cards')
@@ -67,10 +64,7 @@ export class CardsController {
   }
 
   @Delete(':id')
-  remove(
-    @CurrentUser() user: { id: string },
-    @Param('id') id: string,
-  ) {
+  remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.deleteCard.execute(id, user.id);
   }
 }

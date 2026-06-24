@@ -37,6 +37,7 @@ function buildService(overrides: {
     transactionsRepository as never,
     {} as never, // cards
     familyContext as never,
+    {} as never, // createInstallments
     {} as never, // parser
     {} as never, // transcription
     wmodeClient as never,
@@ -59,9 +60,11 @@ const callCancel = (
   service: WhatsappService,
   phoneKey = '5511999',
 ): Promise<void> =>
-  (service as unknown as {
-    handleCancel: (f: string, u: string, p?: string) => Promise<void>;
-  }).handleCancel('5511999@c.us', 'u1', phoneKey);
+  (
+    service as unknown as {
+      handleCancel: (f: string, u: string, p?: string) => Promise<void>;
+    }
+  ).handleCancel('5511999@c.us', 'u1', phoneKey);
 
 describe('WhatsappService.handleCancel', () => {
   it('cancela a AÇÃO INTEIRA (parcelamento) via lastAction', async () => {

@@ -28,9 +28,7 @@ export class ChangePasswordUseCase {
 
     const isSame = await bcrypt.compare(input.newPassword, user.passwordHash);
     if (isSame) {
-      throw new BadRequestException(
-        'A nova senha deve ser diferente da atual',
-      );
+      throw new BadRequestException('A nova senha deve ser diferente da atual');
     }
 
     const passwordHash = await bcrypt.hash(input.newPassword, 10);

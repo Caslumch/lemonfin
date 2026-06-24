@@ -16,6 +16,7 @@ const transactionSchema = z.object({
   date: z.string().optional(),
   categoryId: z.string().min(1, "Selecione uma categoria"),
   cardId: z.string().optional(),
+  installments: z.number().int().min(1).max(48).optional(),
 });
 
 interface TransactionModalProps {
@@ -28,6 +29,7 @@ interface TransactionModalProps {
     date?: string;
     categoryId: string;
     cardId?: string;
+    installments?: number;
   }) => Promise<void>;
   transaction?: Transaction | null;
   categories: Category[];
@@ -48,6 +50,7 @@ export function TransactionModal({
   const [date, setDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [cardId, setCardId] = useState("");
+  const [installments, setInstallments] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -61,6 +64,7 @@ export function TransactionModal({
       setDate(transaction.date.slice(0, 10));
       setCategoryId(transaction.categoryId);
       setCardId(transaction.cardId || "");
+      setInstallments(1);
     } else {
       setType("EXPENSE");
       setAmount("");
@@ -68,6 +72,7 @@ export function TransactionModal({
       setDate(new Date().toISOString().slice(0, 10));
       setCategoryId(categories[0]?.id || "");
       setCardId("");
+      setInstallments(1);
     }
     setError("");
   }, [transaction, open, categories]);
@@ -78,6 +83,9 @@ export function TransactionModal({
     e.preventDefault();
     setError("");
 
+    // Parcelamento só vale para despesa na criação; 1x = à vista (não envia).
+    const isInstallment = !isEditing && type === "EXPENSE" && installments >= 2;
+
     const result = transactionSchema.safeParse({
       amount: parseFloat(amount),
       type,
@@ -85,6 +93,7 @@ export function TransactionModal({
       date: date || undefined,
       categoryId,
       cardId: cardId || undefined,
+      installments: isInstallment ? installments : undefined,
     });
 
     if (!result.success) {
@@ -224,6 +233,53 @@ export function TransactionModal({
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {/* Parcelamento — só em despesas e só ao criar (não na edição) */}
+            {type === "EXPENSE" && !isEditing && (
+              <div className="w-full">
+                <label
+                  htmlFor="installments"
+                  className="block text-sm font-medium text-fg mb-1.5"
+                >
+                  Parcelas
+                </label>
+                <select
+                  id="installments"
+                  value={installments}
+                  onChange={(e) => setInstallments(Number(e.target.value))}
+                  className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
+                >
+                  <option value={1}>À vista (1x)</option>
+                  {Array.from({ length: 47 }, (_, i) => i + 2).map((n) => (
+                    <option key={n} value={n}>
+                      {n}x
+                    </option>
+                  ))}
+                </select>
+                {installments >= 2 &&
+                  (() => {
+                    const total = parseFloat(amount);
+                    const per =
+                      Number.isFinite(total) && total > 0
+                        ? total / installments
+                        : 0;
+                    return (
+                      <p className="mt-1.5 text-xs text-fg-muted">
+                        {per > 0
+                          ? `${installments}x de ${per.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })} (total ${total.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}).`
+                          : `Valor é o total da compra, dividido em ${installments}x.`}{" "}
+                        A 1ª parcela cai na <strong>data</strong> informada acima.
+                      </p>
+                    );
+                  })()}
               </div>
             )}
 
