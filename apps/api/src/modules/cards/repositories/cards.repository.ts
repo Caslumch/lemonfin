@@ -50,8 +50,9 @@ export class CardsRepository {
 
   /**
    * Gasto (apenas EXPENSE) do CICLO DE FATURA ABERTO de cada cartão informado,
-   * indexado por cardId. O ciclo vai do dia seguinte ao fechamento do mês
-   * anterior até o fechamento do mês atual — o mesmo critério de getInvoice.
+   * indexado por cardId. O ciclo vai do dia do fechamento do mês anterior até o
+   * dia anterior ao fechamento do mês atual (corte no closingDay, estilo Nubank)
+   * — o mesmo critério de getInvoice.
    *
    * Como cada cartão tem seu próprio closingDay, não há um intervalo único de
    * datas; buscamos as transações da janela máxima possível (~últimos ~62 dias,
@@ -114,16 +115,20 @@ export class CardsRepository {
     const month = now.getMonth();
     const day = now.getDate();
 
-    // Se ainda não fechou neste mês, o ciclo aberto encerra no fechamento deste
-    // mês; caso contrário, encerra no fechamento do mês seguinte.
-    const closesThisMonth = day <= closingDay;
+    // Convenção estilo Nubank: o DIA do fechamento é o corte — uma compra no
+    // closingDay já abre o próximo ciclo. Logo, se hoje ainda é ANTES do
+    // fechamento deste mês (day < closingDay), o ciclo aberto encerra no
+    // fechamento deste mês; do dia do fechamento em diante, já encerra no mês
+    // seguinte. O ciclo vai do closingDay (inclusive) ao dia anterior ao próximo
+    // closingDay (closingDay - 1, 23:59:59).
+    const closesThisMonth = day < closingDay;
     const endMonthOffset = closesThisMonth ? 0 : 1;
 
-    const start = new Date(year, month - 1 + endMonthOffset, closingDay + 1);
+    const start = new Date(year, month - 1 + endMonthOffset, closingDay);
     const end = new Date(
       year,
       month + endMonthOffset,
-      closingDay,
+      closingDay - 1,
       23,
       59,
       59,
