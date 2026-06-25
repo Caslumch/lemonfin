@@ -31,10 +31,28 @@ interface TransactionModalProps {
     categoryId: string;
     cardId?: string;
     installments?: number;
+    // true quando a edição deve recriar a compra parcelada inteira (scope=group).
+    editGroup?: boolean;
   }) => Promise<void>;
   transaction?: Transaction | null;
   categories: Category[];
   cards?: Card[];
+}
+
+// Recua `months` meses a partir de uma data ISO (ancorada ao meio-dia UTC),
+// devolvendo "YYYY-MM-DD". Usado para descobrir a data da 1ª parcela a partir
+// de uma parcela do meio do grupo (a data desta - (n-1) meses), fazendo clamp
+// do dia ao último dia válido do mês-alvo (igual ao backend).
+function isoMinusMonthsToInput(iso: string, months: number): string {
+  const d = new Date(iso);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const day = d.getUTCDate();
+  const lastDay = new Date(Date.UTC(y, m - months + 1, 0)).getUTCDate();
+  const target = new Date(
+    Date.UTC(y, m - months, Math.min(day, lastDay), 12, 0, 0),
+  );
+  return target.toISOString().slice(0, 10);
 }
 
 export function TransactionModal({
@@ -53,6 +71,10 @@ export function TransactionModal({
   const [cardId, setCardId] = useState("");
   const [isParcelado, setIsParcelado] = useState(false);
   const [installments, setInstallments] = useState(2);
+  // true quando estamos editando uma compra parcelada já existente (o modal
+  // abre em modo grupo: valor TOTAL, nº de parcelas e data da 1ª, e salvar
+  // recria todas as parcelas).
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [parcelasOpen, setParcelasOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const [error, setError] = useState("");
@@ -86,14 +108,35 @@ export function TransactionModal({
 
   useEffect(() => {
     if (transaction) {
+      // Compra parcelada (a transação é a parcela n/N): abre em modo grupo.
+      const total = transaction.installmentTotal ?? 0;
+      const number = transaction.installmentNumber ?? 0;
+      const isGroup = total >= 2 && number >= 1;
+
       setType(transaction.type);
-      setAmount(String(Number(transaction.amount)));
-      setDescription(transaction.description || "");
-      setDate(transaction.date.slice(0, 10));
+      setIsEditingGroup(isGroup);
+
+      if (isGroup) {
+        // Valor exibido = TOTAL da compra (soma das N parcelas), derivado do
+        // valor desta parcela × N. Descrição sem o sufixo "(n/N)" que o backend
+        // acrescenta. Data = a da 1ª parcela (recuando n-1 meses desta).
+        const perInstallment = Number(transaction.amount);
+        setAmount(String(Math.round(perInstallment * total * 100) / 100));
+        setDescription(
+          (transaction.description || "").replace(/\s*\(\d+\/\d+\)\s*$/, ""),
+        );
+        setDate(isoMinusMonthsToInput(transaction.date, number - 1));
+        setInstallments(total);
+      } else {
+        setAmount(String(Number(transaction.amount)));
+        setDescription(transaction.description || "");
+        setDate(transaction.date.slice(0, 10));
+        setInstallments(2);
+      }
+
       setCategoryId(transaction.categoryId);
       setCardId(transaction.cardId || "");
       setIsParcelado(false);
-      setInstallments(2);
     } else {
       setType("EXPENSE");
       setAmount("");
@@ -103,6 +146,7 @@ export function TransactionModal({
       setCardId("");
       setIsParcelado(false);
       setInstallments(2);
+      setIsEditingGroup(false);
     }
     setParcelasOpen(false);
     setError("");
@@ -126,9 +170,11 @@ export function TransactionModal({
     e.preventDefault();
     setError("");
 
-    // Parcelamento só vale para despesa na criação, com o switch ligado.
-    const isInstallment =
-      !isEditing && type === "EXPENSE" && isParcelado && installments >= 2;
+    // Parcelamento na CRIAÇÃO: despesa com o switch ligado. Na EDIÇÃO de um
+    // grupo, o nº de parcelas vem do mesmo seletor (sempre >= 2).
+    const isInstallment = isEditingGroup
+      ? installments >= 2
+      : !isEditing && type === "EXPENSE" && isParcelado && installments >= 2;
 
     const result = transactionSchema.safeParse({
       amount: parseFloat(amount),
@@ -152,6 +198,7 @@ export function TransactionModal({
         date: result.data.date
           ? new Date(result.data.date + "T12:00:00").toISOString()
           : undefined,
+        editGroup: isEditingGroup,
       });
       onClose();
     } catch (err) {
@@ -283,29 +330,43 @@ export function TransactionModal({
               </div>
             )}
 
-            {/* Parcelamento — só em despesas e só ao criar (não na edição) */}
-            {type === "EXPENSE" && !isEditing && (
+            {/* Parcelamento — ao CRIAR uma despesa (com switch) ou ao EDITAR
+                uma compra parcelada existente (modo grupo, seletor sempre visível). */}
+            {((type === "EXPENSE" && !isEditing) || isEditingGroup) && (
               <div className="w-full">
-                {/* Switch "Parcelar" */}
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="parcelar-switch"
-                    className="text-sm font-medium text-fg cursor-pointer"
-                  >
-                    Parcelar
-                  </label>
-                  <Toggle
-                    checked={isParcelado}
-                    onCheckedChange={(v) => {
-                      setIsParcelado(v);
-                      setParcelasOpen(false);
-                    }}
-                  />
-                </div>
+                {/* Switch "Parcelar" — só na criação. No modo grupo a compra já
+                    é parcelada, então não faz sentido ligar/desligar. */}
+                {!isEditingGroup && (
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="parcelar-switch"
+                      className="text-sm font-medium text-fg cursor-pointer"
+                    >
+                      Parcelar
+                    </label>
+                    <Toggle
+                      checked={isParcelado}
+                      onCheckedChange={(v) => {
+                        setIsParcelado(v);
+                        setParcelasOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
 
-                {/* Dropdown de parcelas — só quando o switch está ligado */}
-                {isParcelado && (
-                  <div className="relative mt-3" ref={parcelasRef}>
+                {isEditingGroup && (
+                  <label className="block text-sm font-medium text-fg mb-1.5">
+                    Parcelas
+                  </label>
+                )}
+
+                {/* Dropdown de parcelas — quando o switch está ligado (criação)
+                    ou sempre, no modo grupo (edição). */}
+                {(isParcelado || isEditingGroup) && (
+                  <div
+                    className={`relative ${isEditingGroup ? "" : "mt-3"}`}
+                    ref={parcelasRef}
+                  >
                     <button
                       ref={parcelasTriggerRef}
                       type="button"
@@ -373,6 +434,13 @@ export function TransactionModal({
                             : `O valor é o total da compra, dividido em ${installments}x.`}{" "}
                           A 1ª parcela cai na <strong>data</strong> informada
                           acima.
+                          {isEditingGroup && (
+                            <>
+                              {" "}
+                              Salvar <strong>recria todas as parcelas</strong>{" "}
+                              desta compra.
+                            </>
+                          )}
                         </p>
                       );
                     })()}

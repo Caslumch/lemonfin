@@ -82,6 +82,23 @@ describe('CreateInstallmentsUseCase', () => {
     expect(months).toEqual(['2026-01', '2026-02', '2026-03']);
   });
 
+  it('grava as parcelas ancoradas ao meio-dia UTC (sobrevive ao fuso do Brasil)', async () => {
+    // Compra em 11/06/2026. As datas devem manter dia 11 em UTC e horário
+    // 12:00Z — formatar no fuso do Brasil (UTC-3) não pode voltar pro dia 10.
+    await useCase.execute({
+      ...baseParams,
+      installments: 3,
+      startDate: '2026-06-11T15:00:00.000Z',
+    });
+
+    const dates = createdArgs.map((a) => a.date as string);
+    expect(dates).toEqual([
+      '2026-06-11T12:00:00.000Z',
+      '2026-07-11T12:00:00.000Z',
+      '2026-08-11T12:00:00.000Z',
+    ]);
+  });
+
   it('faz clamp do dia para o último dia do mês (evita "vazar" para o mês seguinte)', async () => {
     // Compra em 31/01/2026; a 2ª parcela (fev) deve cair em 28/02, não 03/03.
     await useCase.execute({
@@ -93,9 +110,9 @@ describe('CreateInstallmentsUseCase', () => {
     const days = createdArgs.map((a) => {
       const d = new Date(a.date as string);
       return {
-        year: d.getFullYear(),
-        month: d.getMonth() + 1,
-        day: d.getDate(),
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth() + 1,
+        day: d.getUTCDate(),
       };
     });
     // jan: 31, fev: 28 (clamp), mar: 31.

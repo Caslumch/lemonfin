@@ -16,12 +16,58 @@ interface CreateInstallmentsParams {
   // Aceita data no passado (compra retroativa). Ausente = hoje.
   startDate?: string | Date;
   source?: 'WHATSAPP' | 'MANUAL';
+  // Reaproveita um grupo existente em vez de gerar um novo. Usado ao EDITAR um
+  // grupo de parcelas (apaga as antigas e recria preservando o mesmo id).
+  installmentGroupId?: string;
 }
 
 export interface CreateInstallmentsResult {
   perInstallment: number;
   installmentGroupId: string;
   transactionIds: string[];
+}
+
+// Calcula o cronograma de uma compra parcelada: o valor de cada parcela e a
+// data (ISO, ancorada ao meio-dia UTC) de cada uma a partir de startDate, uma
+// por mês. Extraído para reuso entre criar e editar (recriar) um grupo.
+export function buildInstallmentSchedule(params: {
+  amount: number;
+  installments: number;
+  startDate?: string | Date;
+}): { perInstallment: number; dates: string[] } {
+  const perInstallment =
+    Math.round((params.amount / params.installments) * 100) / 100;
+  const base = params.startDate ? new Date(params.startDate) : new Date();
+
+  // Lê a base em UTC (e gera as parcelas em UTC, ancoradas ao meio-dia). O
+  // startDate sempre chega ancorado ao meio-dia, então o dia em UTC é o dia
+  // real da compra; o par getUTC*/Date.UTC deixa a intenção explícita e à
+  // prova de mudança de TZ do servidor.
+  const baseYear = base.getUTCFullYear();
+  const baseMonth = base.getUTCMonth();
+  const baseDay = base.getUTCDate();
+
+  const dates: string[] = [];
+  for (let i = 0; i < params.installments; i++) {
+    // Fixa o dia no último dia válido do mês-alvo. Sem isso, new Date(ano,
+    // mês+i, 31) "vaza" para o mês seguinte (ex: 31/jan + 1 mês → 03/mar),
+    // pulando meses e bagunçando o cronograma das parcelas.
+    const lastDayOfTargetMonth = new Date(
+      Date.UTC(baseYear, baseMonth + i + 1, 0),
+    ).getUTCDate();
+    const day = Math.min(baseDay, lastDayOfTargetMonth);
+    // Ancora ao meio-dia UTC (e não meia-noite local). new Date(ano, mês, dia)
+    // num servidor UTC vira T00:00:00Z, que ao formatar no fuso do Brasil
+    // (UTC-3) volta um dia (mostra o dia anterior na lista). O resto do app
+    // (modal manual) também usa meio-dia justamente para sobreviver a esse
+    // round-trip de fuso.
+    const installmentDate = new Date(
+      Date.UTC(baseYear, baseMonth + i, day, 12, 0, 0),
+    );
+    dates.push(installmentDate.toISOString());
+  }
+
+  return { perInstallment, dates };
 }
 
 @Injectable()
@@ -57,33 +103,20 @@ export class CreateInstallmentsUseCase {
       }
     }
 
-    const perInstallment =
-      Math.round((params.amount / params.installments) * 100) / 100;
-    const base = params.startDate ? new Date(params.startDate) : new Date();
-    const installmentGroupId = randomUUID();
+    const { perInstallment, dates } = buildInstallmentSchedule({
+      amount: params.amount,
+      installments: params.installments,
+      startDate: params.startDate,
+    });
+    const installmentGroupId = params.installmentGroupId ?? randomUUID();
     const transactionIds: string[] = [];
 
-    const baseYear = base.getFullYear();
-    const baseMonth = base.getMonth();
-    const baseDay = base.getDate();
-
     for (let i = 0; i < params.installments; i++) {
-      // Fixa o dia no último dia válido do mês-alvo. Sem isso, new Date(ano,
-      // mês+i, 31) "vaza" para o mês seguinte (ex: 31/jan + 1 mês → 03/mar),
-      // pulando meses e bagunçando o cronograma das parcelas.
-      const lastDayOfTargetMonth = new Date(
-        baseYear,
-        baseMonth + i + 1,
-        0,
-      ).getDate();
-      const day = Math.min(baseDay, lastDayOfTargetMonth);
-      const installmentDate = new Date(baseYear, baseMonth + i, day);
-
       const tx = await this.transactionsRepository.create({
         amount: perInstallment,
         type: 'EXPENSE',
         description: `${params.description} (${i + 1}/${params.installments})`,
-        date: installmentDate.toISOString(),
+        date: dates[i],
         source: params.source ?? 'MANUAL',
         userId: params.userId,
         categoryId: params.categoryId,

@@ -5,6 +5,7 @@ import { CreateTransactionUseCase } from './use-cases/create-transaction.use-cas
 import { CreateInstallmentsUseCase } from './use-cases/create-installments.use-case';
 import { ListTransactionsUseCase } from './use-cases/list-transactions.use-case';
 import { UpdateTransactionUseCase } from './use-cases/update-transaction.use-case';
+import { UpdateInstallmentGroupUseCase } from './use-cases/update-installment-group.use-case';
 import { DeleteTransactionUseCase } from './use-cases/delete-transaction.use-case';
 import { GetSummaryUseCase } from './use-cases/get-summary.use-case';
 import { GetMonthlyBreakdownUseCase } from './use-cases/get-monthly-breakdown.use-case';
@@ -32,6 +33,7 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     CreateInstallmentsUseCase,
     ListTransactionsUseCase,
     UpdateTransactionUseCase,
+    UpdateInstallmentGroupUseCase,
     DeleteTransactionUseCase,
     GetSummaryUseCase,
     GetMonthlyBreakdownUseCase,

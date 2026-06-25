@@ -14,9 +14,14 @@ function formatCurrency(value: string | number) {
 }
 
 function formatDate(date: string) {
+  // Formata em UTC, não no fuso do navegador. As datas são gravadas ancoradas
+  // ao meio-dia UTC; formatar em fuso local (Brasil, UTC-3) puxaria datas
+  // próximas da meia-noite para o dia anterior — e divergiria do dia que o
+  // modal de edição mostra (ele faz slice(0,10) da string, sem fuso).
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
+    timeZone: "UTC",
   }).format(new Date(date));
 }
 
