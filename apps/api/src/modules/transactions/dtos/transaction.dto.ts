@@ -22,6 +22,19 @@ export const updateTransactionSchema = z.object({
   cardId: z.string().cuid().nullable().optional(),
 });
 
+// Edição de uma compra parcelada inteira (scope=group). `amount` é o valor
+// TOTAL da compra (será redividido), `installments` o novo nº de parcelas e
+// `date` a data da 1ª parcela — o backend apaga as parcelas atuais e recria o
+// grupo (preservando o installmentGroupId). Sempre EXPENSE.
+export const updateInstallmentGroupSchema = z.object({
+  amount: z.number().positive('Valor deve ser positivo'),
+  description: z.string().optional(),
+  date: z.string().datetime(),
+  categoryId: z.string().cuid(),
+  cardId: z.string().cuid().nullable().optional(),
+  installments: z.number().int().min(2).max(48),
+});
+
 export const listTransactionsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   perPage: z.coerce.number().int().positive().max(100).default(20),
@@ -39,4 +52,7 @@ export const listTransactionsQuerySchema = z.object({
 
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
+export type UpdateInstallmentGroupInput = z.infer<
+  typeof updateInstallmentGroupSchema
+>;
 export type ListTransactionsQuery = z.infer<typeof listTransactionsQuerySchema>;

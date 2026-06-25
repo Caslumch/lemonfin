@@ -211,6 +211,53 @@ export class TransactionsRepository {
     return count;
   }
 
+  // Substitui (atomicamente) todas as parcelas de um grupo: apaga as atuais e
+  // recria a partir da lista informada, tudo numa transação. Usado ao EDITAR um
+  // grupo de parcelas (o nº de parcelas/valor/data podem mudar). Escopa o
+  // delete aos usuários (isolamento de tenant). Retorna as parcelas criadas.
+  async replaceInstallmentGroup(
+    installmentGroupId: string,
+    userIds: string[],
+    rows: Array<{
+      amount: number;
+      description?: string;
+      date: string;
+      source?: 'MANUAL' | 'WHATSAPP' | 'RECURRING';
+      userId: string;
+      categoryId: string;
+      cardId?: string;
+      installmentNumber: number;
+      installmentTotal: number;
+    }>,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({
+        where: { installmentGroupId, userId: { in: userIds } },
+      });
+      const created = [];
+      for (const row of rows) {
+        const t = await tx.transaction.create({
+          data: {
+            amount: new Prisma.Decimal(row.amount),
+            type: 'EXPENSE',
+            description: row.description,
+            date: new Date(row.date),
+            source: row.source ?? 'MANUAL',
+            userId: row.userId,
+            categoryId: row.categoryId,
+            cardId: row.cardId,
+            installmentGroupId,
+            installmentNumber: row.installmentNumber,
+            installmentTotal: row.installmentTotal,
+          },
+          include: txInclude,
+        });
+        created.push(t);
+      }
+      return created;
+    });
+  }
+
   // Exclui um conjunto de transações por id, escopado aos usuários (isolamento
   // de tenant). Usado para cancelar a "última ação" inteira (lote/parcelamento).
   async deleteManyByIds(ids: string[], userIds: string[]): Promise<number> {

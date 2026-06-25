@@ -144,11 +144,15 @@ function TransacoesPageInner() {
     categoryId: string;
     cardId?: string;
     installments?: number;
+    editGroup?: boolean;
   }) {
     try {
+      // editGroup só faz sentido na edição; não vai no POST de criação.
+      const { editGroup: _editGroup, ...rest } = data;
+      void _editGroup;
       await fetchApi("/transactions", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(rest),
       });
       toast.success("Transação criada com sucesso");
       invalidateTransactionData(queryClient);
@@ -165,15 +169,24 @@ function TransacoesPageInner() {
     date?: string;
     categoryId: string;
     cardId?: string;
+    installments?: number;
+    editGroup?: boolean;
   }) {
     if (!editingTx) return;
     try {
-      await fetchApi(`/transactions/${editingTx.id}`, {
+      // Edição de compra parcelada inteira: scope=group recria todas as parcelas
+      // (o backend espera amount=total, installments e date=1ª parcela). O resto
+      // dos campos da edição avulsa (type) não vai nesse payload.
+      const { editGroup, ...rest } = data;
+      const path = editGroup
+        ? `/transactions/${editingTx.id}?scope=group`
+        : `/transactions/${editingTx.id}`;
+      await fetchApi(path, {
         method: "PATCH",
-        body: JSON.stringify(data),
+        body: JSON.stringify(rest),
       });
       setEditingTx(null);
-      toast.success("Transação atualizada");
+      toast.success(editGroup ? "Parcelas atualizadas" : "Transação atualizada");
       invalidateTransactionData(queryClient);
     } catch {
       toast.error("Erro ao atualizar transação");

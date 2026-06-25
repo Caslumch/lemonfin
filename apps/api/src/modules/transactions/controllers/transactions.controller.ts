@@ -16,6 +16,7 @@ import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CreateTransactionUseCase } from '../use-cases/create-transaction.use-case';
 import { ListTransactionsUseCase } from '../use-cases/list-transactions.use-case';
 import { UpdateTransactionUseCase } from '../use-cases/update-transaction.use-case';
+import { UpdateInstallmentGroupUseCase } from '../use-cases/update-installment-group.use-case';
 import { DeleteTransactionUseCase } from '../use-cases/delete-transaction.use-case';
 import { GetSummaryUseCase } from '../use-cases/get-summary.use-case';
 import { GetMonthlyBreakdownUseCase } from '../use-cases/get-monthly-breakdown.use-case';
@@ -25,11 +26,11 @@ import { GetForecastUseCase } from '../use-cases/get-forecast.use-case';
 import {
   createTransactionSchema,
   updateTransactionSchema,
+  updateInstallmentGroupSchema,
   listTransactionsQuerySchema,
 } from '../dtos/transaction.dto';
 import type {
   CreateTransactionInput,
-  UpdateTransactionInput,
   ListTransactionsQuery,
 } from '../dtos/transaction.dto';
 
@@ -40,6 +41,7 @@ export class TransactionsController {
     private readonly createTransaction: CreateTransactionUseCase,
     private readonly listTransactions: ListTransactionsUseCase,
     private readonly updateTransaction: UpdateTransactionUseCase,
+    private readonly updateInstallmentGroup: UpdateInstallmentGroupUseCase,
     private readonly deleteTransaction: DeleteTransactionUseCase,
     private readonly getSummary: GetSummaryUseCase,
     private readonly getMonthlyBreakdown: GetMonthlyBreakdownUseCase,
@@ -109,10 +111,20 @@ export class TransactionsController {
   update(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateTransactionSchema))
-    body: UpdateTransactionInput,
+    // scope=group edita a compra parcelada inteira (recria todas as parcelas
+    // com novo valor/nº/data). O default (single) edita só esta transação. O
+    // schema depende do scope, por isso validamos aqui (não no decorator).
+    @Query('scope') scope: string | undefined,
+    @Body() body: unknown,
   ) {
-    return this.updateTransaction.execute(id, user.id, body);
+    if (scope === 'group') {
+      const data = new ZodValidationPipe(updateInstallmentGroupSchema).transform(
+        body,
+      );
+      return this.updateInstallmentGroup.execute(id, user.id, data);
+    }
+    const data = new ZodValidationPipe(updateTransactionSchema).transform(body);
+    return this.updateTransaction.execute(id, user.id, data);
   }
 
   @Delete(':id')
