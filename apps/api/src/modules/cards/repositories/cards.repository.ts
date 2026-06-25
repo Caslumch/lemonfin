@@ -167,6 +167,12 @@ export class CardsRepository {
     });
   }
 
+  // Retorna a fatura INTEIRA do ciclo (sem paginação) de propósito: é o gasto de
+  // um mês de um único cartão — poucas dezenas de linhas no caso real. Trazer
+  // tudo de uma vez permite ordenar no cliente (instantâneo, sem nova request a
+  // cada troca de critério). Se algum dia uma fatura puder ter centenas/milhares
+  // de transações, reconsiderar: aí o caminho é paginar AQUI com orderBy +
+  // skip/take (ordenação e paginação acopladas, senão ordena só a fatia trazida).
   async getInvoice(
     cardId: string,
     userIds: string[],
