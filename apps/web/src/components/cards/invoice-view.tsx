@@ -132,7 +132,9 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                     {tx.description || tx.category.name}
                   </p>
                   <p className="text-xs text-fg-muted">
-                    {new Date(tx.date).toLocaleDateString("pt-BR")}
+                    {new Date(tx.date).toLocaleDateString("pt-BR", {
+                      timeZone: "UTC",
+                    })}
                   </p>
                 </div>
               </div>

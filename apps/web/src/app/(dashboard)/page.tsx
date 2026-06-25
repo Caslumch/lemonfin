@@ -44,9 +44,12 @@ function formatCurrency(value: number) {
 }
 
 function formatDate(date: string) {
+  // Datas de transação são gravadas ancoradas ao meio-dia UTC; formata em UTC
+  // para não deslocar o dia no fuso do navegador (ver transaction-list.tsx).
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
+    timeZone: "UTC",
   }).format(new Date(date));
 }
 

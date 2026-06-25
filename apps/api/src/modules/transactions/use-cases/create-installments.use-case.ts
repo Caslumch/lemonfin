@@ -63,21 +63,31 @@ export class CreateInstallmentsUseCase {
     const installmentGroupId = randomUUID();
     const transactionIds: string[] = [];
 
-    const baseYear = base.getFullYear();
-    const baseMonth = base.getMonth();
-    const baseDay = base.getDate();
+    // Lê a base em UTC (e gera as parcelas em UTC, ancoradas ao meio-dia). O
+    // startDate sempre chega ancorado ao meio-dia, então o dia em UTC é o dia
+    // real da compra; ler em fuso local do servidor (UTC) seria equivalente
+    // hoje, mas o par getUTC*/Date.UTC deixa a intenção explícita e à prova de
+    // mudança de TZ do servidor.
+    const baseYear = base.getUTCFullYear();
+    const baseMonth = base.getUTCMonth();
+    const baseDay = base.getUTCDate();
 
     for (let i = 0; i < params.installments; i++) {
       // Fixa o dia no último dia válido do mês-alvo. Sem isso, new Date(ano,
       // mês+i, 31) "vaza" para o mês seguinte (ex: 31/jan + 1 mês → 03/mar),
       // pulando meses e bagunçando o cronograma das parcelas.
       const lastDayOfTargetMonth = new Date(
-        baseYear,
-        baseMonth + i + 1,
-        0,
-      ).getDate();
+        Date.UTC(baseYear, baseMonth + i + 1, 0),
+      ).getUTCDate();
       const day = Math.min(baseDay, lastDayOfTargetMonth);
-      const installmentDate = new Date(baseYear, baseMonth + i, day);
+      // Ancora ao meio-dia UTC (e não meia-noite local). new Date(ano, mês, dia)
+      // num servidor UTC vira T00:00:00Z, que ao formatar no fuso do Brasil
+      // (UTC-3) volta um dia (mostra o dia anterior na lista). O resto do app
+      // (modal manual) também usa meio-dia justamente para sobreviver a esse
+      // round-trip de fuso.
+      const installmentDate = new Date(
+        Date.UTC(baseYear, baseMonth + i, day, 12, 0, 0),
+      );
 
       const tx = await this.transactionsRepository.create({
         amount: perInstallment,
