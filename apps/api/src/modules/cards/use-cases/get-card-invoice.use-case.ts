@@ -26,10 +26,13 @@ export class GetCardInvoiceUseCase {
       monthIndex = m - 1;
     }
 
-    // Billing cycle: from closingDay of previous month to closingDay of current month
+    // Ciclo de fatura (convenção estilo Nubank): o DIA do fechamento é o corte —
+    // uma compra feita no closingDay já entra no próximo ciclo. Logo a fatura do
+    // mês vai do closingDay do mês anterior até o dia ANTERIOR ao fechamento
+    // deste mês (closingDay - 1, 23:59:59).
     const closingDay = card.closingDay;
-    const startDate = new Date(year, monthIndex - 1, closingDay + 1);
-    const endDate = new Date(year, monthIndex, closingDay, 23, 59, 59);
+    const startDate = new Date(year, monthIndex - 1, closingDay);
+    const endDate = new Date(year, monthIndex, closingDay - 1, 23, 59, 59);
 
     const { transactions, total } = await this.cardsRepository.getInvoice(
       cardId,
