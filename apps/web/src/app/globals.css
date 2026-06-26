@@ -305,3 +305,55 @@ body {
   color: var(--color-fg);
   font-family: var(--font-body), system-ui, sans-serif;
 }
+
+/* ===== DatePicker (react-day-picker) — tema da plataforma ===== */
+.lemon-daypicker {
+  --rdp-accent-color: var(--color-lima);
+  --rdp-accent-background-color: var(--color-lima);
+  margin: 0;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--color-fg);
+}
+.lemon-daypicker .rdp-month_caption {
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 0 0.25rem 0.25rem;
+}
+.lemon-daypicker .rdp-nav button,
+.lemon-daypicker .rdp-button_previous,
+.lemon-daypicker .rdp-button_next {
+  color: var(--color-fg-muted);
+  border-radius: 0.5rem;
+}
+.lemon-daypicker .rdp-nav button:hover {
+  background-color: var(--color-muted);
+  color: var(--color-fg);
+}
+.lemon-daypicker .rdp-weekday {
+  color: var(--color-fg-muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: lowercase;
+}
+.lemon-daypicker .rdp-day_button {
+  border-radius: 0.5rem;
+  transition: background-color 150ms;
+}
+.lemon-daypicker .rdp-day_button:hover {
+  background-color: var(--color-muted);
+}
+.lemon-daypicker .rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: var(--color-lima-hover);
+  font-weight: 600;
+}
+.lemon-daypicker .rdp-selected .rdp-day_button {
+  background-color: var(--color-lima);
+  color: var(--color-lima-text);
+  font-weight: 600;
+  border: none;
+}
+.lemon-daypicker .rdp-outside .rdp-day_button {
+  color: var(--color-fg-muted);
+  opacity: 0.5;
+}

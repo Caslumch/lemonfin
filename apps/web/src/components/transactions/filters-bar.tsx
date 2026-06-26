@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Tabs } from "@/components/ui/tabs";
+import { Select } from "@/components/ui/select";
 import type { Category } from "@/types/transaction";
 
 interface FiltersBarProps {
@@ -53,18 +54,16 @@ export function FiltersBar({
       />
 
       {/* Category filter */}
-      <select
+      <Select
         value={categoryId}
-        onChange={(e) => onCategoryChange(e.target.value)}
-        className="rounded-[12px] border-[1.5px] border-border bg-surface px-3.5 py-2 text-sm text-fg transition-colors focus:border-fg focus:outline-none cursor-pointer"
-      >
-        <option value="">Todas categorias</option>
-        {categories.map((cat) => (
-          <option key={cat.id} value={cat.id}>
-            {cat.name}
-          </option>
-        ))}
-      </select>
+        onChange={onCategoryChange}
+        size="md"
+        className="sm:w-48"
+        options={[
+          { value: "", label: "Todas categorias" },
+          ...categories.map((cat) => ({ value: cat.id, label: cat.name })),
+        ]}
+      />
 
       {/* Month selector */}
       <div className="flex items-center rounded-[12px] border-[1.5px] border-border bg-surface">

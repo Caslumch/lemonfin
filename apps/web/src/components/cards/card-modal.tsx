@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { Card } from "@/types/card";
 
 const cardSchema = z.object({
@@ -134,27 +135,15 @@ export function CardModal({
               required
             />
 
-            <div className="w-full">
-              <label
-                htmlFor="brand"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Bandeira
-              </label>
-              <select
-                id="brand"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {BRANDS.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="brand"
+              label="Bandeira"
+              value={brand}
+              onChange={setBrand}
+              size="md"
+              placeholder="Selecione..."
+              options={BRANDS.map((b) => ({ value: b, label: b }))}
+            />
 
             <Input
               id="limit"

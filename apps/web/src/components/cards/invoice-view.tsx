@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
 import { useCategories } from "@/hooks/use-transactions-data";
 import { logApiError } from "@/lib/log-error";
@@ -48,9 +49,6 @@ const INSTALLMENT_OPTIONS: { value: InstallmentFilter; label: string }[] = [
   { value: "yes", label: "Só parceladas" },
   { value: "no", label: "Só à vista" },
 ];
-
-const selectClass =
-  "rounded-md border-[1.5px] border-border bg-surface px-2.5 py-1.5 text-xs text-fg transition-colors duration-150 focus:border-fg focus:outline-none cursor-pointer";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -206,46 +204,46 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Todas categorias</option>
-              {categories?.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+              size="sm"
+              className="w-auto"
+              menuWidth="auto"
+              options={[
+                { value: "", label: "Todas categorias" },
+                ...(categories?.map((cat) => ({
+                  value: cat.id,
+                  label: cat.name,
+                })) ?? []),
+              ]}
+            />
 
-            <select
+            <Select
               value={installment}
-              onChange={(e) =>
-                setInstallment(e.target.value as InstallmentFilter)
-              }
-              className={selectClass}
-            >
-              {INSTALLMENT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setInstallment(v as InstallmentFilter)}
+              size="sm"
+              className="w-auto"
+              menuWidth="auto"
+              options={INSTALLMENT_OPTIONS.map((opt) => ({
+                value: opt.value,
+                label: opt.label,
+              }))}
+            />
 
             <label className="ml-auto flex items-center gap-2 text-xs text-fg-muted">
               Ordenar
-              <select
+              <Select
                 value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className={selectClass}
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSort(v as SortKey)}
+                size="sm"
+                className="w-auto"
+                menuWidth="auto"
+                options={SORT_OPTIONS.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                }))}
+              />
             </label>
           </div>
         </div>

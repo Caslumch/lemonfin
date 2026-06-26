@@ -1,6 +1,7 @@
 "use client";
 
 import { Users } from "lucide-react";
+import { Select } from "@/components/ui/select";
 import { useFamilyMembers } from "@/hooks/use-family";
 import { useMemberFilter } from "@/hooks/use-member-filter";
 
@@ -18,24 +19,20 @@ export function MemberFilter() {
   if (members.length < 2) return null;
 
   return (
-    <div className="relative">
-      <Users
-        size={16}
-        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-fg-muted"
-      />
-      <select
-        value={memberId ?? ""}
-        onChange={(e) => setMemberId(e.target.value || undefined)}
-        aria-label="Filtrar por membro da família"
-        className="rounded-[12px] border-[1.5px] border-border bg-surface py-2 pl-10 pr-3.5 text-sm text-fg transition-colors focus:border-fg focus:outline-none cursor-pointer"
-      >
-        <option value="">Toda a família</option>
-        {members.map((m) => (
-          <option key={m.user.id} value={m.user.id}>
-            {m.user.name.split(" ")[0]}
-          </option>
-        ))}
-      </select>
-    </div>
+    <Select
+      value={memberId ?? ""}
+      onChange={(v) => setMemberId(v || undefined)}
+      aria-label="Filtrar por membro da família"
+      size="md"
+      icon={<Users size={16} />}
+      className="sm:w-48"
+      options={[
+        { value: "", label: "Toda a família" },
+        ...members.map((m) => ({
+          value: m.user.id,
+          label: m.user.name.split(" ")[0],
+        })),
+      ]}
+    />
   );
 }

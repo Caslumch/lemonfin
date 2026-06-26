@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { Category } from "@/types/transaction";
 import type { Goal } from "@/types/goal";
 
@@ -123,28 +124,19 @@ export function GoalModal({
               required
             />
 
-            <div className="w-full">
-              <label
-                htmlFor="category"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Categoria
-              </label>
-              <select
-                id="category"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                disabled={isEditing}
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none disabled:opacity-50"
-              >
-                <option value="">Selecione...</option>
-                {availableCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon} {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="category"
+              label="Categoria"
+              value={categoryId}
+              onChange={setCategoryId}
+              disabled={isEditing}
+              size="md"
+              placeholder="Selecione..."
+              options={availableCategories.map((c) => ({
+                value: c.id,
+                label: `${c.icon} ${c.name}`,
+              }))}
+            />
 
             <Input
               id="amount"
@@ -159,25 +151,17 @@ export function GoalModal({
               required
             />
 
-            <div className="w-full">
-              <label
-                htmlFor="period"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Período
-              </label>
-              <select
-                id="period"
-                value={period}
-                onChange={(e) =>
-                  setPeriod(e.target.value as "MONTHLY" | "WEEKLY")
-                }
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-              >
-                <option value="MONTHLY">Mensal</option>
-                <option value="WEEKLY">Semanal</option>
-              </select>
-            </div>
+            <Select
+              id="period"
+              label="Período"
+              value={period}
+              onChange={(v) => setPeriod(v as "MONTHLY" | "WEEKLY")}
+              size="md"
+              options={[
+                { value: "MONTHLY", label: "Mensal" },
+                { value: "WEEKLY", label: "Semanal" },
+              ]}
+            />
 
             {error && (
               <p className="text-sm text-danger text-center">{error}</p>
