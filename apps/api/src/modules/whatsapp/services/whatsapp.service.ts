@@ -761,7 +761,7 @@ export class WhatsappService {
           to: from,
           content:
             `Você tem mais de um cartão (${names}). ` +
-            `De qual você quer ver os gastos? É só me dizer o nome.`,
+            `De qual você quer ver a fatura? É só me dizer o nome.`,
         });
         return;
       }
