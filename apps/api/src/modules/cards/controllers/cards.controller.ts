@@ -18,15 +18,19 @@ import { ListCardsUseCase } from '../use-cases/list-cards.use-case';
 import { UpdateCardUseCase } from '../use-cases/update-card.use-case';
 import { DeleteCardUseCase } from '../use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from '../use-cases/get-card-invoice.use-case';
+import { PayInvoiceUseCase } from '../use-cases/pay-invoice.use-case';
+import { UndoInvoicePaymentUseCase } from '../use-cases/undo-invoice-payment.use-case';
 import {
   createCardSchema,
   updateCardSchema,
   invoiceQuerySchema,
+  payInvoiceSchema,
 } from '../dtos/card.dto';
 import type {
   CreateCardInput,
   UpdateCardInput,
   InvoiceQuery,
+  PayInvoiceInput,
 } from '../dtos/card.dto';
 
 @Controller('cards')
@@ -38,6 +42,8 @@ export class CardsController {
     private readonly updateCard: UpdateCardUseCase,
     private readonly deleteCard: DeleteCardUseCase,
     private readonly getCardInvoice: GetCardInvoiceUseCase,
+    private readonly payInvoice: PayInvoiceUseCase,
+    private readonly undoInvoicePayment: UndoInvoicePaymentUseCase,
   ) {}
 
   @Post()
@@ -60,6 +66,25 @@ export class CardsController {
     @Query(new ZodValidationPipe(invoiceQuerySchema)) query: InvoiceQuery,
   ) {
     return this.getCardInvoice.execute(id, user.id, query);
+  }
+
+  @Post(':id/invoice/pay')
+  pay(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(payInvoiceSchema)) body: PayInvoiceInput,
+  ) {
+    return this.payInvoice.execute(id, user.id, body);
+  }
+
+  // Rota específica ANTES de @Delete(':id') — senão "invoice-payments" casaria
+  // como :id do cartão.
+  @Delete('invoice-payments/:paymentId')
+  undoPayment(
+    @CurrentUser() user: { id: string },
+    @Param('paymentId') paymentId: string,
+  ) {
+    return this.undoInvoicePayment.execute(paymentId, user.id);
   }
 
   @Patch(':id')

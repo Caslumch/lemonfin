@@ -1,4 +1,25 @@
-import { cardCycleRange } from './card-cycle';
+import { cardCycleRange, invoicePaymentStatus } from './card-cycle';
+
+describe('invoicePaymentStatus', () => {
+  it('nada pago → open', () => {
+    expect(invoicePaymentStatus(6338.27, 0)).toBe('open');
+  });
+  it('pago parcial → partial', () => {
+    expect(invoicePaymentStatus(6338.27, 3000)).toBe('partial');
+  });
+  it('pago total → paid', () => {
+    expect(invoicePaymentStatus(6338.27, 6338.27)).toBe('paid');
+  });
+  it('pago acima do total → paid', () => {
+    expect(invoicePaymentStatus(6338.27, 7000)).toBe('paid');
+  });
+  it('tolera arredondamento de centavo → paid', () => {
+    expect(invoicePaymentStatus(100, 99.999)).toBe('paid');
+  });
+  it('fatura sem compras (total 0) → paid (nada a pagar)', () => {
+    expect(invoicePaymentStatus(0, 0)).toBe('paid');
+  });
+});
 
 describe('cardCycleRange', () => {
   // A régua é baseada no MÊS de referência, não no dia. A fatura "de junho" é

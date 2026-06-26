@@ -21,3 +21,21 @@ export function cardCycleRange(
   const end = new Date(year, monthIndex, closingDay - 1, 23, 59, 59, 999);
   return { start, end };
 }
+
+export type InvoicePaymentStatus = 'open' | 'partial' | 'paid';
+
+/**
+ * Status de pagamento de uma fatura, derivado do total pago vs o total do ciclo.
+ * `open` = nada pago; `partial` = pago < total; `paid` = pago >= total (com uma
+ * folga de centavo para arredondamento). Um ciclo com total 0 (sem compras) e
+ * nada pago é considerado `paid` (não há o que pagar).
+ */
+export function invoicePaymentStatus(
+  total: number,
+  paid: number,
+): InvoicePaymentStatus {
+  if (total <= 0) return 'paid';
+  if (paid <= 0) return 'open';
+  if (paid + 0.005 >= total) return 'paid';
+  return 'partial';
+}

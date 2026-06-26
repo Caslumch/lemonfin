@@ -1,13 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CardsRepository } from '../repositories/cards.repository';
+import { InvoicePaymentRepository } from '../repositories/invoice-payment.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
-import { cardCycleRange } from '../utils/card-cycle';
+import { cardCycleRange, invoicePaymentStatus } from '../utils/card-cycle';
 import type { InvoiceQuery } from '../dtos/card.dto';
 
 @Injectable()
 export class GetCardInvoiceUseCase {
   constructor(
     private readonly cardsRepository: CardsRepository,
+    private readonly invoicePaymentRepository: InvoicePaymentRepository,
     private readonly familyContext: FamilyContextService,
   ) {}
 
@@ -52,13 +54,38 @@ export class GetCardInvoiceUseCase {
         },
       );
 
+    const cycle = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
+    // Status de pagamento do ciclo. `paid` = soma dos InvoicePayment do ciclo.
+    // Derivamos o status contra o total da fatura. Nota: quando há filtros
+    // ativos (busca/categoria), `total` reflete só o subconjunto filtrado; o
+    // status é uma propriedade da fatura inteira, então só é exato sem filtros
+    // — que é o caso do selo na UI (o selo é exibido sem filtros aplicados).
+    const paid = await this.invoicePaymentRepository.sumByCycle(
+      cardId,
+      cycle,
+      userIds,
+    );
+    const payments = await this.invoicePaymentRepository.findByCardCycle(
+      cardId,
+      cycle,
+      userIds,
+    );
+
     return {
       card,
-      month: `${year}-${String(monthIndex + 1).padStart(2, '0')}`,
+      month: cycle,
       transactions,
       // total = soma do ciclo FILTRADO inteiro (não só a página)
       total,
       isClosed: now > endDate,
+      paid,
+      paymentStatus: invoicePaymentStatus(total, paid),
+      payments: payments.map((p) => ({
+        id: p.id,
+        amount: p.amount.toNumber(),
+        paidAt: p.paidAt.toISOString(),
+      })),
       meta: {
         total: count,
         page: query.page,

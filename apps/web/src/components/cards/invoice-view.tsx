@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
 import { useCategories } from "@/hooks/use-transactions-data";
+import { invalidateTransactionData } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { CardInvoice } from "@/types/card";
 
@@ -54,10 +57,49 @@ function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function PaymentBadge({
+  status,
+  paid,
+  total,
+  lastPaidAt,
+}: {
+  status: "open" | "partial" | "paid";
+  paid: number;
+  total: number;
+  lastPaidAt?: string;
+}) {
+  if (status === "paid" && total > 0) {
+    const date = lastPaidAt
+      ? new Date(lastPaidAt).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+      : null;
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-success-muted text-success">
+        {date ? `Paga em ${date}` : "Paga"}
+      </span>
+    );
+  }
+  if (status === "partial") {
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-warning-muted text-warning">
+        Parcial ({formatBRL(paid)} de {formatBRL(total)})
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-danger-muted text-danger">
+      Em aberto
+    </span>
+  );
+}
+
 export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const { fetchApi } = useApi();
+  const queryClient = useQueryClient();
   const { data: categories } = useCategories();
   const [invoice, setInvoice] = useState<CardInvoice | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [paySubmitting, setPaySubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => {
     const now = new Date();
@@ -127,6 +169,53 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
 
+  // Restante a pagar do ciclo (default do campo de pagamento).
+  const remaining = Math.max(0, (invoice?.total ?? 0) - (invoice?.paid ?? 0));
+
+  function openPay() {
+    setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : "");
+    setPayOpen(true);
+  }
+
+  async function handlePay() {
+    const amount = Number(payAmount.replace(",", "."));
+    if (!amount || amount <= 0) {
+      toast.error("Informe um valor válido");
+      return;
+    }
+    setPaySubmitting(true);
+    try {
+      await fetchApi(`/cards/${cardId}/invoice/pay`, {
+        method: "POST",
+        body: JSON.stringify({ cycle: month, amount }),
+      });
+      toast.success("Pagamento registrado");
+      setPayOpen(false);
+      await fetchInvoice();
+      // A despesa de pagamento afeta saldo/gastos/transações.
+      invalidateTransactionData(queryClient);
+    } catch (error) {
+      logApiError("pay:invoice", error);
+      toast.error("Erro ao registrar pagamento");
+    } finally {
+      setPaySubmitting(false);
+    }
+  }
+
+  async function handleUndoPayment(paymentId: string) {
+    try {
+      await fetchApi(`/cards/invoice-payments/${paymentId}`, {
+        method: "DELETE",
+      });
+      toast.success("Pagamento desfeito");
+      await fetchInvoice();
+      invalidateTransactionData(queryClient);
+    } catch (error) {
+      logApiError("undo:invoice-payment", error);
+      toast.error("Erro ao desfazer pagamento");
+    }
+  }
+
   const monthLabel = (() => {
     const [y, m] = month.split("-").map(Number);
     const d = new Date(y, m - 1, 1);
@@ -178,15 +267,12 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             {invoice && (
-              <span
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                  invoice.isClosed
-                    ? "bg-danger-muted text-danger"
-                    : "bg-success-muted text-success"
-                }`}
-              >
-                {invoice.isClosed ? "Fechada" : "Aberta"}
-              </span>
+              <PaymentBadge
+                status={invoice.paymentStatus}
+                paid={invoice.paid}
+                total={invoice.total}
+                lastPaidAt={invoice.payments[0]?.paidAt}
+              />
             )}
             <div className="relative w-56">
               <Search
@@ -319,6 +405,84 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
               {formatBRL(invoice?.total ?? 0)}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* Pagamento da fatura — sem filtros ativos e com fatura carregada */}
+      {invoice && !hasActiveFilters && invoice.total > 0 && (
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-fg">
+                Pagamento da fatura
+              </p>
+              <p className="text-xs text-fg-muted">
+                {invoice.paid > 0
+                  ? `${formatBRL(invoice.paid)} pago de ${formatBRL(invoice.total)}`
+                  : "Nenhum pagamento registrado"}
+              </p>
+            </div>
+            {remaining > 0 && !payOpen && (
+              <Button size="sm" onClick={openPay}>
+                Pagar fatura
+              </Button>
+            )}
+          </div>
+
+          {payOpen && (
+            <div className="flex items-end gap-2">
+              <label className="flex-1 text-xs text-fg-muted">
+                Valor
+                <div className="mt-1 flex items-center rounded-md border-[1.5px] border-border bg-surface px-3 py-1.5 focus-within:border-fg">
+                  <span className="text-sm text-fg-muted mr-1">R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full bg-transparent text-sm text-fg focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+              </label>
+              <Button size="sm" onClick={handlePay} disabled={paySubmitting}>
+                {paySubmitting ? "Salvando..." : "Confirmar"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPayOpen(false)}
+                disabled={paySubmitting}
+              >
+                Cancelar
+              </Button>
+            </div>
+          )}
+
+          {invoice.payments.length > 0 && (
+            <div className="divide-y divide-border border-t border-border pt-1">
+              {invoice.payments.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between py-2"
+                >
+                  <span className="text-xs text-fg-muted">
+                    {formatBRL(p.amount)} em{" "}
+                    {new Date(p.paidAt).toLocaleDateString("pt-BR", {
+                      timeZone: "UTC",
+                    })}
+                  </span>
+                  <button
+                    onClick={() => handleUndoPayment(p.id)}
+                    className="flex items-center gap-1 text-xs text-fg-muted hover:text-danger cursor-pointer"
+                    title="Desfazer pagamento"
+                  >
+                    <X size={14} /> Desfazer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

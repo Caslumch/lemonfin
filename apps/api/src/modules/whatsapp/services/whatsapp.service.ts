@@ -17,6 +17,7 @@ import { WmodeClientService } from './wmode-client.service';
 import { phoneCandidates } from './phone-candidates';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { CreateInstallmentsUseCase } from '../../transactions/use-cases/create-installments.use-case';
+import { PayInvoiceUseCase } from '../../cards/use-cases/pay-invoice.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
 import { computeReserveProgress } from '../../reserves/reserve-progress';
@@ -68,6 +69,7 @@ export class WhatsappService {
     private readonly conversation: ConversationRepository,
     private readonly premiumAccess: PremiumAccessService,
     private readonly billingConfig: BillingConfigService,
+    private readonly payInvoiceUseCase: PayInvoiceUseCase,
   ) {}
 
   async handleIncomingMessage({
@@ -271,6 +273,9 @@ export class WhatsappService {
         break;
       case 'reserve_contribution':
         await this.handleReserveContribution(from, user.id, result, phoneKey);
+        break;
+      case 'pay_invoice':
+        await this.handlePayInvoice(from, user.id, result, phoneKey);
         break;
       case 'goal_create':
         await this.handleGoalCreate(from, user.id, result.data);
@@ -730,6 +735,55 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({ to: from, content: message });
   }
 
+  // Resolve o cartão de um comando (consulta/pagamento). cardName indefinido ou
+  // "cartao" = genérico (resolve só se houver exatamente 1 cartão). Se não der
+  // pra resolver, JÁ envia a mensagem apropriada e retorna null.
+  private async resolveCardForCommand(
+    from: string,
+    userIds: string[],
+    cardName?: string | null,
+    purpose: 'ver a fatura' | 'pagar a fatura' = 'ver a fatura',
+  ): Promise<{ id: string; name: string; closingDay: number } | null> {
+    if (!cardName || cardName.toLowerCase() === 'cartao') {
+      const cards = await this.cardsRepository.findMany(userIds);
+      if (cards.length === 0) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Você ainda não tem nenhum cartão cadastrado. ' +
+            'Cadastre um no app pra eu acompanhar a fatura dele 💳',
+        });
+        return null;
+      }
+      if (cards.length > 1) {
+        const names = cards.map((c) => c.name).join(', ');
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            `Você tem mais de um cartão (${names}). ` +
+            `De qual você quer ${purpose}? É só me dizer o nome.`,
+        });
+        return null;
+      }
+      return cards[0];
+    }
+
+    const card = await this.cardsRepository.findByName(cardName, userIds);
+    if (!card) {
+      const cards = await this.cardsRepository.findMany(userIds);
+      const tail =
+        cards.length > 0
+          ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}.`
+          : 'Você ainda não tem nenhum cartão cadastrado.';
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
+      });
+      return null;
+    }
+    return card;
+  }
+
   // Gastos de um cartão específico no mês. cardName indefinido ou "cartao" =
   // genérico (tenta resolver se o usuário só tem 1 cartão).
   private async handleCardQuery(
@@ -741,46 +795,8 @@ export class WhatsappService {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    let card: { id: string; name: string; closingDay: number } | null = null;
-
-    if (!cardName || cardName.toLowerCase() === 'cartao') {
-      // Genérico: resolve só se houver exatamente 1 cartão.
-      const cards = await this.cardsRepository.findMany(userIds);
-      if (cards.length === 0) {
-        await this.wmodeClient.sendMessage({
-          to: from,
-          content:
-            'Você ainda não tem nenhum cartão cadastrado. ' +
-            'Cadastre um no app pra eu acompanhar os gastos dele 💳',
-        });
-        return;
-      }
-      if (cards.length > 1) {
-        const names = cards.map((c) => c.name).join(', ');
-        await this.wmodeClient.sendMessage({
-          to: from,
-          content:
-            `Você tem mais de um cartão (${names}). ` +
-            `De qual você quer ver a fatura? É só me dizer o nome.`,
-        });
-        return;
-      }
-      card = cards[0];
-    } else {
-      card = await this.cardsRepository.findByName(cardName, userIds);
-      if (!card) {
-        const cards = await this.cardsRepository.findMany(userIds);
-        const tail =
-          cards.length > 0
-            ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}.`
-            : 'Você ainda não tem nenhum cartão cadastrado.';
-        await this.wmodeClient.sendMessage({
-          to: from,
-          content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
-        });
-        return;
-      }
-    }
+    const card = await this.resolveCardForCommand(from, userIds, cardName);
+    if (!card) return;
 
     // Fatura ABERTA = ciclo de fechamento (mesmo critério da tela /cartoes),
     // não o gasto do mês civil. Assim "qual minha fatura?" bate com o app.
@@ -1606,6 +1622,77 @@ export class WhatsappService {
     });
   }
 
+  // Registra o pagamento da fatura de um cartão. Sem valor informado, paga o
+  // total da fatura aberta (ciclo de fechamento). cardName "cartao"/null =
+  // genérico (resolve se houver 1 cartão; senão pede o nome).
+  private async handlePayInvoice(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'pay_invoice' }>,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const card = await this.resolveCardForCommand(
+      from,
+      userIds,
+      result.cardName,
+      'pagar a fatura',
+    );
+    if (!card) return;
+
+    // Ciclo aberto = mês corrente (mesma régua de getInvoice).
+    const now = new Date();
+    const cycle = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const { start, end } = cardCycleRange(
+      card.closingDay,
+      new Date(now.getFullYear(), now.getMonth(), 1),
+    );
+    const { total } = await this.transactionsRepository.getCardSummary(
+      userIds,
+      card.id,
+      start.toISOString(),
+      end.toISOString(),
+    );
+
+    const amount = result.amount ?? total;
+    if (amount <= 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `A fatura do *${card.name}* está zerada — nada a pagar 👍`,
+      });
+      return;
+    }
+
+    const res = await this.payInvoiceUseCase.execute(card.id, userId, {
+      cycle,
+      amount,
+    });
+
+    const statusLabel =
+      res.paymentStatus === 'paid'
+        ? 'Fatura quitada ✅'
+        : `Parcial: ${fmt(res.paid)} de ${fmt(res.total)}`;
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `✅ Registrei o pagamento de *${fmt(amount)}* na fatura do ` +
+        `*${card.name}*.\n${statusLabel}`,
+    });
+
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        {
+          role: 'bot',
+          text: `Pagamento de fatura registrado: ${card.name} ${fmt(amount)}`,
+        },
+      ]);
+    }
+  }
+
   // Resolve o aporte pendente (sem IA): identifica a reserva por número ou nome,
   // cria a DESPESA em "reservas" e incrementa o acumulado da reserva.
   private async resolveReserveContribution(
@@ -2117,6 +2204,8 @@ export class WhatsappService {
         return `🎤 ${open}, vou criar essa reserva pra você 👍`;
       case 'reserve_contribution':
         return `🎤 ${open}, vou guardar ${fmt(result.amount)} 👍`;
+      case 'pay_invoice':
+        return `🎤 ${open}, vou registrar o pagamento da fatura 👍`;
       case 'goal_create':
         return `🎤 ${open}, vou definir essa meta 👍`;
       case 'cancel':

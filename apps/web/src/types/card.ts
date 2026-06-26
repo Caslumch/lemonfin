@@ -15,6 +15,14 @@ export interface Card {
   currentSpend?: number;
 }
 
+export type InvoicePaymentStatus = "open" | "partial" | "paid";
+
+export interface InvoicePayment {
+  id: string;
+  amount: number;
+  paidAt: string;
+}
+
 export interface CardInvoice {
   card: Card;
   month: string;
@@ -22,6 +30,11 @@ export interface CardInvoice {
   // Soma do ciclo FILTRADO inteiro (não só a página atual).
   total: number;
   isClosed: boolean;
+  // Pagamento da fatura: total já pago no ciclo, status derivado e a lista de
+  // pagamentos (para histórico/desfazer).
+  paid: number;
+  paymentStatus: InvoicePaymentStatus;
+  payments: InvoicePayment[];
   meta: {
     total: number;
     page: number;
