@@ -32,7 +32,7 @@ describe('UpdateInstallmentGroupUseCase', () => {
         .mockImplementation(
           (_grp: string, _userIds: string[], rows: typeof lastRows) => {
             lastRows = rows;
-            return Promise.resolve(rows.map((_, i) => ({ id: `new${i}` })));
+            return Promise.resolve({ count: rows.length });
           },
         ),
     };
