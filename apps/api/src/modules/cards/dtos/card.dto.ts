@@ -27,3 +27,24 @@ export const updateCardSchema = z.object({
 
 export type CreateCardInput = z.infer<typeof createCardSchema>;
 export type UpdateCardInput = z.infer<typeof updateCardSchema>;
+
+// Filtros/paginação da fatura. A fatura passou a ser paginada no servidor (ver
+// comentário em cards.repository.getInvoice): busca/categoria/parcelamento e
+// ordenação acoplados a skip/take. `installment` discrimina pela presença de
+// installmentNumber (parcela), não de installmentGroupId — compras à vista
+// importadas em lote têm groupId mas number nulo.
+export const invoiceQuerySchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'Mês deve ser YYYY-MM')
+    .optional(),
+  page: z.coerce.number().int().positive().default(1),
+  perPage: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+  categoryId: z.string().cuid().optional(),
+  installment: z.enum(['all', 'yes', 'no']).default('all'),
+  orderBy: z.enum(['date', 'amount', 'installment']).default('date'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+});
+
+export type InvoiceQuery = z.infer<typeof invoiceQuerySchema>;

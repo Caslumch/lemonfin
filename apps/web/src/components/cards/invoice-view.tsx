@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
+import { useCategories } from "@/hooks/use-transactions-data";
 import { logApiError } from "@/lib/log-error";
 import type { CardInvoice } from "@/types/card";
-import type { Transaction } from "@/types/transaction";
 
 interface InvoiceViewProps {
   cardId: string;
@@ -15,38 +15,42 @@ interface InvoiceViewProps {
   onBack: () => void;
 }
 
-type SortKey = "date" | "amount-desc" | "amount-asc" | "alpha";
+// Ordenação agora é resolvida no servidor (a fatura é paginada). Cada opção
+// mapeia para os params orderBy/order do endpoint. "installment" ordena pela
+// presença de parcela: desc = parceladas primeiro, asc = à vista primeiro.
+type SortKey =
+  | "date"
+  | "amount-desc"
+  | "amount-asc"
+  | "installment-first"
+  | "cash-first";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "date", label: "Mais recentes" },
   { value: "amount-desc", label: "Maior valor" },
   { value: "amount-asc", label: "Menor valor" },
-  { value: "alpha", label: "A → Z" },
+  { value: "installment-first", label: "Parceladas primeiro" },
+  { value: "cash-first", label: "À vista primeiro" },
 ];
 
-function sortTransactions(txs: Transaction[], sort: SortKey): Transaction[] {
-  // Cópia antes de ordenar — não muta o array do estado/cache.
-  const copy = [...txs];
-  switch (sort) {
-    case "amount-desc":
-      return copy.sort((a, b) => Number(b.amount) - Number(a.amount));
-    case "amount-asc":
-      return copy.sort((a, b) => Number(a.amount) - Number(b.amount));
-    case "alpha":
-      return copy.sort((a, b) =>
-        (a.description || a.category.name).localeCompare(
-          b.description || b.category.name,
-          "pt-BR",
-          { sensitivity: "base" },
-        ),
-      );
-    case "date":
-    default:
-      return copy.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      );
-  }
-}
+const SORT_PARAMS: Record<SortKey, { orderBy: string; order: string }> = {
+  date: { orderBy: "date", order: "desc" },
+  "amount-desc": { orderBy: "amount", order: "desc" },
+  "amount-asc": { orderBy: "amount", order: "asc" },
+  "installment-first": { orderBy: "installment", order: "desc" },
+  "cash-first": { orderBy: "installment", order: "asc" },
+};
+
+type InstallmentFilter = "all" | "yes" | "no";
+
+const INSTALLMENT_OPTIONS: { value: InstallmentFilter; label: string }[] = [
+  { value: "all", label: "Todas as compras" },
+  { value: "yes", label: "Só parceladas" },
+  { value: "no", label: "Só à vista" },
+];
+
+const selectClass =
+  "rounded-md border-[1.5px] border-border bg-surface px-2.5 py-1.5 text-xs text-fg transition-colors duration-150 focus:border-fg focus:outline-none cursor-pointer";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -54,6 +58,7 @@ function formatBRL(value: number) {
 
 export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const { fetchApi } = useApi();
+  const { data: categories } = useCategories();
   const [invoice, setInvoice] = useState<CardInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => {
@@ -61,19 +66,40 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const [sort, setSort] = useState<SortKey>("date");
+  const [categoryId, setCategoryId] = useState("");
+  const [installment, setInstallment] = useState<InstallmentFilter>("all");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  // Ordena no cliente: a fatura já vem inteira do backend (sem paginação), então
-  // reordenar é instantâneo e não dispara nova request.
-  const sortedTransactions = useMemo(
-    () => (invoice ? sortTransactions(invoice.transactions, sort) : []),
-    [invoice, sort],
-  );
+  // Debounce da busca (mesmo padrão da tela de Transações: 350ms).
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Qualquer mudança de filtro/mês/ordenação volta para a página 1 — senão você
+  // pode ficar "preso" numa página que não existe mais no conjunto filtrado.
+  useEffect(() => {
+    setPage(1);
+  }, [month, sort, categoryId, installment, debouncedSearch]);
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
     try {
+      const { orderBy, order } = SORT_PARAMS[sort];
+      const params = new URLSearchParams();
+      params.set("month", month);
+      params.set("page", String(page));
+      params.set("perPage", "20");
+      params.set("orderBy", orderBy);
+      params.set("order", order);
+      if (installment !== "all") params.set("installment", installment);
+      if (categoryId) params.set("categoryId", categoryId);
+      if (debouncedSearch) params.set("search", debouncedSearch);
+
       const data = await fetchApi<CardInvoice>(
-        `/cards/${cardId}/invoice?month=${month}`,
+        `/cards/${cardId}/invoice?${params.toString()}`,
       );
       setInvoice(data);
     } catch (error) {
@@ -82,7 +108,16 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [fetchApi, cardId, month]);
+  }, [
+    fetchApi,
+    cardId,
+    month,
+    page,
+    sort,
+    categoryId,
+    installment,
+    debouncedSearch,
+  ]);
 
   useEffect(() => {
     fetchInvoice();
@@ -91,9 +126,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   function navigateMonth(delta: number) {
     const [y, m] = month.split("-").map(Number);
     const d = new Date(y, m - 1 + delta, 1);
-    setMonth(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-    );
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
 
   const monthLabel = (() => {
@@ -101,6 +134,15 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     const d = new Date(y, m - 1, 1);
     return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   })();
+
+  const transactions = invoice?.transactions ?? [];
+  const meta = invoice?.meta;
+  // "tem algo a filtrar" = há filtros ativos OU resultados. Mantém a barra de
+  // filtros visível mesmo quando um filtro zera o resultado (senão o usuário
+  // não consegue limpar o filtro que esvaziou a lista).
+  const hasActiveFilters =
+    Boolean(debouncedSearch) || Boolean(categoryId) || installment !== "all";
+  const showControls = transactions.length > 0 || hasActiveFilters;
 
   return (
     <div className="space-y-4">
@@ -133,32 +175,79 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         </button>
       </div>
 
-      {/* Status badge + ordenação */}
-      {invoice && invoice.transactions.length > 0 && (
-        <div className="flex items-center justify-between gap-3">
-          <span
-            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-              invoice.isClosed
-                ? "bg-danger-muted text-danger"
-                : "bg-success-muted text-success"
-            }`}
-          >
-            {invoice.isClosed ? "Fechada" : "Aberta"}
-          </span>
-          <label className="flex items-center gap-2 text-xs text-fg-muted">
-            Ordenar
+      {/* Status badge + filtros + ordenação */}
+      {showControls && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            {invoice && (
+              <span
+                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                  invoice.isClosed
+                    ? "bg-danger-muted text-danger"
+                    : "bg-success-muted text-success"
+                }`}
+              >
+                {invoice.isClosed ? "Fechada" : "Aberta"}
+              </span>
+            )}
+            <div className="relative w-56">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar lançamento..."
+                className="w-full rounded-md border-[1.5px] border-border bg-surface py-1.5 pl-9 pr-3 text-xs text-fg placeholder:text-fg-muted transition-colors focus:border-fg focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className="rounded-md border-[1.5px] border-border bg-surface px-2.5 py-1.5 text-xs text-fg transition-colors duration-150 focus:border-fg focus:outline-none cursor-pointer"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={selectClass}
             >
-              {SORT_OPTIONS.map((opt) => (
+              <option value="">Todas categorias</option>
+              {categories?.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={installment}
+              onChange={(e) =>
+                setInstallment(e.target.value as InstallmentFilter)
+              }
+              className={selectClass}
+            >
+              {INSTALLMENT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </select>
-          </label>
+
+            <label className="ml-auto flex items-center gap-2 text-xs text-fg-muted">
+              Ordenar
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className={selectClass}
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       )}
 
@@ -167,15 +256,17 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">Carregando...</p>
         </div>
-      ) : !invoice || invoice.transactions.length === 0 ? (
+      ) : transactions.length === 0 ? (
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">
-            Nenhuma transação neste período.
+            {hasActiveFilters
+              ? "Nenhum lançamento corresponde aos filtros."
+              : "Nenhuma transação neste período."}
           </p>
         </div>
       ) : (
         <div className="rounded-[20px] border border-border bg-surface shadow-xs divide-y divide-border">
-          {sortedTransactions.map((tx) => {
+          {transactions.map((tx) => {
             // Compra parcelada: total = valor da parcela × nº de parcelas.
             // Mostrado como subtexto discreto (o destaque continua sendo o
             // valor da parcela, que é o que entra nesta fatura).
@@ -223,12 +314,42 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
             );
           })}
 
-          {/* Total */}
+          {/* Total — soma do ciclo filtrado inteiro, não só desta página */}
           <div className="flex items-center justify-between px-4 py-3 bg-subtle">
             <span className="text-sm font-bold text-fg">Total</span>
             <span className="text-sm font-bold text-fg">
-              {formatBRL(invoice.total)}
+              {formatBRL(invoice?.total ?? 0)}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Paginação */}
+      {meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-fg-muted">
+            {meta.total} {meta.total === 1 ? "lançamento" : "lançamentos"}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Anterior
+            </Button>
+            <span className="flex items-center text-sm text-fg-secondary px-2">
+              {page} / {meta.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= meta.totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Próximo
+            </Button>
           </div>
         </div>
       )}

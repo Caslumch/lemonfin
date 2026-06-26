@@ -167,27 +167,80 @@ export class CardsRepository {
     });
   }
 
+  // Fatura paginada no servidor. A decisão original era trazer o ciclo inteiro e
+  // ordenar no cliente, mas com importação de faturas reais um ciclo pode ter
+  // centenas de linhas (compras parceladas reconstruídas espalham o histórico).
+  // Como previsto no comentário antigo, paginamos AQUI com orderBy + skip/take
+  // acoplados. O total (R$) e a contagem são do ciclo FILTRADO inteiro (via
+  // aggregate/count), não da página — senão o rodapé "Total" mostraria só a fatia.
   async getInvoice(
     cardId: string,
     userIds: string[],
     startDate: Date,
     endDate: Date,
+    opts: {
+      skip: number;
+      take: number;
+      search?: string;
+      categoryId?: string;
+      installment?: 'all' | 'yes' | 'no';
+      orderBy?: 'date' | 'amount' | 'installment';
+      order?: 'asc' | 'desc';
+    },
   ) {
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        userId: { in: userIds },
-        cardId,
-        date: { gte: startDate, lte: endDate },
-      },
-      include: { category: true },
-      orderBy: { date: 'desc' },
-    });
+    const where: Prisma.TransactionWhereInput = {
+      userId: { in: userIds },
+      cardId,
+      date: { gte: startDate, lte: endDate },
+    };
 
-    const total = transactions.reduce(
-      (sum, tx) => sum + tx.amount.toNumber(),
-      0,
-    );
+    if (opts.search) {
+      where.description = { contains: opts.search, mode: 'insensitive' };
+    }
+    if (opts.categoryId) {
+      where.categoryId = opts.categoryId;
+    }
+    // Parcelada vs à vista: discriminador é installmentNumber (não groupId).
+    if (opts.installment === 'yes') {
+      where.installmentNumber = { not: null };
+    } else if (opts.installment === 'no') {
+      where.installmentNumber = null;
+    }
 
-    return { transactions, total };
+    const order = opts.order ?? 'desc';
+    // "installment" ordena pela presença de parcela. À vista = installmentNumber
+    // null. Em desc (parceladas primeiro) os nulls vão para o FIM; em asc (à
+    // vista primeiro) vão para o COMEÇO — por isso nulls acompanha o order.
+    // Empate por data.
+    const orderBy: Prisma.TransactionOrderByWithRelationInput[] =
+      opts.orderBy === 'amount'
+        ? [{ amount: order }, { date: 'desc' }]
+        : opts.orderBy === 'installment'
+          ? [
+              {
+                installmentNumber: {
+                  sort: order,
+                  nulls: order === 'desc' ? 'last' : 'first',
+                },
+              },
+              { date: 'desc' },
+            ]
+          : [{ date: order }];
+
+    const [data, count, agg] = await this.prisma.$transaction([
+      this.prisma.transaction.findMany({
+        where,
+        include: { category: true },
+        orderBy,
+        skip: opts.skip,
+        take: opts.take,
+      }),
+      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.aggregate({ where, _sum: { amount: true } }),
+    ]);
+
+    const total = agg._sum.amount?.toNumber() ?? 0;
+
+    return { transactions: data, total, count };
   }
 }
