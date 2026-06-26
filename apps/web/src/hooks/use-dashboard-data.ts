@@ -54,6 +54,33 @@ export function useDashboardData() {
       // mês seguinte) ficam no topo do `date desc` e roubam o lugar das reais.
       const recentEndDate = new Date().toISOString();
 
+      // Janela do mês corrente. Sem ela, /transactions/summary e /by-category
+      // somam TODOS os meses — incluindo as parcelas futuras de compras
+      // parceladas — e os cards ("Gastos do mês", "Saldo", categorias) explodem.
+      const now = new Date();
+      const monthStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0,
+      ).toISOString();
+      const monthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      ).toISOString();
+      const monthQs = new URLSearchParams({
+        startDate: monthStart,
+        endDate: monthEnd,
+      }).toString();
+
       const [
         summary,
         monthly,
@@ -65,9 +92,9 @@ export function useDashboardData() {
         budget,
         cards,
       ] = await Promise.all([
-        fetchApi<TransactionSummary>("/transactions/summary"),
+        fetchApi<TransactionSummary>(`/transactions/summary?${monthQs}`),
         fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
-        fetchApi<CategoryBreakdown[]>("/transactions/by-category"),
+        fetchApi<CategoryBreakdown[]>(`/transactions/by-category?${monthQs}`),
         fetchApi<PaginatedResponse<Transaction>>(
           `/transactions?perPage=5&page=1&endDate=${encodeURIComponent(recentEndDate)}`,
         ),

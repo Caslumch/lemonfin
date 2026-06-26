@@ -431,11 +431,18 @@ export class TransactionsRepository {
 
     return {
       income: totalIncome,
-      expense: totalExpenseNoCard + totalCardExpense,
+      // "Saídas" = só o que sai do bolso agora (pix/débito, fora cartão). O gasto
+      // no cartão NÃO entra aqui — vira fatura (cardExpense), paga depois.
+      expense: totalExpenseNoCard,
+      // Gasto no cartão DENTRO do range recebido (mês civil). O endpoint de
+      // summary sobrescreve isto pelo total do CICLO de fatura (ver
+      // GetSummaryUseCase). Mantido para compatibilidade de outros chamadores.
       cardExpense: totalCardExpense,
+      // Saldo = receita − saídas do bolso. Fatura do cartão fica de fora até ser
+      // paga (aí vira uma despesa fora-cartão na data do pagamento).
       balance: totalIncome - totalExpenseNoCard,
       incomeCount: income._count,
-      expenseCount: expenseNoCard._count + expenseCard._count,
+      expenseCount: expenseNoCard._count,
     };
   }
 

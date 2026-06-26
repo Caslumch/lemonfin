@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { cardCycleRange } from '../utils/card-cycle';
 
 @Injectable()
 export class CardsRepository {
@@ -49,16 +50,20 @@ export class CardsRepository {
   }
 
   /**
-   * Gasto (apenas EXPENSE) do CICLO DE FATURA ABERTO de cada cartão informado,
-   * indexado por cardId. O ciclo vai do dia do fechamento do mês anterior até o
-   * dia anterior ao fechamento do mês atual (corte no closingDay, estilo Nubank)
-   * — o mesmo critério de getInvoice.
+   * Gasto (apenas EXPENSE) da FATURA ABERTA de cada cartão informado, indexado
+   * por cardId. Usa o MESMO critério de ciclo de getInvoice (cardCycleRange,
+   * baseado no mês de referência), de modo que o "limite usado" do card bate
+   * exatamente com o total da tela de fatura.
    *
-   * Como cada cartão tem seu próprio closingDay, não há um intervalo único de
-   * datas; buscamos as transações da janela máxima possível (~últimos ~62 dias,
-   * cobrindo qualquer ciclo aberto) e somamos em memória respeitando o ciclo de
-   * cada cartão. Para a escala de um app pessoal (poucos cartões/transações) é
-   * barato e evita N queries.
+   * Importante: NÃO limitamos por `date <= hoje`. A fatura aberta inclui as
+   * compras já lançadas com data dentro do ciclo, mesmo que a data seja "no
+   * futuro" dentro do próprio ciclo (ex.: parcelas reconstruídas a partir de uma
+   * fatura importada). Limitar em `now` subestimava a fatura.
+   *
+   * Como cada cartão tem seu próprio closingDay, buscamos uma janela ampla
+   * (~2 meses cobrindo qualquer ciclo aberto) e somamos em memória respeitando o
+   * ciclo de cada cartão. Para a escala de um app pessoal é barato e evita N
+   * queries.
    */
   async getCurrentCycleSpendByCard(
     cards: { id: string; closingDay: number }[],
@@ -68,15 +73,20 @@ export class CardsRepository {
     const result: Record<string, number> = {};
     if (cards.length === 0) return result;
 
-    // Limite inferior seguro para a busca: início do ciclo mais antigo possível
-    // entre os cartões (o de menor closingDay). Pegamos com folga (2 meses).
-    const windowStart = new Date(
+    // Referência = mês corrente. O ciclo aberto é a fatura que fecha neste mês.
+    const ref = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Janela de busca ampla cobrindo o ciclo aberto de qualquer closingDay:
+    // do início do mês anterior ao fim do mês corrente.
+    const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const windowEnd = new Date(
       now.getFullYear(),
-      now.getMonth() - 2,
-      1,
+      now.getMonth() + 1,
       0,
-      0,
-      0,
+      23,
+      59,
+      59,
+      999,
     );
 
     const transactions = await this.prisma.transaction.findMany({
@@ -84,13 +94,13 @@ export class CardsRepository {
         userId: { in: userIds },
         cardId: { in: cards.map((c) => c.id) },
         type: 'EXPENSE',
-        date: { gte: windowStart, lte: now },
+        date: { gte: windowStart, lte: windowEnd },
       },
       select: { cardId: true, amount: true, date: true },
     });
 
     for (const card of cards) {
-      const { start, end } = this.currentCycleRange(card.closingDay, now);
+      const { start, end } = cardCycleRange(card.closingDay, ref);
       const spent = transactions
         .filter(
           (tx) => tx.cardId === card.id && tx.date >= start && tx.date <= end,
@@ -100,41 +110,6 @@ export class CardsRepository {
     }
 
     return result;
-  }
-
-  /**
-   * Intervalo do ciclo de fatura ABERTO para um closingDay, relativo a `now`.
-   * Se hoje já passou do fechamento deste mês, o ciclo aberto é o próximo
-   * (fecha mês que vem); senão, é o que fecha neste mês.
-   */
-  private currentCycleRange(
-    closingDay: number,
-    now: Date,
-  ): { start: Date; end: Date } {
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
-
-    // Convenção estilo Nubank: o DIA do fechamento é o corte — uma compra no
-    // closingDay já abre o próximo ciclo. Logo, se hoje ainda é ANTES do
-    // fechamento deste mês (day < closingDay), o ciclo aberto encerra no
-    // fechamento deste mês; do dia do fechamento em diante, já encerra no mês
-    // seguinte. O ciclo vai do closingDay (inclusive) ao dia anterior ao próximo
-    // closingDay (closingDay - 1, 23:59:59).
-    const closesThisMonth = day < closingDay;
-    const endMonthOffset = closesThisMonth ? 0 : 1;
-
-    const start = new Date(year, month - 1 + endMonthOffset, closingDay);
-    const end = new Date(
-      year,
-      month + endMonthOffset,
-      closingDay - 1,
-      23,
-      59,
-      59,
-      999,
-    );
-    return { start, end };
   }
 
   async update(
