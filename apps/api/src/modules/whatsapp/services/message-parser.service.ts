@@ -89,6 +89,10 @@ export type ParseResult =
   | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'reserve_create'; data: ParsedReserve }
   | { intent: 'reserve_contribution'; amount: number }
+  // Registrar o pagamento da fatura de um cartão. cardName: nome do cartão na
+  // mensagem, "cartao" se genérico, ou null. amount: valor pago se mencionado
+  // (senão usa o total da fatura aberta).
+  | { intent: 'pay_invoice'; cardName: string | null; amount: number | null }
   | { intent: 'goal_create'; data: ParsedGoal }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
   // Refaz a ÚLTIMA AÇÃO de outro jeito: o bot exclui o que registrou por último
@@ -300,6 +304,15 @@ Use SOMENTE quando a mensagem não tem sentido algum (ex: "asdkjh", figurinha se
 Responda: {"intent": "unknown", "message": string}
 Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soar robótico.
 
+### 15. PAY_INVOICE — Pagar a fatura do cartão
+Quando o usuário diz que PAGOU (ou está pagando) a fatura de um cartão.
+Exemplos: "paguei a fatura do Bradesco", "quitei o cartão Nubank", "paguei 3000 da fatura", "paguei minha fatura".
+
+Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number | null}
+- cardName: nome do cartão na mensagem (ex: "Bradesco"), "cartao" se disser só "minha fatura/meu cartão" sem nome, ou null.
+- amount: valor pago SÓ se mencionado (ex: "paguei 3000 da fatura" → 3000). Senão null (o bot usa o total da fatura).
+NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é registrar que PAGOU.
+
 ## DESAMBIGUAÇÃO (evite confundir):
 - "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
 - "quero juntar/guardar + valor", "reserva de + valor" ou "objetivo de + valor" → reserve_create (NÃO transaction, NÃO recurring).
@@ -309,6 +322,7 @@ Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soa
 - "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
 - "como está meu cartão X" / "gastos no X" / "quanto gastei no X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
+- "paguei a fatura do X" / "quitei o cartão X" / "paguei 500 da fatura" → pay_invoice (REGISTRAR pagamento), NÃO query "card" (que é consultar).
 - "faz separado" / "cria duas transações" / "separa isso" / "na verdade era em Nx" / "parcela isso" / "refaz ..." referindo-se ao que ACABOU de registrar → redo (refazer a última ação), NÃO um gasto novo. Se vierem valores ("139 e 139"), preencha redo.adjust.items; se for só "em 4x", preencha redo.adjust.installments.
 - "exclui essa que criou" / "apaga o que registrou" / "cancela isso" (SEM recriar) → cancel (apaga a última AÇÃO inteira), NÃO redo.
 - redo SEMPRE se refere a algo já registrado. Uma compra nova e completa (com valor) que não referencia o anterior é transaction/installment/batch, não redo.
@@ -503,6 +517,16 @@ export class MessageParserService {
           return {
             intent: 'reserve_contribution',
             amount: Number(json.amount),
+          };
+
+        case 'pay_invoice':
+          return {
+            intent: 'pay_invoice',
+            cardName: typeof json.cardName === 'string' ? json.cardName : null,
+            amount:
+              typeof json.amount === 'number' && json.amount > 0
+                ? Number(json.amount)
+                : null,
           };
 
         case 'goal_create': {

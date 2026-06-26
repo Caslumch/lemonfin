@@ -34,6 +34,6 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     PayInvoiceUseCase,
     UndoInvoicePaymentUseCase,
   ],
-  exports: [CardsRepository, InvoicePaymentRepository],
+  exports: [CardsRepository, InvoicePaymentRepository, PayInvoiceUseCase],
 })
 export class CardsModule {}
