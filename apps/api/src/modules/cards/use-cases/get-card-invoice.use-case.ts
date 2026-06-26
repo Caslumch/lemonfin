@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CardsRepository } from '../repositories/cards.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
+import { cardCycleRange } from '../utils/card-cycle';
 import type { InvoiceQuery } from '../dtos/card.dto';
 
 @Injectable()
@@ -27,13 +28,11 @@ export class GetCardInvoiceUseCase {
       monthIndex = m - 1;
     }
 
-    // Ciclo de fatura (convenção estilo Nubank): o DIA do fechamento é o corte —
-    // uma compra feita no closingDay já entra no próximo ciclo. Logo a fatura do
-    // mês vai do closingDay do mês anterior até o dia ANTERIOR ao fechamento
-    // deste mês (closingDay - 1, 23:59:59).
-    const closingDay = card.closingDay;
-    const startDate = new Date(year, monthIndex - 1, closingDay);
-    const endDate = new Date(year, monthIndex, closingDay - 1, 23, 59, 59);
+    // Ciclo de fatura — ver cardCycleRange (fonte única, convenção estilo Nubank).
+    const { start: startDate, end: endDate } = cardCycleRange(
+      card.closingDay,
+      new Date(year, monthIndex, 1),
+    );
 
     const skip = (query.page - 1) * query.perPage;
     const { transactions, total, count } =

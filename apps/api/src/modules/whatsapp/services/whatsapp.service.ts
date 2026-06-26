@@ -3,6 +3,7 @@ import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
+import { cardCycleRange } from '../../cards/utils/card-cycle';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import {
   MessageParserService,
@@ -740,7 +741,7 @@ export class WhatsappService {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    let card: { id: string; name: string } | null = null;
+    let card: { id: string; name: string; closingDay: number } | null = null;
 
     if (!cardName || cardName.toLowerCase() === 'cartao') {
       // Genérico: resolve só se houver exatamente 1 cartão.
@@ -781,26 +782,25 @@ export class WhatsappService {
       }
     }
 
+    // Fatura ABERTA = ciclo de fechamento (mesmo critério da tela /cartoes),
+    // não o gasto do mês civil. Assim "qual minha fatura?" bate com o app.
     const now = new Date();
-    const startDate = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    ).toISOString();
-    const endDate = now.toISOString();
+    const { start, end } = cardCycleRange(
+      card.closingDay,
+      new Date(now.getFullYear(), now.getMonth(), 1),
+    );
 
     const { total, count } = await this.transactionsRepository.getCardSummary(
       userIds,
       card.id,
-      startDate,
-      endDate,
+      start.toISOString(),
+      end.toISOString(),
     );
-    const monthName = now.toLocaleDateString('pt-BR', { month: 'long' });
 
     if (count === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `Nada no *${card.name}* em ${monthName} ainda — fatura limpa 👍`,
+        content: `Nada no *${card.name}* nesta fatura ainda — fatura limpa 👍`,
       });
       return;
     }
@@ -808,7 +808,7 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `💳 No *${card.name}* você gastou *${fmt(total)}* em ${monthName} ` +
+        `💳 A fatura aberta do *${card.name}* está em *${fmt(total)}* ` +
         `(${count} ${count === 1 ? 'compra' : 'compras'}).`,
     });
   }
