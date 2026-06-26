@@ -54,6 +54,28 @@ function dateRangeFilter(
   return range;
 }
 
+// Ordenação da listagem, COM desempate estável. A `date` é gravada ancorada ao
+// meio-dia UTC (sem a hora real do gasto), então transações do mesmo dia
+// empatam — sem critério secundário a ordem fica indeterminada e "mais
+// recentes" embaralha lançamentos do mesmo dia. Desempatamos por `createdAt`
+// (ordem real de registro) na MESMA direção: assim "mais recentes" mostra, no
+// mesmo dia, a última transação feita primeiro. Ordenar por `amount` também
+// desempata por createdAt para resultado estável.
+function buildOrderBy(
+  orderBy: string | undefined,
+  order: 'asc' | 'desc' = 'desc',
+): Prisma.TransactionOrderByWithRelationInput[] {
+  const dir = order === 'asc' ? 'asc' : 'desc';
+  if (orderBy === 'amount') {
+    return [{ amount: dir }, { createdAt: dir }];
+  }
+  if (orderBy === 'createdAt') {
+    return [{ createdAt: dir }];
+  }
+  // default: 'date' (data do gasto) com desempate por registro real.
+  return [{ date: dir }, { createdAt: dir }];
+}
+
 @Injectable()
 export class TransactionsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -181,7 +203,7 @@ export class TransactionsRepository {
     const dateRange = dateRangeFilter(options.startDate, options.endDate);
     if (dateRange) where.date = dateRange;
 
-    const orderBy = { [options.orderBy || 'date']: options.order || 'desc' };
+    const orderBy = buildOrderBy(options.orderBy, options.order);
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.transaction.findMany({
