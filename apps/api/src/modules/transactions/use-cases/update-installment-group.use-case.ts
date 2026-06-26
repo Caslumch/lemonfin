@@ -81,7 +81,7 @@ export class UpdateInstallmentGroupUseCase {
 
     return {
       installmentGroupId: transaction.installmentGroupId,
-      count: created.length,
+      count: created.count,
       perInstallment,
     };
   }

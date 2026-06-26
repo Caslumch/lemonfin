@@ -230,32 +230,34 @@ export class TransactionsRepository {
       installmentTotal: number;
     }>,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.transaction.deleteMany({
+    // Apaga as parcelas atuais e recria o cronograma numa única transação.
+    // Usa createMany (1 query em lote) em vez de N creates sequenciais: com o
+    // banco remoto (Neon), parcelamentos longos estouravam o timeout de 5s da
+    // interactive transaction (P2028 "Transaction already closed"). Retornamos
+    // só a contagem — o único chamador (UpdateInstallmentGroupUseCase) usa
+    // apenas o nº de parcelas recriadas.
+    const data = rows.map((row) => ({
+      amount: new Prisma.Decimal(row.amount),
+      type: 'EXPENSE' as const,
+      description: row.description,
+      date: new Date(row.date),
+      source: row.source ?? ('MANUAL' as const),
+      userId: row.userId,
+      categoryId: row.categoryId,
+      cardId: row.cardId,
+      installmentGroupId,
+      installmentNumber: row.installmentNumber,
+      installmentTotal: row.installmentTotal,
+    }));
+
+    const [, created] = await this.prisma.$transaction([
+      this.prisma.transaction.deleteMany({
         where: { installmentGroupId, userId: { in: userIds } },
-      });
-      const created = [];
-      for (const row of rows) {
-        const t = await tx.transaction.create({
-          data: {
-            amount: new Prisma.Decimal(row.amount),
-            type: 'EXPENSE',
-            description: row.description,
-            date: new Date(row.date),
-            source: row.source ?? 'MANUAL',
-            userId: row.userId,
-            categoryId: row.categoryId,
-            cardId: row.cardId,
-            installmentGroupId,
-            installmentNumber: row.installmentNumber,
-            installmentTotal: row.installmentTotal,
-          },
-          include: txInclude,
-        });
-        created.push(t);
-      }
-      return created;
-    });
+      }),
+      this.prisma.transaction.createMany({ data }),
+    ]);
+
+    return { count: created.count };
   }
 
   // Exclui um conjunto de transações por id, escopado aos usuários (isolamento
