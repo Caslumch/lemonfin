@@ -11,7 +11,7 @@ import { SummaryCards } from "@/components/transactions/summary-cards";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { DeleteModal } from "@/components/transactions/delete-modal";
-import { FiltersBar } from "@/components/transactions/filters-bar";
+import { FiltersBar, type SortValue } from "@/components/transactions/filters-bar";
 import { MemberFilter } from "@/components/filters/member-filter";
 import { useApi } from "@/hooks/use-api";
 import { useMemberFilter } from "@/hooks/use-member-filter";
@@ -48,6 +48,7 @@ function TransacoesPageInner() {
   });
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sort, setSort] = useState<SortValue>("date:desc");
   const [page, setPage] = useState(1);
 
   // Debounce search input so we don't fire a request per keystroke.
@@ -83,6 +84,10 @@ function TransacoesPageInner() {
     setMonth(value);
     setPage(1);
   }
+  function changeSort(value: SortValue) {
+    setSort(value);
+    setPage(1);
+  }
 
   // Start/end of the selected month as ISO (local boundaries)
   const monthRange = useMemo(() => {
@@ -99,6 +104,12 @@ function TransacoesPageInner() {
     return { start: start.toISOString(), end: end.toISOString() };
   }, [month]);
 
+  // "campo:direção" → orderBy/order para a API.
+  const [orderBy, order] = sort.split(":") as [
+    "date" | "amount",
+    "asc" | "desc",
+  ];
+
   // Data (React Query) — cache por combinação de filtros, com revalidação
   const filters = {
     page,
@@ -108,6 +119,8 @@ function TransacoesPageInner() {
     startDate: monthRange.start,
     endDate: monthRange.end,
     memberId,
+    orderBy,
+    order,
   };
   const listQuery = useTransactionsList(filters);
   const summaryQuery = useTransactionsSummary(monthRange);
@@ -244,6 +257,8 @@ function TransacoesPageInner() {
             onMonthChange={changeMonth}
             search={search}
             onSearchChange={setSearch}
+            sort={sort}
+            onSortChange={changeSort}
             categories={categories}
           />
           {/* Só renderiza algo quando o usuário está em família com 2+ membros. */}

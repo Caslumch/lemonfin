@@ -12,6 +12,10 @@ export interface ParsedTransaction {
   categoryConfidence: number;
   description: string;
   cardName?: string;
+  // Data da transação, ISO 'YYYY-MM-DD...'. Só quando o usuário menciona
+  // ("ontem", "anteontem", "dia 5", "semana passada"). Aceita passado (registro
+  // retroativo); o validador descarta datas inválidas/no futuro. Ausente = hoje.
+  purchaseDate?: string;
 }
 
 export interface ParsedInstallment {
@@ -75,7 +79,11 @@ export type ParseResult =
         | 'reserves'
         | 'recurring'
         | 'category'
-        | 'card';
+        | 'card'
+        // última transação registrada (mais recente)
+        | 'last_transaction'
+        // transação de maior valor (mais cara) do mês
+        | 'top_transaction';
       // Só presente quando queryType === 'card'. "cartao" = genérico (sem nome).
       cardName?: string;
       // Só presente quando queryType === 'category'. Slug da categoria perguntada.
@@ -164,9 +172,10 @@ Quando o usuário menciona um gasto, despesa, recebimento ou ganho com valor.
 Categorias disponíveis (use exatamente o slug):
 ${buildCategoryList(custom)}
 
-Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string, "cardName": string | null}
+Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string, "cardName": string | null, "purchaseDate": string | null}
 - cardName: nome específico do cartão se mencionado (ex: "Nubank", "Inter", "Bradesco"), senão null. Se o usuário diz apenas "cartão", "cartão de crédito" ou "crédito" sem nome específico, use "cartao" como valor.
 - categoryConfidence: número de 0 a 1 indicando sua confiança na categoria escolhida. Use ALTO (0.9+) quando o texto deixa claro (ex: "mercado", "uber", "salário"). Use BAIXO (< 0.6) quando é vago e você teve que adivinhar (ex: "gastei 50 ali", "paguei 30", "comprei uma coisa"). Seja honesto na incerteza.
+- purchaseDate: data em que o gasto/recebimento ACONTECEU, no formato ISO "YYYY-MM-DD", SOMENTE se o usuário mencionar quando foi ("ontem", "anteontem", "dia 5", "semana passada", "segunda-feira", "no dia 10"). Resolva a expressão relativa usando a data de HOJE informada acima. Se NÃO houver menção de data, retorne null (vai usar hoje). Não invente datas nem use datas no futuro.
 
 ### 2. QUERY — Consultar finanças
 Quando o usuário pergunta sobre seus gastos, receitas, saldo ou resumo financeiro.
@@ -176,9 +185,11 @@ Para METAS / orçamento (teto de gasto): "minhas metas", "quais são minhas meta
 Para reservas (juntar dinheiro): "minhas reservas", "como tá minha reserva?", "quanto já juntei pra viagem?", "como vão meus objetivos?"
 Para RECORRÊNCIAS / contas fixas: "minhas recorrências", "minhas recorrencias", "quais são minhas contas fixas?", "minhas assinaturas", "o que tenho fixo todo mês?", "meus gastos fixos", "contas que se repetem"
 Para uma CATEGORIA específica: "quanto gastei com comida esse mês?", "gastos com transporte", "quanto foi de mercado?", "quanto gastei em saúde?", "meus gastos com lazer", "quanto torrei em ifood?"
-Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nubank", "quanto gastei no Inter?", "meu cartão X", "fatura do Bradesco", "o que gastei no <cartão>?"
+Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nubank", "quanto gastei no Inter?", "meu cartão X", "fatura do Bradesco", "o que gastei no <cartão>?", "quando vence a fatura do Bradesco?", "qual o vencimento do meu cartão?"
+Para a ÚLTIMA transação (mais recente): "qual foi minha última compra?", "qual foi meu último gasto?", "minha última transação", "o que registrei por último?", "qual foi a última coisa que gastei?"
+Para a transação MAIS CARA (maior valor do mês): "qual foi minha compra mais cara?", "qual o maior gasto do mês?", "qual foi minha transação mais alta?", "no que gastei mais de uma vez só?", "minha maior despesa"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card", "cardName": string | null, "categorySlug": string | null}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card" | "last_transaction" | "top_transaction", "cardName": string | null, "categorySlug": string | null}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
@@ -188,7 +199,9 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - reserves: situação das RESERVAS / objetivos de juntar dinheiro (quanto já juntou de cada reserva, quanto falta)
 - recurring: lista das RECORRÊNCIAS / contas fixas / assinaturas que se repetem todo mês (quanto, em que dia)
 - category: gasto numa CATEGORIA específica de despesa (alimentação, transporte, etc.) no mês
-- card: gastos de um CARTÃO específico
+- card: gastos de um CARTÃO específico (total da fatura aberta E/OU data de vencimento)
+- last_transaction: a ÚLTIMA transação registrada (a mais recente), com valor, categoria e quando
+- top_transaction: a transação de MAIOR valor (mais cara) do mês
 - cardName: SÓ quando queryType="card". Nome do cartão mencionado (ex: "Bradesco", "Nubank"), ou "cartao" se disser só "meu cartão" sem nome. Nos outros queryTypes, null.
 - categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
 IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
@@ -321,7 +334,9 @@ NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é regist
 - "minhas reservas" / "como tá minha reserva" / "quanto juntei pra viagem" → query com queryType "reserves" (objetivo de poupança), NÃO budget, NÃO saudação.
 - "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
-- "como está meu cartão X" / "gastos no X" / "quanto gastei no X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
+- "como está meu cartão X" / "gastos no X" / "quanto gastei no X" / "quando vence a fatura do X" / "vencimento do cartão X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
+- "minha última compra/transação/gasto" / "o que registrei por último" → query queryType "last_transaction", NUNCA "summary"/"expenses" (que dão totais, não um item).
+- "minha compra mais cara" / "maior gasto do mês" / "transação mais alta" / "maior despesa" → query queryType "top_transaction", NUNCA "expenses" nem "advice" (é um item específico, não análise).
 - "paguei a fatura do X" / "quitei o cartão X" / "paguei 500 da fatura" → pay_invoice (REGISTRAR pagamento), NÃO query "card" (que é consultar).
 - "faz separado" / "cria duas transações" / "separa isso" / "na verdade era em Nx" / "parcela isso" / "refaz ..." referindo-se ao que ACABOU de registrar → redo (refazer a última ação), NÃO um gasto novo. Se vierem valores ("139 e 139"), preencha redo.adjust.items; se for só "em 4x", preencha redo.adjust.installments.
 - "exclui essa que criou" / "apaga o que registrou" / "cancela isso" (SEM recriar) → cancel (apaga a última AÇÃO inteira), NÃO redo.
@@ -589,6 +604,9 @@ export class MessageParserService {
             : 1,
         description: (json.description as string) || fallbackDescription,
         cardName: (json.cardName as string) || undefined,
+        purchaseDate: this.normalizePurchaseDate(
+          json.purchaseDate as string | null | undefined,
+        ),
       },
     };
   }

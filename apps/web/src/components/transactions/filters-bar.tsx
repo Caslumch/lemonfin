@@ -1,9 +1,24 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowDownUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Tabs } from "@/components/ui/tabs";
 import { Select } from "@/components/ui/select";
 import type { Category } from "@/types/transaction";
+
+// Valor único combinando campo + direção (o que o Select manipula). O par é
+// desmembrado em orderBy/order na página. "date:desc" = mais recentes primeiro.
+export type SortValue =
+  | "date:desc"
+  | "date:asc"
+  | "amount:desc"
+  | "amount:asc";
+
+const SORT_OPTIONS: { value: SortValue; label: string }[] = [
+  { value: "date:desc", label: "Mais recentes" },
+  { value: "date:asc", label: "Mais antigas" },
+  { value: "amount:desc", label: "Maior valor" },
+  { value: "amount:asc", label: "Menor valor" },
+];
 
 interface FiltersBarProps {
   type: string;
@@ -14,6 +29,8 @@ interface FiltersBarProps {
   onMonthChange: (month: Date) => void;
   search: string;
   onSearchChange: (search: string) => void;
+  sort: SortValue;
+  onSortChange: (sort: SortValue) => void;
   categories: Category[];
 }
 
@@ -38,6 +55,8 @@ export function FiltersBar({
   onMonthChange,
   search,
   onSearchChange,
+  sort,
+  onSortChange,
   categories,
 }: FiltersBarProps) {
   return (
@@ -87,6 +106,18 @@ export function FiltersBar({
           <ChevronRight size={18} />
         </button>
       </div>
+
+      {/* Sort */}
+      <Select
+        value={sort}
+        onChange={(v) => onSortChange(v as SortValue)}
+        size="md"
+        className="sm:w-44"
+        menuWidth="auto"
+        icon={<ArrowDownUp size={15} />}
+        aria-label="Ordenar transações"
+        options={SORT_OPTIONS}
+      />
 
       {/* Search */}
       <div className="relative sm:ml-auto sm:w-56">
