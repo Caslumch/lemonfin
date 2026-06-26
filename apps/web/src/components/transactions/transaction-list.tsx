@@ -25,6 +25,15 @@ function formatDate(date: string) {
   }).format(new Date(date));
 }
 
+function formatTime(createdAt: string) {
+  // Horário REAL do registro vem de createdAt (a `date` é meio-dia UTC e não
+  // carrega a hora do gasto). Exibido no fuso local (Brasil), formato 24h.
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(createdAt));
+}
+
 type CategorySlug =
   | "alimentacao"
   | "transporte"
@@ -122,7 +131,9 @@ export function TransactionList({
                 {tx.description || tx.category.name}
               </p>
               <div className="text-xs text-fg-muted mt-0.5 flex items-center gap-1 flex-wrap">
-                <span>{formatDate(tx.date)}</span>
+                <span>
+                  {formatDate(tx.date)} · {formatTime(tx.createdAt)}
+                </span>
                 {tx.user?.name && (
                   <span>· {tx.user.name.split(" ")[0]}</span>
                 )}

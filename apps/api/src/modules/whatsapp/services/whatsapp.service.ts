@@ -298,6 +298,19 @@ export class WhatsappService {
     }
   }
 
+  // Data da transação a gravar: quando o usuário menciona "ontem"/"dia 5", o
+  // parser devolve purchaseDate (ISO). Reancoramos no MEIO-DIA UTC (convenção do
+  // projeto) para a data não deslocar 1 dia no fuso do Brasil. Sem menção,
+  // retorna undefined e o repositório usa `new Date()` (hoje).
+  private resolveTransactionDate(purchaseDate?: string): string | undefined {
+    if (!purchaseDate) return undefined;
+    const d = new Date(purchaseDate);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0),
+    ).toISOString();
+  }
+
   private async handleTransaction(
     from: string,
     userId: string,
@@ -305,6 +318,7 @@ export class WhatsappService {
     phoneKey?: string,
   ) {
     const { data } = result;
+    const txDate = this.resolveTransactionDate(data.purchaseDate);
 
     // Confiança baixa na categoria → confirma com o usuário antes de registrar
     // (não chuta). Só quando temos a chave da conversa para guardar o pendente.
@@ -352,6 +366,7 @@ export class WhatsappService {
             source: 'WHATSAPP',
             userId,
             categoryId: category.id,
+            date: txDate,
           });
 
           const amountFormatted = data.amount.toLocaleString('pt-BR', {
@@ -414,6 +429,7 @@ export class WhatsappService {
       userId,
       categoryId: category.id,
       cardId,
+      date: txDate,
     });
 
     const amountFormatted = data.amount.toLocaleString('pt-BR', {
@@ -538,6 +554,7 @@ export class WhatsappService {
       txType: data.type,
       description: data.description,
       cardName: data.cardName,
+      purchaseDate: data.purchaseDate,
       options,
     };
     await this.conversation.setPending(phoneKey, pending);
@@ -623,6 +640,7 @@ export class WhatsappService {
           categoryConfidence: 1,
           description: pending.description,
           cardName: pending.cardName,
+          purchaseDate: pending.purchaseDate,
         },
       },
       phoneKey,
@@ -664,6 +682,16 @@ export class WhatsappService {
 
     if (result.queryType === 'card') {
       await this.handleCardQuery(from, userId, result.cardName);
+      return;
+    }
+
+    if (result.queryType === 'last_transaction') {
+      await this.handleLastTransactionQuery(from, userId);
+      return;
+    }
+
+    if (result.queryType === 'top_transaction') {
+      await this.handleTopTransactionQuery(from, userId);
       return;
     }
 
@@ -743,7 +771,12 @@ export class WhatsappService {
     userIds: string[],
     cardName?: string | null,
     purpose: 'ver a fatura' | 'pagar a fatura' = 'ver a fatura',
-  ): Promise<{ id: string; name: string; closingDay: number } | null> {
+  ): Promise<{
+    id: string;
+    name: string;
+    closingDay: number;
+    dueDay: number | null;
+  } | null> {
     if (!cardName || cardName.toLowerCase() === 'cartao') {
       const cards = await this.cardsRepository.findMany(userIds);
       if (cards.length === 0) {
@@ -813,10 +846,19 @@ export class WhatsappService {
       end.toISOString(),
     );
 
+    // Linha de vencimento (só se o cartão tiver dueDay cadastrado). A fatura
+    // fecha em `end`; vence na próxima ocorrência do dueDay a partir daí.
+    const dueLine =
+      card.dueDay != null
+        ? `\n📅 Vence em *${this.formatTxDate(this.nextDueDate(card.dueDay, end))}*.`
+        : '';
+
     if (count === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `Nada no *${card.name}* nesta fatura ainda — fatura limpa 👍`,
+        content:
+          `Nada no *${card.name}* nesta fatura ainda — fatura limpa 👍` +
+          dueLine,
       });
       return;
     }
@@ -825,8 +867,114 @@ export class WhatsappService {
       to: from,
       content:
         `💳 A fatura aberta do *${card.name}* está em *${fmt(total)}* ` +
-        `(${count} ${count === 1 ? 'compra' : 'compras'}).`,
+        `(${count} ${count === 1 ? 'compra' : 'compras'}).` +
+        dueLine,
     });
+  }
+
+  // Próxima data de vencimento (dueDay) a partir do fechamento da fatura. A
+  // fatura fecha em `closeDate`; o vencimento é a primeira ocorrência do dueDay
+  // em ou após o dia seguinte ao fechamento. Ancorada ao meio-dia UTC para a
+  // exibição (timeZone UTC em formatTxDate) não deslocar o dia.
+  private nextDueDate(dueDay: number, closeDate: Date): Date {
+    const year = closeDate.getFullYear();
+    // Se o dueDay deste mês já passou (<= dia do fechamento), vai pro mês
+    // seguinte. Date.UTC normaliza o overflow de mês (12 → jan do ano seguinte).
+    const month =
+      dueDay <= closeDate.getDate()
+        ? closeDate.getMonth() + 1
+        : closeDate.getMonth();
+    // Clampa ao último dia do mês (ex.: dueDay 31 em fevereiro).
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const day = Math.min(dueDay, lastDay);
+    return new Date(Date.UTC(year, month, day, 12, 0, 0));
+  }
+
+  // "Qual foi minha última transação?" — a mais recente (por data do gasto).
+  private async handleLastTransactionQuery(from: string, userId: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const tx = await this.transactionsRepository.findLatest(userIds);
+
+    if (!tx) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Você ainda não tem nenhuma transação registrada. ' +
+          'Manda algo como _"gastei 50 no mercado"_ que eu anoto 😉',
+      });
+      return;
+    }
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const amount = fmt(tx.amount.toNumber());
+    const icon = tx.category?.icon ?? (tx.type === 'INCOME' ? '💰' : '💸');
+    const label = tx.description || tx.category?.name || 'transação';
+    const when = this.formatTxDate(tx.date);
+    const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
+    const verb = tx.type === 'INCOME' ? 'Última entrada' : 'Último gasto';
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `${icon} *${verb}:* *${amount}* em _${label}_${cardInfo}\n` +
+        `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
+    });
+  }
+
+  // "Qual foi minha compra mais cara?" — maior DESPESA do mês corrente.
+  private async handleTopTransactionQuery(from: string, userId: string) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const now = new Date();
+    const startDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    ).toISOString();
+    const endDate = now.toISOString();
+
+    const tx = await this.transactionsRepository.findMostExpensive(userIds, {
+      type: 'EXPENSE',
+      startDate,
+      endDate,
+    });
+
+    const monthName = now.toLocaleDateString('pt-BR', { month: 'long' });
+
+    if (!tx) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: `Você ainda não tem gastos em ${monthName} 👍`,
+      });
+      return;
+    }
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const amount = fmt(tx.amount.toNumber());
+    const icon = tx.category?.icon ?? '💸';
+    const label = tx.description || tx.category?.name || 'gasto';
+    const when = this.formatTxDate(tx.date);
+    const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `${icon} *Sua maior despesa em ${monthName}:* *${amount}* em _${label}_${cardInfo}\n` +
+        `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
+    });
+  }
+
+  // Formata a data de uma transação para exibição (dd/mm/aaaa). Em UTC porque as
+  // datas são ancoradas ao meio-dia UTC; formatar no fuso local puxaria datas
+  // próximas da meia-noite para o dia anterior.
+  private formatTxDate(date: Date): string {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(date));
   }
 
   // Gasto numa CATEGORIA específica (alimentação, transporte...) no mês corrente.

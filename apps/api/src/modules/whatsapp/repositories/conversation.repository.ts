@@ -18,6 +18,9 @@ export type PendingConfirmation =
       txType: 'INCOME' | 'EXPENSE';
       description: string;
       cardName?: string;
+      // Data mencionada ("ontem"/"dia 5"), ISO. Preservada para a transação não
+      // perder a data ao ser recriada após a confirmação de categoria.
+      purchaseDate?: string;
       // Opções de categoria oferecidas (slug + label), na ordem dos números.
       options: { slug: string; label: string }[];
     }

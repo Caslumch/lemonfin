@@ -106,6 +106,41 @@ export class TransactionsRepository {
     });
   }
 
+  // Transação mais recente do(s) usuário(s). Ordena pela DATA do gasto (a que o
+  // usuário enxerga) e desempata por createdAt — assim "última compra" bate com
+  // o topo da lista de transações. Escopo familiar (userIds).
+  async findLatest(userIds: string[]) {
+    return this.prisma.transaction.findFirst({
+      where: { userId: { in: userIds } },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      include: txInclude,
+    });
+  }
+
+  // Transação de MAIOR valor num período (despesa mais cara, por padrão). Usado
+  // por "qual foi minha compra mais cara?". Escopo familiar (userIds).
+  async findMostExpensive(
+    userIds: string[],
+    options?: {
+      type?: 'INCOME' | 'EXPENSE';
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
+    const where: Prisma.TransactionWhereInput = {
+      userId: { in: userIds },
+    };
+    if (options?.type) where.type = options.type;
+    const dateRange = dateRangeFilter(options?.startDate, options?.endDate);
+    if (dateRange) where.date = dateRange;
+
+    return this.prisma.transaction.findFirst({
+      where,
+      orderBy: { amount: 'desc' },
+      include: txInclude,
+    });
+  }
+
   // Possível duplicata: mesma valor + categoria + tipo dentro da janela (horas).
   // Usado para alertar registros repetidos acidentais.
   async findPossibleDuplicate(

@@ -19,6 +19,9 @@ export interface TransactionFilters {
   startDate: string;
   endDate: string;
   memberId?: string;
+  // Ordenação. Campos aceitos pela API: date | amount | createdAt.
+  orderBy?: "date" | "amount" | "createdAt";
+  order?: "asc" | "desc";
 }
 
 function buildListParams(f: TransactionFilters) {
@@ -31,6 +34,8 @@ function buildListParams(f: TransactionFilters) {
   params.set("startDate", f.startDate);
   params.set("endDate", f.endDate);
   if (f.memberId) params.set("memberId", f.memberId);
+  if (f.orderBy) params.set("orderBy", f.orderBy);
+  if (f.order) params.set("order", f.order);
   return params.toString();
 }
 
