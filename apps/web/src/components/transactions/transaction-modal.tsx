@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { X, Check, ChevronDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import type { Transaction, Category } from "@/types/transaction";
@@ -75,34 +77,8 @@ export function TransactionModal({
   // abre em modo grupo: valor TOTAL, nº de parcelas e data da 1ª, e salvar
   // recria todas as parcelas).
   const [isEditingGroup, setIsEditingGroup] = useState(false);
-  const [parcelasOpen, setParcelasOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const parcelasRef = useRef<HTMLDivElement>(null);
-  const parcelasTriggerRef = useRef<HTMLButtonElement>(null);
-
-  // Altura máxima da lista (px) — mantém em sincronia com max-h-52 (13rem).
-  const PARCELAS_MENU_MAX_H = 208;
-
-  // Abre a lista decidindo a direção: se não couber abaixo do gatilho dentro da
-  // viewport, abre para cima. Evita o dropdown ser "comido" pela borda inferior.
-  function toggleParcelas() {
-    if (parcelasOpen) {
-      setParcelasOpen(false);
-      return;
-    }
-    const rect = parcelasTriggerRef.current?.getBoundingClientRect();
-    if (rect) {
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setDropUp(
-        spaceBelow < PARCELAS_MENU_MAX_H + 16 && spaceAbove > spaceBelow,
-      );
-    }
-    setParcelasOpen(true);
-  }
 
   const isEditing = !!transaction;
 
@@ -148,21 +124,8 @@ export function TransactionModal({
       setInstallments(2);
       setIsEditingGroup(false);
     }
-    setParcelasOpen(false);
     setError("");
   }, [transaction, open, categories]);
-
-  // Fecha o dropdown de parcelas ao clicar fora dele.
-  useEffect(() => {
-    if (!parcelasOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (parcelasRef.current && !parcelasRef.current.contains(e.target as Node)) {
-        setParcelasOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [parcelasOpen]);
 
   if (!open) return null;
 
@@ -273,60 +236,42 @@ export function TransactionModal({
             />
 
             {/* Date */}
-            <Input
+            <DatePicker
               id="date"
               label="Data"
-              type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
             />
 
             {/* Category */}
-            <div className="w-full">
-              <label
-                htmlFor="categoryId"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Categoria
-              </label>
-              <select
-                id="categoryId"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-                required
-              >
-                <option value="">Selecione...</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="categoryId"
+              label="Categoria"
+              value={categoryId}
+              onChange={setCategoryId}
+              placeholder="Selecione..."
+              options={categories.map((cat) => ({
+                value: cat.id,
+                label: cat.name,
+              }))}
+            />
 
             {/* Card (only for expenses) */}
             {type === "EXPENSE" && cards.length > 0 && (
               <div className="w-full">
-                <label
-                  htmlFor="cardId"
-                  className="block text-sm font-medium text-fg mb-1.5"
-                >
-                  Cartão (opcional)
-                </label>
-                <select
+                <Select
                   id="cardId"
+                  label="Cartão (opcional)"
                   value={cardId}
-                  onChange={(e) => setCardId(e.target.value)}
-                  className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-                >
-                  <option value="">Sem cartão</option>
-                  {cards.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {card.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCardId}
+                  options={[
+                    { value: "", label: "Sem cartão" },
+                    ...cards.map((card) => ({
+                      value: card.id,
+                      label: card.name,
+                    })),
+                  ]}
+                />
               </div>
             )}
 
@@ -346,10 +291,7 @@ export function TransactionModal({
                     </label>
                     <Toggle
                       checked={isParcelado}
-                      onCheckedChange={(v) => {
-                        setIsParcelado(v);
-                        setParcelasOpen(false);
-                      }}
+                      onCheckedChange={setIsParcelado}
                     />
                   </div>
                 )}
@@ -363,57 +305,15 @@ export function TransactionModal({
                 {/* Dropdown de parcelas — quando o switch está ligado (criação)
                     ou sempre, no modo grupo (edição). */}
                 {(isParcelado || isEditingGroup) && (
-                  <div
-                    className={`relative ${isEditingGroup ? "" : "mt-3"}`}
-                    ref={parcelasRef}
-                  >
-                    <button
-                      ref={parcelasTriggerRef}
-                      type="button"
-                      onClick={toggleParcelas}
-                      className="flex w-full items-center justify-between rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-                    >
-                      <span>{installments}x</span>
-                      <ChevronDown
-                        size={16}
-                        className={`text-fg-muted transition-transform duration-150 ${
-                          parcelasOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-
-                    {parcelasOpen && (
-                      <ul
-                        role="listbox"
-                        className={`absolute z-20 max-h-52 w-full overflow-y-auto rounded-md border-[1.5px] border-border bg-surface py-1 shadow-lg ${
-                          dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5"
-                        }`}
-                      >
-                        {Array.from({ length: 47 }, (_, i) => i + 2).map((n) => (
-                          <li key={n}>
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={installments === n}
-                              onClick={() => {
-                                setInstallments(n);
-                                setParcelasOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between px-3.5 py-2 text-sm transition-colors hover:bg-muted ${
-                                installments === n
-                                  ? "font-medium text-fg"
-                                  : "text-fg-muted"
-                              }`}
-                            >
-                              <span>{n}x</span>
-                              {installments === n && (
-                                <Check size={15} className="text-lima" />
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                  <div className={isEditingGroup ? "" : "mt-3"}>
+                    <Select
+                      value={String(installments)}
+                      onChange={(v) => setInstallments(Number(v))}
+                      aria-label="Número de parcelas"
+                      options={Array.from({ length: 47 }, (_, i) => i + 2).map(
+                        (n) => ({ value: String(n), label: `${n}x` }),
+                      )}
+                    />
 
                     {(() => {
                       const total = parseFloat(amount);

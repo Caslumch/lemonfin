@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Check, ArrowRight, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 import type { Category } from "@/types/transaction";
@@ -261,21 +262,20 @@ export default function OnboardingPage() {
                         }
                         className="w-16 rounded-[12px] border-[1.5px] border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-fg focus:outline-none"
                       />
-                      <select
+                      <Select
                         value={exp.categorySlug}
-                        onChange={(e) =>
-                          updateExpense(i, { categorySlug: e.target.value })
+                        onChange={(v) =>
+                          updateExpense(i, { categorySlug: v })
                         }
-                        className="flex-1 rounded-[12px] border-[1.5px] border-border bg-surface px-3 py-2 text-sm text-fg focus:border-fg focus:outline-none cursor-pointer"
-                      >
-                        {categories
+                        size="md"
+                        className="flex-1"
+                        options={categories
                           .filter((c) => c.slug !== "salario")
-                          .map((c) => (
-                            <option key={c.id} value={c.slug}>
-                              {c.icon} {c.name}
-                            </option>
-                          ))}
-                      </select>
+                          .map((c) => ({
+                            value: c.slug,
+                            label: `${c.icon} ${c.name}`,
+                          }))}
+                      />
                     </div>
                   </div>
                 ))}

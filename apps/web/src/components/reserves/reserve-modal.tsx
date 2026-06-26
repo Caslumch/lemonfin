@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { Reserve } from "@/types/reserve";
 
 const reserveSchema = z.object({
@@ -126,13 +127,11 @@ export function ReserveModal({
               required
             />
 
-            <Input
+            <DatePicker
               id="deadline"
               label="Até quando"
-              type="date"
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              required
+              onChange={setDeadline}
             />
 
             {error && (

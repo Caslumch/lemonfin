@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { Category } from "@/types/transaction";
 import type { Card } from "@/types/card";
 import type { Recurring } from "@/types/recurring";
@@ -164,27 +165,18 @@ export function RecurringModal({
               </div>
             </div>
 
-            <div className="w-full">
-              <label
-                htmlFor="category"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Categoria
-              </label>
-              <select
-                id="category"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-              >
-                <option value="">Selecione...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon} {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="category"
+              label="Categoria"
+              value={categoryId}
+              onChange={setCategoryId}
+              size="md"
+              placeholder="Selecione..."
+              options={categories.map((c) => ({
+                value: c.id,
+                label: `${c.icon} ${c.name}`,
+              }))}
+            />
 
             <Input
               id="amount"
@@ -219,19 +211,16 @@ export function RecurringModal({
                 Cartão{" "}
                 <span className="text-fg-muted font-normal">(opcional)</span>
               </label>
-              <select
+              <Select
                 id="card"
                 value={cardId}
-                onChange={(e) => setCardId(e.target.value)}
-                className="w-full rounded-md border-[1.5px] border-border bg-surface px-3.5 py-2.5 text-sm text-fg transition-colors duration-150 focus:border-fg focus:outline-none"
-              >
-                <option value="">Nenhum</option>
-                {cards.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setCardId}
+                size="md"
+                options={[
+                  { value: "", label: "Nenhum" },
+                  ...cards.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
             </div>
 
             {error && (
