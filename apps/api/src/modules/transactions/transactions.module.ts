@@ -22,7 +22,8 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
   imports: [
     CategoriesModule,
     FamiliesModule,
-    CardsModule,
+    // forwardRef: CardsModule importa TransactionsModule (PayInvoiceUseCase).
+    forwardRef(() => CardsModule),
     forwardRef(() => RecurringModule),
     BillingEnforcementModule,
   ],

@@ -48,3 +48,13 @@ export const invoiceQuerySchema = z.object({
 });
 
 export type InvoiceQuery = z.infer<typeof invoiceQuerySchema>;
+
+// Pagamento de fatura: cycle = "YYYY-MM" (mês de referência do ciclo), amount =
+// valor pago (total ou parcial), paidAt = data do pagamento (default agora).
+export const payInvoiceSchema = z.object({
+  cycle: z.string().regex(/^\d{4}-\d{2}$/, 'Ciclo deve ser YYYY-MM'),
+  amount: z.number().positive('O valor deve ser positivo'),
+  paidAt: z.string().datetime().optional(),
+});
+
+export type PayInvoiceInput = z.infer<typeof payInvoiceSchema>;
