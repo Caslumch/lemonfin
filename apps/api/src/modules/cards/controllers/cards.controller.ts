@@ -18,8 +18,16 @@ import { ListCardsUseCase } from '../use-cases/list-cards.use-case';
 import { UpdateCardUseCase } from '../use-cases/update-card.use-case';
 import { DeleteCardUseCase } from '../use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from '../use-cases/get-card-invoice.use-case';
-import { createCardSchema, updateCardSchema } from '../dtos/card.dto';
-import type { CreateCardInput, UpdateCardInput } from '../dtos/card.dto';
+import {
+  createCardSchema,
+  updateCardSchema,
+  invoiceQuerySchema,
+} from '../dtos/card.dto';
+import type {
+  CreateCardInput,
+  UpdateCardInput,
+  InvoiceQuery,
+} from '../dtos/card.dto';
 
 @Controller('cards')
 @UseGuards(JwtAuthGuard, PremiumGuard)
@@ -49,9 +57,9 @@ export class CardsController {
   invoice(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Query('month') month?: string,
+    @Query(new ZodValidationPipe(invoiceQuerySchema)) query: InvoiceQuery,
   ) {
-    return this.getCardInvoice.execute(id, user.id, month);
+    return this.getCardInvoice.execute(id, user.id, query);
   }
 
   @Patch(':id')

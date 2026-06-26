@@ -19,6 +19,13 @@ export interface CardInvoice {
   card: Card;
   month: string;
   transactions: Transaction[];
+  // Soma do ciclo FILTRADO inteiro (não só a página atual).
   total: number;
   isClosed: boolean;
+  meta: {
+    total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
+  };
 }
