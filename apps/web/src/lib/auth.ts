@@ -13,13 +13,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         // Token mode: the caller already authenticated (incl. 2FA) against
-        // the API and has a valid access token. Skip re-calling /auth/sign-in.
+        // the API and has an access token. We must NOT trust the id/name/email
+        // sent by the client — anyone could forge a session with an arbitrary
+        // identity. Validate the token against the API and derive identity from
+        // /users/me. An invalid/expired token makes the call 401 → login fails.
         if (credentials?.directToken) {
+          const token = credentials.directToken as string;
+          const meRes = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/users/me`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          if (!meRes.ok) return null;
+
+          const me = await meRes.json();
+          if (!me?.id) return null;
+
           return {
-            id: credentials.userId as string,
-            name: (credentials.name as string) ?? null,
-            email: (credentials.email as string) ?? null,
-            accessToken: credentials.directToken as string,
+            id: me.id as string,
+            name: (me.name as string) ?? null,
+            email: (me.email as string) ?? null,
+            accessToken: token,
           };
         }
 
