@@ -17,7 +17,7 @@ export class ListTransactionsUseCase {
     );
     const skip = (query.page - 1) * query.perPage;
 
-    const { data, total } = await this.transactionsRepository.findMany({
+    const opts = {
       userIds,
       type: query.type,
       categoryId: query.categoryId,
@@ -28,7 +28,15 @@ export class ListTransactionsUseCase {
       order: query.order,
       skip,
       take: query.perPage,
-    });
+    };
+
+    // Por padrão a listagem AGRUPA compras parceladas numa linha só (a compra),
+    // ancorada no mês da 1ª parcela. `grouped=false` volta ao modo "uma linha
+    // por parcela" (cada parcela no seu mês).
+    const { data, total } =
+      query.grouped === false
+        ? await this.transactionsRepository.findMany(opts)
+        : await this.transactionsRepository.findManyGrouped(opts);
 
     return {
       data,

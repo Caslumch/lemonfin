@@ -79,6 +79,44 @@ describe('cardCycleRange', () => {
     expect(ultimoDia >= start && ultimoDia <= end).toBe(true);
     expect(diaDoCorte <= end).toBe(false);
   });
+
+  // closingDay >= 29 com mês curto: sem clamp, Date.UTC vazava para o mês
+  // seguinte (ex.: fatura de fev com closingDay=31 ia até 02/mar). O fim precisa
+  // ficar dentro do mês de referência.
+  it('closingDay=31, fatura de fevereiro → termina no último dia de fevereiro', () => {
+    const { end } = cardCycleRange(31, ref(2026, 1)); // fevereiro/2026
+    expect(end.getUTCMonth()).toBe(1); // fevereiro, NÃO março
+    expect(end.getUTCDate()).toBe(28);
+  });
+
+  it('closingDay=30, fatura de fevereiro → termina no último dia de fevereiro', () => {
+    const { end } = cardCycleRange(30, ref(2026, 1));
+    expect(end.getUTCMonth()).toBe(1);
+    expect(end.getUTCDate()).toBe(28);
+  });
+
+  // Ciclos consecutivos com closingDay alto devem ser CONTÍGUOS e DISJUNTOS:
+  // o início de um ciclo é exatamente 1ms após o fim do anterior. Sem isso, o
+  // clamp de fim de mês sobreporia 1 dia (compra contada em duas faturas).
+  it('closingDay=31: ciclos consecutivos não têm buraco nem sobreposição', () => {
+    const fev = cardCycleRange(31, ref(2026, 1));
+    const mar = cardCycleRange(31, ref(2026, 2));
+    expect(mar.start.getTime()).toBe(fev.end.getTime() + 1);
+    // E março não começa em fevereiro (sem sobreposição).
+    expect(mar.start.getUTCMonth()).toBe(2); // março
+    expect(mar.start.getUTCDate()).toBe(1);
+  });
+
+  // Uma compra no último dia de fevereiro (mês curto) cai em UM ciclo só.
+  it('closingDay=31: compra em 28/fev cai só na fatura de fevereiro, não na de março', () => {
+    const fev = cardCycleRange(31, ref(2026, 1));
+    const mar = cardCycleRange(31, ref(2026, 2));
+    const compra = new Date(Date.UTC(2026, 1, 28, 12, 0, 0)); // 28/fev meio-dia
+    const naFev = compra >= fev.start && compra <= fev.end;
+    const noMar = compra >= mar.start && compra <= mar.end;
+    expect(naFev).toBe(true);
+    expect(noMar).toBe(false);
+  });
 });
 
 describe('nextDueDate', () => {

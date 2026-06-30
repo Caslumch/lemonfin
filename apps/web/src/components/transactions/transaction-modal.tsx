@@ -93,11 +93,18 @@ export function TransactionModal({
       setIsEditingGroup(isGroup);
 
       if (isGroup) {
-        // Valor exibido = TOTAL da compra (soma das N parcelas), derivado do
-        // valor desta parcela × N. Descrição sem o sufixo "(n/N)" que o backend
-        // acrescenta. Data = a da 1ª parcela (recuando n-1 meses desta).
+        // Valor exibido = TOTAL da compra. Preferimos installmentSum (soma real
+        // das N parcelas, vinda do backend na lista agrupada) — ele já reflete o
+        // residual de arredondamento absorvido na última parcela. Só quando não
+        // veio (ex.: edição fora do fluxo agrupado) recaímos no parcela × N.
+        // Descrição sem o sufixo "(n/N)" que o backend acrescenta. Data = a da 1ª
+        // parcela (recuando n-1 meses desta).
         const perInstallment = Number(transaction.amount);
-        setAmount(String(Math.round(perInstallment * total * 100) / 100));
+        const totalCompra =
+          transaction.installmentSum != null
+            ? transaction.installmentSum
+            : Math.round(perInstallment * total * 100) / 100;
+        setAmount(String(totalCompra));
         setDescription(
           (transaction.description || "").replace(/\s*\(\d+\/\d+\)\s*$/, ""),
         );

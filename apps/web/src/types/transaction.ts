@@ -28,6 +28,10 @@ export interface Transaction {
   installmentGroupId?: string | null;
   installmentNumber?: number | null;
   installmentTotal?: number | null;
+  // Na listagem AGRUPADA (/transactions?grouped=true), a 1ª parcela representa a
+  // compra inteira e carrega aqui a SOMA de todas as parcelas (valor total da
+  // compra). Ausente nas linhas à vista e no modo não-agrupado.
+  installmentSum?: number | null;
   createdAt: string;
   updatedAt: string;
 }
