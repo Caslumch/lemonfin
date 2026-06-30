@@ -3,7 +3,7 @@ import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
-import { cardCycleRange } from '../../cards/utils/card-cycle';
+import { cardCycleRange, nextDueDate } from '../../cards/utils/card-cycle';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import {
   MessageParserService,
@@ -833,10 +833,11 @@ export class WhatsappService {
 
     // Fatura ABERTA = ciclo de fechamento (mesmo critério da tela /cartoes),
     // não o gasto do mês civil. Assim "qual minha fatura?" bate com o app.
+    // ref em UTC para casar com cardCycleRange (régua em UTC).
     const now = new Date();
     const { start, end } = cardCycleRange(
       card.closingDay,
-      new Date(now.getFullYear(), now.getMonth(), 1),
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
     );
 
     const { total, count } = await this.transactionsRepository.getCardSummary(
@@ -850,7 +851,7 @@ export class WhatsappService {
     // fecha em `end`; vence na próxima ocorrência do dueDay a partir daí.
     const dueLine =
       card.dueDay != null
-        ? `\n📅 Vence em *${this.formatTxDate(this.nextDueDate(card.dueDay, end))}*.`
+        ? `\n📅 Vence em *${this.formatTxDate(nextDueDate(card.dueDay, end))}*.`
         : '';
 
     if (count === 0) {
@@ -870,24 +871,6 @@ export class WhatsappService {
         `(${count} ${count === 1 ? 'compra' : 'compras'}).` +
         dueLine,
     });
-  }
-
-  // Próxima data de vencimento (dueDay) a partir do fechamento da fatura. A
-  // fatura fecha em `closeDate`; o vencimento é a primeira ocorrência do dueDay
-  // em ou após o dia seguinte ao fechamento. Ancorada ao meio-dia UTC para a
-  // exibição (timeZone UTC em formatTxDate) não deslocar o dia.
-  private nextDueDate(dueDay: number, closeDate: Date): Date {
-    const year = closeDate.getFullYear();
-    // Se o dueDay deste mês já passou (<= dia do fechamento), vai pro mês
-    // seguinte. Date.UTC normaliza o overflow de mês (12 → jan do ano seguinte).
-    const month =
-      dueDay <= closeDate.getDate()
-        ? closeDate.getMonth() + 1
-        : closeDate.getMonth();
-    // Clampa ao último dia do mês (ex.: dueDay 31 em fevereiro).
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    const day = Math.min(dueDay, lastDay);
-    return new Date(Date.UTC(year, month, day, 12, 0, 0));
   }
 
   // "Qual foi minha última transação?" — a mais recente (por data do gasto).
@@ -1791,12 +1774,13 @@ export class WhatsappService {
     );
     if (!card) return;
 
-    // Ciclo aberto = mês corrente (mesma régua de getInvoice).
+    // Ciclo aberto = mês corrente (mesma régua de getInvoice). UTC para o `cycle`
+    // (chave do InvoicePayment) bater com o derivado no web em get-card-invoice.
     const now = new Date();
-    const cycle = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const cycle = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     const { start, end } = cardCycleRange(
       card.closingDay,
-      new Date(now.getFullYear(), now.getMonth(), 1),
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
     );
     const { total } = await this.transactionsRepository.getCardSummary(
       userIds,

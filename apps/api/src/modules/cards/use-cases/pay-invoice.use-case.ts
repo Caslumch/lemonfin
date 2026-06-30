@@ -36,8 +36,9 @@ export class PayInvoiceUseCase {
     }
 
     // Ciclo a partir do "YYYY-MM" informado (mesma régua de getInvoice).
+    // ref em UTC para casar com cardCycleRange (régua em UTC).
     const [year, month] = input.cycle.split('-').map(Number);
-    const ref = new Date(year, month - 1, 1);
+    const ref = new Date(Date.UTC(year, month - 1, 1));
     const { start, end } = cardCycleRange(card.closingDay, ref);
 
     const category = await this.categoriesRepository.findBySlug(
