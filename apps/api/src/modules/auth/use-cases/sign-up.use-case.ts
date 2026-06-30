@@ -47,7 +47,11 @@ export class SignUpUseCase {
       ...(normalizedPhone && { phone: normalizedPhone }),
     });
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email });
+    const token = this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      type: 'access',
+    });
 
     if (normalizedPhone) {
       this.sendWelcomeWhatsApp(normalizedPhone, input.name).catch((err) =>

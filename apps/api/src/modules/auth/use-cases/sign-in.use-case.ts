@@ -33,7 +33,11 @@ export class SignInUseCase {
       return { status: 'TOTP_REQUIRED' as const, tempToken };
     }
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email });
+    const token = this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      type: 'access',
+    });
 
     return {
       status: 'SUCCESS' as const,

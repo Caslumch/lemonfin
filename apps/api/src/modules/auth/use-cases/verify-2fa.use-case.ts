@@ -70,7 +70,11 @@ export class VerifyTwoFactorUseCase {
       throw new UnauthorizedException('Código inválido');
     }
 
-    const token = this.jwtService.sign({ sub: user.id, email: user.email });
+    const token = this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      type: 'access',
+    });
 
     return {
       status: 'SUCCESS' as const,
