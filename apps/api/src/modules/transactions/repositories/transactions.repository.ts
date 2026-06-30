@@ -143,6 +143,19 @@ export class TransactionsRepository {
     });
   }
 
+  // Última transação REGISTRADA (por createdAt), escopo familiar. Diferente de
+  // findLatest (que ordena por `date`): para "qual foi minha última transação?"
+  // no WhatsApp, ordenar por `date` traz a PARCELA mais futura de uma compra
+  // parcelada (date no mês de vencimento, ex. 2027), não a compra mais recente.
+  // createdAt reflete a ordem real de lançamento.
+  async findLastCreated(userIds: string[]) {
+    return this.prisma.transaction.findFirst({
+      where: { userId: { in: userIds } },
+      orderBy: { createdAt: 'desc' },
+      include: txInclude,
+    });
+  }
+
   // Transação de MAIOR valor num período (despesa mais cara, por padrão). Usado
   // por "qual foi minha compra mais cara?". Escopo familiar (userIds).
   async findMostExpensive(
