@@ -226,11 +226,17 @@ export class WhatsappService {
     )
       .filter((c) => c.userId !== null)
       .map((c) => ({ slug: c.slug, name: c.name }));
+    // Membros da família (só com 2+) para o parser extrair memberName em
+    // consultas tipo "o que a Danielle gastou". Vazio para usuário solo.
+    const familyMembers = await this.familyContext.listMembers(user.id);
     const result = await this.messageParser.parse(
       content,
       history,
       customCategories,
       user.id,
+      familyMembers.length > 1
+        ? familyMembers.map((m) => ({ firstName: m.firstName }))
+        : [],
     );
 
     // Registra a mensagem do usuário no histórico.
@@ -691,6 +697,100 @@ export class WhatsappService {
     return true;
   }
 
+  // Resolve a janela de tempo de uma consulta em horário de Brasília (UTC-3) e
+  // devolve start/end ISO + um rótulo legível. "today" = hoje; "week" = últimos
+  // 7 dias; "month"/ausente = mês civil corrente. As datas das transações são
+  // meio-dia UTC, então uma janela [00:00 BR, 23:59 BR] as captura corretamente.
+  private resolvePeriodBR(period?: 'today' | 'week' | 'month'): {
+    startDate: string;
+    endDate: string;
+    label: string;
+  } {
+    // "Agora" no fuso BR (UTC-3) para extrair o dia/mês civil do usuário.
+    const nowBR = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const y = nowBR.getUTCFullYear();
+    const m = nowBR.getUTCMonth();
+    const d = nowBR.getUTCDate();
+    const startOfDay = (yy: number, mm: number, dd: number) =>
+      new Date(
+        `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}T00:00:00.000-03:00`,
+      ).toISOString();
+    const endOfDay = (yy: number, mm: number, dd: number) =>
+      new Date(
+        `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}T23:59:59.999-03:00`,
+      ).toISOString();
+
+    if (period === 'today') {
+      return {
+        startDate: startOfDay(y, m, d),
+        endDate: endOfDay(y, m, d),
+        label: 'hoje',
+      };
+    }
+    if (period === 'week') {
+      // Últimos 7 dias (inclui hoje). Ancorado em meia-noite BR de 6 dias atrás.
+      const from = new Date(Date.UTC(y, m, d - 6));
+      return {
+        startDate: startOfDay(
+          from.getUTCFullYear(),
+          from.getUTCMonth(),
+          from.getUTCDate(),
+        ),
+        endDate: endOfDay(y, m, d),
+        label: 'nos últimos 7 dias',
+      };
+    }
+    // month (padrão): 1º dia do mês até o fim de hoje.
+    const monthName = nowBR.toLocaleDateString('pt-BR', {
+      month: 'long',
+      timeZone: 'UTC',
+    });
+    return {
+      startDate: startOfDay(y, m, 1),
+      endDate: endOfDay(y, m, d),
+      label: `em ${monthName}`,
+    };
+  }
+
+  // Resolve o ESCOPO de uma consulta: se o usuário citou um membro ("a Danielle"),
+  // filtra só nele; senão, a família inteira. Retorna os userIds e um sufixo de
+  // rótulo ("da Danielle") — ou null quando o nome não resolve (já tendo enviado
+  // a mensagem de erro/ambiguidade ao usuário).
+  private async resolveQueryScope(
+    from: string,
+    userId: string,
+    memberName?: string,
+  ): Promise<{ userIds: string[]; who: string } | null> {
+    if (!memberName) {
+      const userIds = await this.familyContext.resolveUserIds(userId);
+      return { userIds, who: '' };
+    }
+    const res = await this.familyContext.resolveMemberByName(
+      userId,
+      memberName,
+    );
+    if (res.status === 'ok') {
+      const first = res.name.trim().split(/\s+/)[0];
+      return { userIds: [res.userId], who: ` (${first})` };
+    }
+    if (res.status === 'ambiguous') {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Tem mais de uma pessoa chamada *${memberName}* na família ` +
+          `(${res.names.join(', ')}). De quem você quer saber? Me diz o nome completo.`,
+      });
+      return null;
+    }
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Não achei ninguém chamado *${memberName}* na sua família. ` +
+        `Confere o nome? Ou pergunta sem citar a pessoa pra ver o total da família.`,
+    });
+    return null;
+  }
+
   private async handleQuery(
     from: string,
     userId: string,
@@ -738,14 +838,11 @@ export class WhatsappService {
       return;
     }
 
-    const userIds = await this.familyContext.resolveUserIds(userId);
-    const now = new Date();
-    const startDate = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    ).toISOString();
-    const endDate = now.toISOString();
+    // Escopo (família ou um membro citado) + janela de tempo (hoje/semana/mês).
+    const scope = await this.resolveQueryScope(from, userId, result.memberName);
+    if (!scope) return; // nome não resolveu — mensagem já enviada
+    const { userIds, who } = scope;
+    const { startDate, endDate, label } = this.resolvePeriodBR(result.period);
 
     const summary = await this.transactionsRepository.getSummary(
       userIds,
@@ -767,35 +864,34 @@ export class WhatsappService {
     });
     const balanceEmoji = summary.balance >= 0 ? '✅' : '🔴';
 
-    const monthName = now.toLocaleDateString('pt-BR', { month: 'long' });
-
+    // "who" entra no texto quando a consulta foi por um membro ("(Danielle)").
     let message = '';
 
     switch (result.queryType) {
       case 'expenses':
         message =
-          `💸 Em ${monthName} você gastou *${expenseFormatted}* ` +
+          `💸${who} ${label} gastou *${expenseFormatted}* ` +
           `(${summary.expenseCount} ${summary.expenseCount === 1 ? 'lançamento' : 'lançamentos'}).\n\n` +
           `_Quer o quadro completo? Manda "resumo" 📊_`;
         break;
 
       case 'income':
         message =
-          `💰 Em ${monthName} entraram *${incomeFormatted}* ` +
+          `💰${who} ${label} entraram *${incomeFormatted}* ` +
           `(${summary.incomeCount} ${summary.incomeCount === 1 ? 'lançamento' : 'lançamentos'}).\n\n` +
           `_Quer o quadro completo? Manda "resumo" 📊_`;
         break;
 
       case 'balance':
         message =
-          `${balanceEmoji} Seu saldo de ${monthName} é *${balanceFormatted}*.\n\n` +
+          `${balanceEmoji}${who} O saldo ${label} é *${balanceFormatted}*.\n\n` +
           `Entrou ${incomeFormatted} 💰 e saiu ${expenseFormatted} 💸.`;
         break;
 
       case 'summary':
       default:
         message =
-          `📊 *Como ${monthName} tá indo:*\n\n` +
+          `📊 *Como${who} tá ${label}:*\n\n` +
           `💰 Entrou *${incomeFormatted}* (${summary.incomeCount})\n` +
           `💸 Saiu *${expenseFormatted}* (${summary.expenseCount})\n` +
           `${balanceEmoji} Saldo: *${balanceFormatted}*\n\n` +

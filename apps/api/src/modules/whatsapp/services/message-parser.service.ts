@@ -88,6 +88,13 @@ export type ParseResult =
       cardName?: string;
       // Só presente quando queryType === 'category'. Slug da categoria perguntada.
       categorySlug?: string;
+      // Primeiro nome de um MEMBRO da família mencionado ("o que a Danielle
+      // gastou"). O handler resolve para o userId daquele membro e filtra a
+      // consulta só nele; ausente = família inteira (comportamento padrão).
+      memberName?: string;
+      // Janela de tempo da consulta. Ausente = mês corrente (padrão). "today" e
+      // "week" recortam hoje / últimos 7 dias; o handler resolve no fuso BR.
+      period?: 'today' | 'week' | 'month';
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
@@ -155,13 +162,23 @@ export function buildCategoryList(
   return lines.join('\n');
 }
 
+// Lista os primeiros nomes dos membros da família para o prompt — o modelo só
+// pode extrair memberName de quem realmente está na família (evita "filtrar" por
+// um nome inventado). Vazio quando o usuário não está numa família com 2+ membros.
+function buildMemberList(members: { firstName: string }[]): string {
+  if (members.length === 0) return '';
+  const names = members.map((m) => m.firstName).join(', ');
+  return `\nMembros da família (para memberName em consultas): ${names}.`;
+}
+
 function buildSystemPrompt(
   custom: { slug: string; name: string }[],
   today: string,
+  members: { firstName: string }[] = [],
 ): string {
   return `Você é o LemonFin, um assistente financeiro inteligente via WhatsApp. Você ajuda usuários a registrar transações, consultar gastos e dar dicas financeiras.
 
-Hoje é ${today}. Use esta data como referência para resolver expressões de tempo relativas ("mês passado", "ontem", "dia 5", "até dezembro").
+Hoje é ${today}. Use esta data como referência para resolver expressões de tempo relativas ("mês passado", "ontem", "dia 5", "até dezembro").${buildMemberList(members)}
 
 Analise a mensagem do usuário e identifique a INTENÇÃO. Responda APENAS com JSON válido (sem markdown, sem backticks, sem explicações).
 
@@ -189,7 +206,7 @@ Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nuba
 Para a ÚLTIMA transação (mais recente): "qual foi minha última compra?", "qual foi meu último gasto?", "minha última transação", "o que registrei por último?", "qual foi a última coisa que gastei?"
 Para a transação MAIS CARA (maior valor do mês): "qual foi minha compra mais cara?", "qual o maior gasto do mês?", "qual foi minha transação mais alta?", "no que gastei mais de uma vez só?", "minha maior despesa"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card" | "last_transaction" | "top_transaction", "cardName": string | null, "categorySlug": string | null}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card" | "last_transaction" | "top_transaction", "cardName": string | null, "categorySlug": string | null, "memberName": string | null, "period": "today" | "week" | "month" | null}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
@@ -204,6 +221,7 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - top_transaction: a transação de MAIOR valor (mais cara) do mês
 - cardName: SÓ quando queryType="card". Nome do cartão mencionado (ex: "Bradesco", "Nubank"), ou "cartao" se disser só "meu cartão" sem nome. Nos outros queryTypes, null.
 - categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
+- memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com qualquer queryType de gasto/resumo.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
 IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
 - "METAS" no LemonFin = teto/limite de GASTO do mês → queryType "budget". "minhas metas", "minhas metas de economia", "quais minhas metas" são budget.
 - "RESERVAS" = juntar dinheiro para um objetivo (viagem, carro) → queryType "reserves". SÓ use reserves quando o usuário fala explicitamente de "reserva", "juntar", "guardar" ou um objetivo nomeado. NUNCA classifique "metas" como reserves.
@@ -367,6 +385,7 @@ export class MessageParserService {
     history: { role: 'user' | 'bot'; text: string }[] = [],
     customCategories: { slug: string; name: string }[] = [],
     userId: string | null = null,
+    familyMembers: { firstName: string }[] = [],
   ): Promise<ParseResult> {
     try {
       // O histórico serve APENAS para resolver referências ("e o mês passado?",
@@ -406,7 +425,7 @@ export class MessageParserService {
         messages: [
           {
             role: 'system',
-            content: buildSystemPrompt(customCategories, today),
+            content: buildSystemPrompt(customCategories, today, familyMembers),
           },
           ...userTurns,
           { role: 'user', content: `MENSAGEM ATUAL: ${message}` },
@@ -460,12 +479,24 @@ export class MessageParserService {
                 'Não consegui identificar a categoria. Tente algo como "quanto gastei com transporte?" ou "gastos com alimentação".',
             };
           }
+          const memberName =
+            typeof json.memberName === 'string' && json.memberName.trim()
+              ? json.memberName.trim()
+              : undefined;
+          const period =
+            json.period === 'today' ||
+            json.period === 'week' ||
+            json.period === 'month'
+              ? json.period
+              : undefined;
           const out: Extract<ParseResult, { intent: 'query' }> = {
             intent: 'query',
             queryType,
           };
           if (cardName) out.cardName = cardName;
           if (categorySlug) out.categorySlug = categorySlug;
+          if (memberName) out.memberName = memberName;
+          if (period) out.period = period;
           return out;
         }
 
