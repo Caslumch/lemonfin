@@ -24,10 +24,32 @@ export function cardCycleRange(
 ): { start: Date; end: Date } {
   const year = ref.getUTCFullYear();
   const monthIndex = ref.getUTCMonth();
-  const start = new Date(Date.UTC(year, monthIndex - 1, closingDay));
-  const end = new Date(
-    Date.UTC(year, monthIndex, closingDay - 1, 23, 59, 59, 999),
+
+  // Clampa um dia ao último dia válido do mês-alvo. Sem isso, Date.UTC com um dia
+  // que excede o mês "vaza" para o mês seguinte (ex.: closingDay=31, fatura de
+  // fevereiro → 31/jan a 02/mar, com compras de 01-02/mar caindo na fatura
+  // errada). Mesma proteção que nextDueDate e buildInstallmentSchedule já têm.
+  const clampDay = (y: number, m: number, day: number): number => {
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return Math.min(day, lastDay);
+  };
+
+  // Fim = (closingDay - 1) do mês de referência (clampado a esse mês), 23:59:59.
+  const endDay = clampDay(year, monthIndex, closingDay - 1);
+  const end = new Date(Date.UTC(year, monthIndex, endDay, 23, 59, 59, 999));
+
+  // Início = o instante seguinte ao FIM do ciclo anterior. Derivar o start assim
+  // (em vez de "closingDay do mês anterior") garante ciclos contíguos e
+  // DISJUNTOS mesmo quando o clamp de fim de mês colide: com closingDay=30/31, o
+  // fim de fevereiro e o fim de janeiro clampam ambos para o último dia, e um
+  // "start = closingDay do mês anterior" sobreporia 1 dia (compra contada em 2
+  // faturas). O fim do ciclo anterior é o fim do mês anterior (referência -1).
+  const prevEndDay = clampDay(year, monthIndex - 1, closingDay - 1);
+  const prevEnd = new Date(
+    Date.UTC(year, monthIndex - 1, prevEndDay, 23, 59, 59, 999),
   );
+  const start = new Date(prevEnd.getTime() + 1);
+
   return { start, end };
 }
 

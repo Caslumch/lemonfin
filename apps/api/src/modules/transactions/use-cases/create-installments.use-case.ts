@@ -34,15 +34,52 @@ export function buildInstallmentSchedule(params: {
   amount: number;
   installments: number;
   startDate?: string | Date;
-}): { perInstallment: number; dates: string[] } {
+}): { perInstallment: number; amounts: number[]; dates: string[] } {
   const perInstallment =
     Math.round((params.amount / params.installments) * 100) / 100;
-  const base = params.startDate ? new Date(params.startDate) : new Date();
+
+  // Valor de cada parcela: todas iguais a perInstallment, mas a ÚLTIMA absorve o
+  // residual de arredondamento para a soma bater com o total digitado. Ex.: R$100
+  // em 3x → 33,33 + 33,33 + 33,34 = 100,00 (não 99,99). Sem isso, o "total da
+  // compra" exibido (soma das parcelas) divergia em centavos do valor informado.
+  const total = Math.round(params.amount * 100) / 100;
+  const amounts: number[] = [];
+  for (let i = 0; i < params.installments; i++) {
+    amounts.push(
+      i === params.installments - 1
+        ? Math.round(
+            (total - perInstallment * (params.installments - 1)) * 100,
+          ) / 100
+        : perInstallment,
+    );
+  }
+
+  // Base = data da compra (1ª parcela). Quando startDate vem ancorado ao meio-
+  // dia UTC (caminho normal), o dia em UTC é o dia real da compra. Quando NÃO há
+  // startDate (parcelamento via WhatsApp sem menção de data), usamos hoje — mas
+  // ancorado ao dia CIVIL de Brasília (UTC-3), não ao instante UTC cru: uma
+  // compra feita à noite (ex.: 23h BR = 02h UTC do dia seguinte) cairia no dia
+  // errado, espalhando a 1ª parcela para o mês/dia seguinte.
+  let base: Date;
+  if (params.startDate) {
+    base = new Date(params.startDate);
+  } else {
+    const nowBR = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    base = new Date(
+      Date.UTC(
+        nowBR.getUTCFullYear(),
+        nowBR.getUTCMonth(),
+        nowBR.getUTCDate(),
+        12,
+        0,
+        0,
+      ),
+    );
+  }
 
   // Lê a base em UTC (e gera as parcelas em UTC, ancoradas ao meio-dia). O
-  // startDate sempre chega ancorado ao meio-dia, então o dia em UTC é o dia
-  // real da compra; o par getUTC*/Date.UTC deixa a intenção explícita e à
-  // prova de mudança de TZ do servidor.
+  // par getUTC*/Date.UTC deixa a intenção explícita e à prova de mudança de TZ
+  // do servidor.
   const baseYear = base.getUTCFullYear();
   const baseMonth = base.getUTCMonth();
   const baseDay = base.getUTCDate();
@@ -67,7 +104,7 @@ export function buildInstallmentSchedule(params: {
     dates.push(installmentDate.toISOString());
   }
 
-  return { perInstallment, dates };
+  return { perInstallment, amounts, dates };
 }
 
 @Injectable()
@@ -107,7 +144,7 @@ export class CreateInstallmentsUseCase {
       }
     }
 
-    const { perInstallment, dates } = buildInstallmentSchedule({
+    const { perInstallment, amounts, dates } = buildInstallmentSchedule({
       amount: params.amount,
       installments: params.installments,
       startDate: params.startDate,
@@ -117,7 +154,7 @@ export class CreateInstallmentsUseCase {
 
     for (let i = 0; i < params.installments; i++) {
       const tx = await this.transactionsRepository.create({
-        amount: perInstallment,
+        amount: amounts[i],
         type: 'EXPENSE',
         description: `${params.description} (${i + 1}/${params.installments})`,
         date: dates[i],

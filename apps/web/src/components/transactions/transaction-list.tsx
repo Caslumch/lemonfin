@@ -34,6 +34,12 @@ function formatTime(createdAt: string) {
   }).format(new Date(createdAt));
 }
 
+// Compra parcelada agrupada: a transação é a 1ª parcela representando a compra
+// inteira (tem installmentTotal >= 2 e a soma das parcelas em installmentSum).
+function isGroupedInstallment(tx: Transaction): boolean {
+  return (tx.installmentTotal ?? 0) >= 2 && tx.installmentSum != null;
+}
+
 type CategorySlug =
   | "alimentacao"
   | "transporte"
@@ -108,6 +114,16 @@ export function TransactionList({
         const slug = tx.category.slug;
         const isValidSlug = validSlugs.has(slug);
 
+        // Linha de compra parcelada agrupada: mostra "Nx", valor TOTAL da compra
+        // e o valor de cada parcela no subtexto. À vista segue normal.
+        const grouped = isGroupedInstallment(tx);
+        const total = tx.installmentTotal ?? 0;
+        const displayAmount = grouped ? tx.installmentSum! : Number(tx.amount);
+        const baseDescription = tx.description || tx.category.name;
+        const displayDescription = grouped
+          ? `${baseDescription} ${total}x`
+          : baseDescription;
+
         return (
           <div
             key={tx.id}
@@ -128,12 +144,20 @@ export function TransactionList({
             {/* Description + date */}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-fg truncate">
-                {tx.description || tx.category.name}
+                {displayDescription}
               </p>
               <div className="text-xs text-fg-muted mt-0.5 flex items-center gap-1 flex-wrap">
                 <span>
-                  {formatDate(tx.date)} · {formatTime(tx.createdAt)}
+                  {/* Em compra parcelada, a hora (createdAt) é do registro da 1ª
+                      parcela e não da compra — mostra só a data (da compra). */}
+                  {formatDate(tx.date)}
+                  {!grouped && ` · ${formatTime(tx.createdAt)}`}
                 </span>
+                {grouped && (
+                  <span>
+                    · {total}x de {formatCurrency(Number(tx.amount))}
+                  </span>
+                )}
                 {tx.user?.name && (
                   <span>· {tx.user.name.split(" ")[0]}</span>
                 )}
@@ -156,7 +180,7 @@ export function TransactionList({
               )}
             >
               {tx.type === "INCOME" ? "+" : "-"}{" "}
-              {formatCurrency(tx.amount)}
+              {formatCurrency(displayAmount)}
             </p>
 
             {/* Actions */}

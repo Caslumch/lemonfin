@@ -264,24 +264,13 @@ export class AlertsService {
   private async sendSpendingAlertsForUser(userId: string, phone: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
-    const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-    );
-    const previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      0,
-      23,
-      59,
-      59,
-    );
+    // Janelas de mês em UTC (casam com a gravação noon-UTC). Ver get-insights.
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const currentStart = new Date(Date.UTC(y, m, 1));
+    const currentEnd = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
+    const previousStart = new Date(Date.UTC(y, m - 1, 1));
+    const previousEnd = new Date(Date.UTC(y, m, 0, 23, 59, 59));
 
     const daysRemaining = Math.ceil(
       (currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
@@ -428,19 +417,15 @@ export class AlertsService {
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    // Janelas em UTC (casam com a gravação noon-UTC). Ver get-insights.
     // Previous month (the one that just ended)
-    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const prevStart = new Date(Date.UTC(y, m - 1, 1));
+    const prevEnd = new Date(Date.UTC(y, m, 0, 23, 59, 59));
     // Two months ago
-    const twoMonthsStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const twoMonthsEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      0,
-      23,
-      59,
-      59,
-    );
+    const twoMonthsStart = new Date(Date.UTC(y, m - 2, 1));
+    const twoMonthsEnd = new Date(Date.UTC(y, m - 1, 0, 23, 59, 59));
 
     const [prevSummary, twoMonthsSummary, prevCategories, twoMonthsCategories] =
       await Promise.all([

@@ -62,7 +62,7 @@ export class UpdateInstallmentGroupUseCase {
       }
     }
 
-    const { perInstallment, dates } = buildInstallmentSchedule({
+    const { perInstallment, amounts, dates } = buildInstallmentSchedule({
       amount: input.amount, // valor TOTAL da compra
       installments: input.installments,
       startDate: input.date, // data da 1ª parcela
@@ -70,7 +70,7 @@ export class UpdateInstallmentGroupUseCase {
     const description = input.description ?? '';
 
     const rows = dates.map((date, i) => ({
-      amount: perInstallment,
+      amount: amounts[i],
       description: `${description} (${i + 1}/${input.installments})`,
       date,
       source: 'MANUAL' as const,

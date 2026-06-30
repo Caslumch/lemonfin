@@ -298,16 +298,30 @@ export class WhatsappService {
     }
   }
 
-  // Data da transação a gravar: quando o usuário menciona "ontem"/"dia 5", o
-  // parser devolve purchaseDate (ISO). Reancoramos no MEIO-DIA UTC (convenção do
-  // projeto) para a data não deslocar 1 dia no fuso do Brasil. Sem menção,
-  // retorna undefined e o repositório usa `new Date()` (hoje).
-  private resolveTransactionDate(purchaseDate?: string): string | undefined {
-    if (!purchaseDate) return undefined;
-    const d = new Date(purchaseDate);
-    if (Number.isNaN(d.getTime())) return undefined;
+  // Data da transação a gravar, SEMPRE ancorada ao MEIO-DIA UTC (convenção do
+  // projeto — ver memória transaction-date-noon-utc).
+  //
+  // Dois caminhos, com tratamento de fuso DIFERENTE — não unificar:
+  // - COM purchaseDate: o parser já devolve uma data-só ("dia 5" → 2026-06-05,
+  //   meia-noite UTC). O DIA já é o correto; só reancoramos ao meio-dia UTC LENDO
+  //   em UTC (getUTC*). Aplicar -3h aqui jogaria "dia 5" para "dia 4" (a meia-
+  //   noite UTC menos 3h cai no dia anterior) — bug de off-by-one.
+  // - SEM purchaseDate: usamos o instante atual (new Date()). Aí SIM convertemos
+  //   para o dia civil de Brasília (-3h) antes de ancorar, senão uma compra à
+  //   noite (23h BR = 02h UTC do dia seguinte) cairia no dia errado.
+  private resolveTransactionDate(purchaseDate?: string): string {
+    if (purchaseDate) {
+      const d = new Date(purchaseDate);
+      if (!Number.isNaN(d.getTime())) {
+        return new Date(
+          Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12),
+        ).toISOString();
+      }
+    }
+    // Fallback: hoje, no dia civil de Brasília, ancorado ao meio-dia UTC.
+    const br = new Date(Date.now() - 3 * 60 * 60 * 1000);
     return new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0),
+      Date.UTC(br.getUTCFullYear(), br.getUTCMonth(), br.getUTCDate(), 12),
     ).toISOString();
   }
 
@@ -1577,7 +1591,20 @@ export class WhatsappService {
     phoneKey?: string,
   ) {
     const { data } = result;
-    const deadline = new Date(data.deadline);
+    // Prazo ancorado ao meio-dia UTC (convenção do projeto). data.deadline vem
+    // como "YYYY-MM-DD" do parser; new Date() cru o leria como meia-noite UTC,
+    // que no fuso BR mostraria o mês anterior. Lemos o dia em UTC e reancoramos.
+    const rawDeadline = new Date(data.deadline);
+    const deadline = new Date(
+      Date.UTC(
+        rawDeadline.getUTCFullYear(),
+        rawDeadline.getUTCMonth(),
+        rawDeadline.getUTCDate(),
+        12,
+        0,
+        0,
+      ),
+    );
 
     const reserve = await this.reservesRepository.create({
       name: data.name,
@@ -1591,6 +1618,7 @@ export class WhatsappService {
     const deadlineLabel = deadline.toLocaleDateString('pt-BR', {
       month: 'long',
       year: 'numeric',
+      timeZone: 'UTC', // prazo é meio-dia UTC; sem isto o mês volta no fuso BR
     });
     const { suggestedMonthly, monthsRemaining } = computeReserveProgress(
       data.targetAmount,
@@ -1647,6 +1675,7 @@ export class WhatsappService {
       const deadlineLabel = r.deadline.toLocaleDateString('pt-BR', {
         month: 'long',
         year: 'numeric',
+        timeZone: 'UTC', // prazo é meio-dia UTC; sem isto o mês volta no fuso BR
       });
       return (
         `*${r.name}* — ${deadlineLabel}\n` +
@@ -2119,6 +2148,9 @@ export class WhatsappService {
           amount: Number(t.amount),
           type: t.type,
           description: t.description ?? undefined,
+          // Preserva a DATA original (a compra não mudou de dia só porque trocou
+          // de cartão). Sem isto, recriava com hoje e a transação "pulava" de dia.
+          date: t.date.toISOString(),
           source: 'WHATSAPP',
           userId,
           categoryId: t.categoryId,

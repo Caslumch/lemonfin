@@ -48,6 +48,13 @@ export const listTransactionsQuerySchema = z.object({
   memberId: z.string().cuid().optional(),
   orderBy: z.enum(['date', 'amount', 'createdAt']).default('date'),
   order: z.enum(['asc', 'desc']).default('desc'),
+  // Agrupa compras parceladas numa linha só (a compra, ancorada no mês da 1ª
+  // parcela). Default true; grouped=false volta a uma linha por parcela.
+  // NÃO usar z.coerce.boolean(): ele faz Boolean("false") === true, então
+  // ?grouped=false nunca desligaria. Tratamos a string explicitamente.
+  grouped: z
+    .preprocess((v) => v !== 'false' && v !== false, z.boolean())
+    .default(true),
 });
 
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;

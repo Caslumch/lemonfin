@@ -23,9 +23,12 @@ function formatBRL(value: number) {
 }
 
 function formatDeadline(iso: string) {
+  // timeZone UTC: o prazo é gravado ao meio-dia UTC; formatar no fuso local
+  // (Brasil, UTC-3) poderia voltar o mês (ex.: 01/dez vira "novembro").
   return new Date(iso).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

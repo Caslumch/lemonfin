@@ -15,10 +15,14 @@ export class RecurringMaterializerService {
   // Run daily at 06:00 — turn due recurrences into real transactions.
   @Cron('0 6 * * *')
   async materializeDueRecurrences(now: Date = new Date()) {
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const today = now.getDate();
-    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    // Tudo em UTC para casar com a gravação noon-UTC das transações e a régua de
+    // ciclo (que opera em UTC). Ler com getUTC* deixa a intenção explícita e à
+    // prova de mudança de TZ do servidor (o resto do app segue a mesma
+    // convenção — ver create-installments / card-cycle).
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const today = now.getUTCDate();
+    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
     // A recurrence is due today when its dayOfMonth === today, OR when its
     // dayOfMonth falls beyond this month's length and today is the last day
@@ -28,8 +32,8 @@ export class RecurringMaterializerService {
       for (let d = lastDayOfMonth + 1; d <= 31; d++) dueDays.push(d);
     }
 
-    const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
-    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const monthStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 
     let created = 0;
     for (const day of dueDays) {
@@ -45,7 +49,7 @@ export class RecurringMaterializerService {
           );
           if (already) continue;
 
-          const date = new Date(year, month, today, 12, 0, 0, 0);
+          const date = new Date(Date.UTC(year, month, today, 12, 0, 0, 0));
 
           await this.transactionsRepository.create({
             amount: recurring.amount.toNumber(),

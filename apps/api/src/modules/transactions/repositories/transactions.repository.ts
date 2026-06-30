@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { todayNoonUtcBR } from '../../../common/utils/transaction-date';
 
 interface FindManyOptions {
   userIds: string[];
@@ -99,7 +100,10 @@ export class TransactionsRepository {
         amount: new Prisma.Decimal(data.amount),
         type: data.type,
         description: data.description,
-        date: data.date ? new Date(data.date) : new Date(),
+        // Sem data explícita, ancora HOJE ao meio-dia UTC do dia civil BR (não
+        // `new Date()` cru — ver todayNoonUtcBR). Cobre os call sites que não
+        // passam date (aporte de reserva, item de batch, redo de cartão).
+        date: data.date ? new Date(data.date) : todayNoonUtcBR(),
         source: data.source ?? 'MANUAL',
         userId: data.userId,
         categoryId: data.categoryId,
@@ -215,6 +219,108 @@ export class TransactionsRepository {
       }),
       this.prisma.transaction.count({ where }),
     ]);
+
+    return { data, total };
+  }
+
+  // Listagem AGRUPANDO compras parceladas numa linha só (a "compra"), em vez de
+  // N parcelas soltas. A linha representativa é a 1ª parcela (installmentNumber
+  // = 1), que carrega a DATA DA COMPRA — então o filtro de mês casa a compra
+  // pelo mês em que ela foi feita, não pelo mês de cada parcela. À vista
+  // (installmentNumber null) seguem como linhas normais.
+  //
+  // Importante: a janela de data filtra só a 1ª parcela / à vista. As demais
+  // parcelas (2..N) caem em meses seguintes e NÃO entram na listagem — mas
+  // precisamos somá-las para mostrar o valor TOTAL da compra. Por isso, depois
+  // de selecionar as linhas representativas da página, buscamos as somas dos
+  // grupos à parte (sem janela de data) e anexamos installmentSum.
+  //
+  // A paginação é feita em memória sobre o conjunto representativo do mês. Num
+  // app pessoal o volume mensal é pequeno; isso evita SQL acrobático de
+  // DISTINCT+agregação com skip/take (propenso a bug de borda na contagem).
+  async findManyGrouped(options: FindManyOptions) {
+    const where: Prisma.TransactionWhereInput = {
+      userId: { in: options.userIds },
+      // Linhas representativas: à vista (number null) ou a 1ª parcela.
+      OR: [{ installmentNumber: null }, { installmentNumber: 1 }],
+    };
+
+    if (options.type) where.type = options.type;
+    if (options.categoryId) where.categoryId = options.categoryId;
+    if (options.search)
+      where.description = {
+        contains: options.search,
+        mode: 'insensitive',
+      };
+    const dateRange = dateRangeFilter(options.startDate, options.endDate);
+    if (dateRange) where.date = dateRange;
+
+    const orderBy = buildOrderBy(options.orderBy, options.order);
+
+    // Todas as linhas representativas do mês filtrado (sem paginar ainda).
+    const rows = await this.prisma.transaction.findMany({
+      where,
+      include: txInclude,
+      orderBy,
+    });
+
+    const total = rows.length;
+
+    // Soma o valor TOTAL de cada grupo de parcelas presente (todas as parcelas,
+    // fora da janela de data). Calculamos para TODAS as linhas do mês (não só a
+    // página) porque a ordenação por valor precisa do total da compra de todas
+    // antes de paginar. Uma query agregada cobre todos os grupos.
+    const groupIds = rows
+      .filter((r) => r.installmentNumber === 1 && r.installmentGroupId)
+      .map((r) => r.installmentGroupId as string);
+
+    const sums = groupIds.length
+      ? await this.prisma.transaction.groupBy({
+          by: ['installmentGroupId'],
+          where: {
+            userId: { in: options.userIds },
+            installmentGroupId: { in: groupIds },
+          },
+          _sum: { amount: true },
+        })
+      : [];
+    const sumByGroup = new Map(
+      sums.map((s) => [s.installmentGroupId, s._sum.amount?.toNumber() ?? 0]),
+    );
+
+    // Valor "efetivo" de uma linha para ordenação/exibição: total da compra
+    // (installmentSum) se parcelada, senão o próprio amount.
+    const effectiveAmount = (r: (typeof rows)[number]): number =>
+      r.installmentNumber === 1 && r.installmentGroupId
+        ? (sumByGroup.get(r.installmentGroupId) ?? r.amount.toNumber())
+        : r.amount.toNumber();
+
+    // Ordenar por valor deve usar o TOTAL da compra (o que o usuário vê), não o
+    // valor da parcela. O SQL ordenou pelo amount da 1ª parcela; reordenamos em
+    // memória pelo valor efetivo. Empate por data desc (estável). Para os demais
+    // critérios (date/createdAt) o orderBy do SQL já está correto.
+    const ordered =
+      options.orderBy === 'amount'
+        ? [...rows].sort((a, b) => {
+            const diff = effectiveAmount(a) - effectiveAmount(b);
+            const byAmount = options.order === 'asc' ? diff : -diff;
+            if (byAmount !== 0) return byAmount;
+            return b.date.getTime() - a.date.getTime();
+          })
+        : rows;
+
+    const pageRows = ordered.slice(options.skip, options.skip + options.take);
+
+    // Anexa o total da compra (installmentSum) nas linhas parceladas. As à vista
+    // ficam intactas. O front usa installmentSum quando presente.
+    const data = pageRows.map((r) =>
+      r.installmentNumber === 1 && r.installmentGroupId
+        ? {
+            ...r,
+            installmentSum: sumByGroup.get(r.installmentGroupId) ?? null,
+          }
+        : r,
+    );
 
     return { data, total };
   }
@@ -354,10 +460,22 @@ export class TransactionsRepository {
   }
 
   async getMonthlyBreakdown(userIds: string[], months: number = 6) {
-    const since = new Date();
-    since.setMonth(since.getMonth() - months + 1);
-    since.setDate(1);
-    since.setHours(0, 0, 0, 0);
+    // Janela e bucketing em UTC para casar com a gravação noon-UTC: as datas das
+    // transações estão ao meio-dia UTC, então o "mês" de cada uma deve ser lido
+    // em UTC (getUTC*), não em hora local do servidor — senão o agrupamento
+    // depende do TZ. Resto do repo (dateRangeFilter/getSummary) segue a mesma
+    // convenção de fuso.
+    const now = new Date();
+    const since = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() - months + 1,
+        1,
+        0,
+        0,
+        0,
+      ),
+    );
 
     const transactions = await this.prisma.transaction.findMany({
       where: { userId: { in: userIds }, date: { gte: since } },
@@ -371,15 +489,16 @@ export class TransactionsRepository {
 
     // Initialize all months
     for (let i = 0; i < months; i++) {
-      const d = new Date(since);
-      d.setMonth(d.getMonth() + i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const d = new Date(
+        Date.UTC(since.getUTCFullYear(), since.getUTCMonth() + i, 1),
+      );
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
       map.set(key, { income: 0, expense: 0, cardExpense: 0 });
     }
 
     for (const tx of transactions) {
       const d = new Date(tx.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
       const entry = map.get(key);
       if (entry) {
         if (tx.type === 'INCOME') {

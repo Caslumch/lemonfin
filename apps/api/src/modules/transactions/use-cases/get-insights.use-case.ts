@@ -54,24 +54,15 @@ export class GetInsightsUseCase {
   async execute(userId: string): Promise<InsightsResponse> {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
-    const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-    );
-    const previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      0,
-      23,
-      59,
-      59,
-    );
+    // Janelas de mês em UTC (casam com a gravação noon-UTC das transações). Com
+    // construtor local + toISOString() a borda do mês ficava em horário do
+    // servidor, divergindo da régua de dateRangeFilter (que ancora em BR).
+    const y = now.getUTCFullYear();
+    const m = now.getUTCMonth();
+    const currentStart = new Date(Date.UTC(y, m, 1));
+    const currentEnd = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
+    const previousStart = new Date(Date.UTC(y, m - 1, 1));
+    const previousEnd = new Date(Date.UTC(y, m, 0, 23, 59, 59));
 
     const daysRemaining = Math.ceil(
       (currentEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
@@ -176,22 +167,30 @@ export class GetInsightsUseCase {
       .filter((c) => c.trend === 'down')
       .slice(0, 3);
 
+    // Despesa do mês para os insights = gasto TOTAL (fora-cartão + cartão). O
+    // getSummary separa `expense` (só fora-cartão) de `cardExpense`; aqui
+    // somamos os dois para a definição de "quanto gastei" bater com os
+    // comparativos de categoria (getCategoryBreakdown inclui cartão). Sem isto, o
+    // topo do painel mostrava só o fora-cartão enquanto as categorias listavam o
+    // gasto com cartão — números incoerentes na mesma tela.
+    const currentExpense = currentSummary.expense + currentSummary.cardExpense;
+    const previousExpense =
+      previousSummary.expense + previousSummary.cardExpense;
+
     const overallVariation =
-      previousSummary.expense > 0
-        ? ((currentSummary.expense - previousSummary.expense) /
-            previousSummary.expense) *
-          100
+      previousExpense > 0
+        ? ((currentExpense - previousExpense) / previousExpense) * 100
         : 0;
 
     return {
       currentMonth: {
         income: currentSummary.income,
-        expense: currentSummary.expense,
+        expense: currentExpense,
         balance: currentSummary.balance,
       },
       previousMonth: {
         income: previousSummary.income,
-        expense: previousSummary.expense,
+        expense: previousExpense,
         balance: previousSummary.balance,
       },
       overallVariation,
