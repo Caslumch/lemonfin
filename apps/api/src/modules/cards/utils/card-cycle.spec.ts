@@ -1,4 +1,9 @@
-import { cardCycleRange, invoicePaymentStatus } from './card-cycle';
+import {
+  cardCycleRange,
+  invoicePaymentStatus,
+  invoiceCycleState,
+  nextDueDate,
+} from './card-cycle';
 
 describe('invoicePaymentStatus', () => {
   it('nada pago → open', () => {
@@ -73,5 +78,67 @@ describe('cardCycleRange', () => {
     expect(primeiroDia >= start && primeiroDia <= end).toBe(true);
     expect(ultimoDia >= start && ultimoDia <= end).toBe(true);
     expect(diaDoCorte <= end).toBe(false);
+  });
+});
+
+describe('nextDueDate', () => {
+  // Fechamento 24/jun (end do ciclo de junho, closingDay 25), dueDay 5.
+  const closeJun = new Date(Date.UTC(2026, 5, 24, 23, 59, 59, 999));
+
+  it('dueDay após o fechamento → vence no mês seguinte', () => {
+    const due = nextDueDate(5, closeJun); // 5 > 24? não → mês seguinte (julho)
+    expect(due.getUTCFullYear()).toBe(2026);
+    expect(due.getUTCMonth()).toBe(6); // julho
+    expect(due.getUTCDate()).toBe(5);
+    expect(due.getUTCHours()).toBe(12); // meio-dia UTC p/ exibição não deslocar
+  });
+
+  it('dueDay <= dia do fechamento → vai para o mês seguinte (vencimento futuro)', () => {
+    const due = nextDueDate(20, closeJun); // 20 <= 24 → julho
+    expect(due.getUTCMonth()).toBe(6); // julho
+    expect(due.getUTCDate()).toBe(20);
+  });
+
+  it('clampa dueDay ao último dia do mês (31 em fevereiro)', () => {
+    const closeJan = new Date(Date.UTC(2026, 0, 31, 23, 59, 59, 999));
+    const due = nextDueDate(31, closeJan); // 31 <= 31 → fevereiro, clampa a 28
+    expect(due.getUTCMonth()).toBe(1); // fevereiro
+    expect(due.getUTCDate()).toBe(28);
+  });
+});
+
+describe('invoiceCycleState', () => {
+  const start = new Date(Date.UTC(2026, 4, 25)); // 25/mai
+  const end = new Date(Date.UTC(2026, 5, 24, 23, 59, 59, 999)); // 24/jun
+  const base = { total: 6338.27, paid: 0, start, end };
+
+  it('hoje antes do início → future', () => {
+    const now = new Date(Date.UTC(2026, 4, 10)); // 10/mai
+    expect(invoiceCycleState({ ...base, now })).toBe('future');
+  });
+
+  it('hoje dentro do ciclo, nada pago → open', () => {
+    const now = new Date(Date.UTC(2026, 5, 10)); // 10/jun
+    expect(invoiceCycleState({ ...base, now })).toBe('open');
+  });
+
+  it('hoje após o fechamento, nada pago → closed', () => {
+    const now = new Date(Date.UTC(2026, 5, 30)); // 30/jun (caso da tela)
+    expect(invoiceCycleState({ ...base, now })).toBe('closed');
+  });
+
+  it('pagamento parcial tem prioridade sobre o tempo → partial', () => {
+    const now = new Date(Date.UTC(2026, 5, 30));
+    expect(invoiceCycleState({ ...base, paid: 3000, now })).toBe('partial');
+  });
+
+  it('fatura quitada → paid mesmo com ciclo ainda aberto', () => {
+    const now = new Date(Date.UTC(2026, 5, 10)); // ciclo aberto
+    expect(invoiceCycleState({ ...base, paid: 6338.27, now })).toBe('paid');
+  });
+
+  it('ciclo sem compras (total 0) → paid (nada a pagar)', () => {
+    const now = new Date(Date.UTC(2026, 5, 30));
+    expect(invoiceCycleState({ ...base, total: 0, now })).toBe('paid');
   });
 });

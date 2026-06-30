@@ -2,7 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CardsRepository } from '../repositories/cards.repository';
 import { InvoicePaymentRepository } from '../repositories/invoice-payment.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
-import { cardCycleRange, invoicePaymentStatus } from '../utils/card-cycle';
+import {
+  cardCycleRange,
+  invoicePaymentStatus,
+  invoiceCycleState,
+  nextDueDate,
+} from '../utils/card-cycle';
 import type { InvoiceQuery } from '../dtos/card.dto';
 
 @Injectable()
@@ -73,13 +78,34 @@ export class GetCardInvoiceUseCase {
       userIds,
     );
 
+    const isClosed = now > endDate;
+
+    // Estado de CICLO (futura/aberta/fechada/parcial/paga) — base do badge e da
+    // liberação do botão "Pagar fatura" no front. closeDate/dueDate vão prontas
+    // (ISO, meio-dia UTC p/ dueDate) para o front exibir sem reimplementar a
+    // régua de ciclo (que em horário local seria frágil).
+    const cycleState = invoiceCycleState({
+      total,
+      paid,
+      start: startDate,
+      end: endDate,
+      now,
+    });
+    const dueDate =
+      card.dueDay != null
+        ? nextDueDate(card.dueDay, endDate).toISOString()
+        : null;
+
     return {
       card,
       month: cycle,
       transactions,
       // total = soma do ciclo FILTRADO inteiro (não só a página)
       total,
-      isClosed: now > endDate,
+      isClosed,
+      cycleState,
+      closeDate: endDate.toISOString(),
+      dueDate,
       paid,
       paymentStatus: invoicePaymentStatus(total, paid),
       payments: payments.map((p) => ({

@@ -57,37 +57,64 @@ function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function PaymentBadge({
-  status,
+function formatDay(iso: string) {
+  // timeZone UTC: as datas vêm ancoradas ao meio-dia UTC; exibir em UTC evita o
+  // deslocamento de 1 dia no fuso do Brasil (mesma convenção do resto do app).
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+}
+
+// Badge pelo ESTADO DE CICLO (não só por paid/total): distingue uma fatura
+// futura (parcelas lançadas, ciclo nem começou) de uma aberta, de uma já
+// fechada e a vencer. "Em aberto" vermelho era usado para os três casos, o que
+// enganava (parecia cobrança pendente onde não havia nada a pagar).
+function CycleBadge({
+  state,
   paid,
   total,
+  dueDate,
   lastPaidAt,
 }: {
-  status: "open" | "partial" | "paid";
+  state: "future" | "open" | "closed" | "partial" | "paid";
   paid: number;
   total: number;
+  dueDate: string | null;
   lastPaidAt?: string;
 }) {
-  if (status === "paid" && total > 0) {
-    const date = lastPaidAt
-      ? new Date(lastPaidAt).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-      : null;
+  if (state === "paid" && total > 0) {
+    const date = lastPaidAt ? formatDay(lastPaidAt) : null;
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-success-muted text-success">
         {date ? `Paga em ${date}` : "Paga"}
       </span>
     );
   }
-  if (status === "partial") {
+  if (state === "partial") {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-warning-muted text-warning">
         Parcial ({formatBRL(paid)} de {formatBRL(total)})
       </span>
     );
   }
+  if (state === "future") {
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-subtle text-fg-muted">
+        Futura
+      </span>
+    );
+  }
+  if (state === "open") {
+    // Neutro (não há token de "info"/azul no design system). Distinto do cinza
+    // mais apagado de "Futura" (text-fg-muted) por usar text-fg-secondary.
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-subtle text-fg-secondary">
+        Aberta
+      </span>
+    );
+  }
+  // closed: fechada e não paga — destaca o vencimento quando há dueDate.
   return (
-    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-danger-muted text-danger">
-      Em aberto
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-warning-muted text-warning">
+      {dueDate ? `Fechada — vence ${formatDay(dueDate)}` : "Fechada"}
     </span>
   );
 }
@@ -267,10 +294,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             {invoice && (
-              <PaymentBadge
-                status={invoice.paymentStatus}
+              <CycleBadge
+                state={invoice.cycleState}
                 paid={invoice.paid}
                 total={invoice.total}
+                dueDate={invoice.dueDate}
                 lastPaidAt={invoice.payments[0]?.paidAt}
               />
             )}
@@ -419,10 +447,14 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
               <p className="text-xs text-fg-muted">
                 {invoice.paid > 0
                   ? `${formatBRL(invoice.paid)} pago de ${formatBRL(invoice.total)}`
-                  : "Nenhum pagamento registrado"}
+                  : invoice.isClosed
+                    ? "Nenhum pagamento registrado"
+                    : "A fatura ainda não fechou — pagamento disponível após o fechamento."}
               </p>
             </div>
-            {remaining > 0 && !payOpen && (
+            {/* Só faz sentido pagar uma fatura FECHADA: pagar uma aberta/futura
+                registra pagamento de algo que ainda vai mudar. */}
+            {invoice.isClosed && remaining > 0 && !payOpen && (
               <Button size="sm" onClick={openPay}>
                 Pagar fatura
               </Button>
