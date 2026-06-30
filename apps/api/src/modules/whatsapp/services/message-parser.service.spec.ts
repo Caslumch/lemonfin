@@ -59,6 +59,24 @@ describe('MessageParserService', () => {
       });
     });
 
+    it('confidence AUSENTE vira 0 (força confirmação, não chuta)', async () => {
+      mockResponse({
+        intent: 'transaction',
+        amount: 30,
+        type: 'EXPENSE',
+        categorySlug: 'outros',
+        description: 'gastei 30 ali',
+        // sem categoryConfidence — o modelo esqueceu
+      });
+
+      const result = await service.parse('gastei 30 ali');
+
+      expect(result.intent).toBe('transaction');
+      if (result.intent === 'transaction') {
+        expect(result.data.categoryConfidence).toBe(0);
+      }
+    });
+
     it('usa a própria mensagem como descrição quando o modelo não fornece', async () => {
       mockResponse({
         intent: 'transaction',

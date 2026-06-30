@@ -598,10 +598,13 @@ export class MessageParserService {
         amount: Number(json.amount),
         type: json.type === 'INCOME' ? 'INCOME' : 'EXPENSE',
         categorySlug: json.categorySlug as string,
+        // Confiança AUSENTE/inválida → 0 (não 1): quando o modelo esquece o
+        // campo, é justamente quando menos se deve confiar na categoria, então
+        // forçamos a confirmação (gate < 0.6) em vez de registrar um chute.
         categoryConfidence:
           typeof json.categoryConfidence === 'number'
             ? json.categoryConfidence
-            : 1,
+            : 0,
         description: (json.description as string) || fallbackDescription,
         cardName: (json.cardName as string) || undefined,
         purchaseDate: this.normalizePurchaseDate(
