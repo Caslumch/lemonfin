@@ -5,6 +5,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Request } from 'express';
@@ -22,7 +23,9 @@ export class WebhookSignatureGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context
+      .switchToHttp()
+      .getRequest<RawBodyRequest<Request>>();
     const signature = request.headers['x-webhook-signature'] as string;
 
     if (!signature) {
@@ -30,8 +33,21 @@ export class WebhookSignatureGuard implements CanActivate {
       throw new UnauthorizedException('Missing webhook signature');
     }
 
+    // A assinatura é HMAC sobre os BYTES CRUS do corpo, exatamente como o emissor
+    // (WMode) os enviou. Reserializar com JSON.stringify(request.body) NÃO
+    // reproduz esses bytes — ordem de chaves, espaços e escape de unicode
+    // (acentos do português viram \uXXXX) divergem —, então a verificação ficava
+    // incorreta: tanto rejeitava payloads legítimos quanto não garantia a
+    // integridade real. req.rawBody (habilitado por rawBody:true no bootstrap, o
+    // mesmo usado pelo webhook do Stripe) traz os bytes originais.
+    const rawBody = request.rawBody;
+    if (!rawBody) {
+      this.logger.warn('Missing raw body for webhook signature verification');
+      throw new UnauthorizedException('Missing webhook body');
+    }
+
     const expectedHash = createHmac('sha256', this.secret)
-      .update(JSON.stringify(request.body))
+      .update(rawBody)
       .digest('hex');
 
     const expected = `sha256=${expectedHash}`;
