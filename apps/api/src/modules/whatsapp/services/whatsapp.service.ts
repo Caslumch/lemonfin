@@ -348,7 +348,7 @@ export class WhatsappService {
     // Confiança baixa na categoria → confirma com o usuário antes de registrar
     // (não chuta). Só quando temos a chave da conversa para guardar o pendente.
     if (phoneKey && data.categoryConfidence < 0.6) {
-      await this.askCategoryConfirmation(from, phoneKey, data);
+      await this.askCategoryConfirmation(from, phoneKey, userId, data);
       return;
     }
 
@@ -570,24 +570,35 @@ export class WhatsappService {
   private async askCategoryConfirmation(
     from: string,
     phoneKey: string,
+    userId: string,
     data: Extract<ParseResult, { intent: 'transaction' }>['data'],
   ) {
-    // Monta opções: a categoria adivinhada primeiro, depois alternativas
-    // comuns, terminando em "Outros". Dedup e no máx 4.
-    const guessed = data.categorySlug;
-    const candidates = [
-      guessed,
+    // Opções a partir das categorias REAIS do usuário (sistema + personalizadas),
+    // não de uma lista fixa — senão metade das de sistema e TODAS as
+    // personalizadas nunca apareciam, deixando o usuário preso em 4 slugs
+    // genéricos. Prioridade até 4: a adivinhada, depois as personalizadas (o
+    // usuário as criou de propósito), depois sistema comuns, e "outros" por fim.
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const all = await this.categoriesRepository.findForUser(userIds);
+    const bySlug = new Map(all.map((c) => [c.slug, c]));
+    const customSlugs = all.filter((c) => c.userId !== null).map((c) => c.slug);
+
+    const priority = [
+      data.categorySlug,
+      ...customSlugs,
       'alimentacao',
       'transporte',
       'compras',
       'lazer',
+      'saude',
+      'moradia',
       'outros',
     ];
     const seen = new Set<string>();
     const options: { slug: string; label: string }[] = [];
-    for (const slug of candidates) {
+    for (const slug of priority) {
       if (seen.has(slug)) continue;
-      const cat = await this.categoriesRepository.findBySlug(slug);
+      const cat = bySlug.get(slug);
       if (!cat) continue;
       seen.add(slug);
       options.push({
