@@ -42,13 +42,32 @@ export class CategoriesRepository {
     return [...system, ...own];
   }
 
-  // Lookup por id (validação de categoryId em transações/metas/recorrentes).
+  // Lookup por id GLOBAL, sem escopo de dono. NÃO use para validar um categoryId
+  // vindo do cliente — isso permitiria vincular uma transação/meta/recorrente a
+  // uma categoria privada de outra família (IDOR). Para esse caso use
+  // findAccessible. Mantido para usos internos que já conhecem a categoria.
   // Cache só para as de sistema; as do usuário vão direto ao banco.
   async findById(id: string): Promise<Category | null> {
     const system = await this.findSystem();
     const inSystem = system.find((c) => c.id === id);
     if (inSystem) return inSystem;
     return this.prisma.category.findUnique({ where: { id } });
+  }
+
+  // Lookup por id ESCOPADO ao chamador: aceita uma categoria só se for de
+  // sistema (userId null, compartilhada) OU pertencer à família (userIds). É a
+  // checagem correta ao validar um categoryId fornecido pelo cliente — fecha o
+  // IDOR de vincular registros a uma categoria privada de outro usuário.
+  async findAccessible(
+    id: string,
+    userIds: string[],
+  ): Promise<Category | null> {
+    const system = await this.findSystem();
+    const inSystem = system.find((c) => c.id === id);
+    if (inSystem) return inSystem;
+    return this.prisma.category.findFirst({
+      where: { id, userId: { in: userIds } },
+    });
   }
 
   // Resolve um slug. Com userIds, procura nas da família primeiro (categorias

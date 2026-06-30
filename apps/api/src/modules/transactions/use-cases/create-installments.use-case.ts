@@ -86,8 +86,13 @@ export class CreateInstallmentsUseCase {
   async execute(
     params: CreateInstallmentsParams,
   ): Promise<CreateInstallmentsResult> {
-    const category = await this.categoriesRepository.findById(
+    const userIds = await this.familyContext.resolveUserIds(params.userId);
+
+    // Escopa a categoria ao chamador (sistema ou da família) — fecha o IDOR de
+    // vincular as parcelas a uma categoria privada de outra família.
+    const category = await this.categoriesRepository.findAccessible(
       params.categoryId,
+      userIds,
     );
     if (!category) {
       throw new NotFoundException('Categoria nao encontrada');
@@ -96,7 +101,6 @@ export class CreateInstallmentsUseCase {
     // Valida ownership do cartão (mesmo motivo de create-transaction: evita IDOR
     // de escrita vinculando a um cartão de outro usuário/família).
     if (params.cardId) {
-      const userIds = await this.familyContext.resolveUserIds(params.userId);
       const card = await this.cardsRepository.findById(params.cardId, userIds);
       if (!card) {
         throw new NotFoundException('Cartao nao encontrado');

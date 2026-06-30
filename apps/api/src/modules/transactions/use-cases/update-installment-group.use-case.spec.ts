@@ -10,7 +10,9 @@ describe('UpdateInstallmentGroupUseCase', () => {
   let transactionsRepository: jest.Mocked<
     Pick<TransactionsRepository, 'findById' | 'replaceInstallmentGroup'>
   >;
-  let categoriesRepository: jest.Mocked<Pick<CategoriesRepository, 'findById'>>;
+  let categoriesRepository: jest.Mocked<
+    Pick<CategoriesRepository, 'findAccessible'>
+  >;
   let cardsRepository: jest.Mocked<Pick<CardsRepository, 'findById'>>;
   let familyContext: jest.Mocked<Pick<FamilyContextService, 'resolveUserIds'>>;
 
@@ -37,7 +39,9 @@ describe('UpdateInstallmentGroupUseCase', () => {
         ),
     };
     categoriesRepository = {
-      findById: jest.fn().mockResolvedValue({ id: 'cat1', name: 'Compras' }),
+      findAccessible: jest
+        .fn()
+        .mockResolvedValue({ id: 'cat1', name: 'Compras' }),
     };
     cardsRepository = {
       findById: jest.fn().mockResolvedValue({ id: 'card1', name: 'Nubank' }),

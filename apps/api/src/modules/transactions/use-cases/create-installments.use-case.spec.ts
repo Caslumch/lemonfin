@@ -10,7 +10,9 @@ describe('CreateInstallmentsUseCase', () => {
   let transactionsRepository: jest.Mocked<
     Pick<TransactionsRepository, 'create'>
   >;
-  let categoriesRepository: jest.Mocked<Pick<CategoriesRepository, 'findById'>>;
+  let categoriesRepository: jest.Mocked<
+    Pick<CategoriesRepository, 'findAccessible'>
+  >;
   let cardsRepository: jest.Mocked<Pick<CardsRepository, 'findById'>>;
   let familyContext: jest.Mocked<Pick<FamilyContextService, 'resolveUserIds'>>;
 
@@ -26,7 +28,9 @@ describe('CreateInstallmentsUseCase', () => {
       }),
     };
     categoriesRepository = {
-      findById: jest.fn().mockResolvedValue({ id: 'cat1', name: 'Compras' }),
+      findAccessible: jest
+        .fn()
+        .mockResolvedValue({ id: 'cat1', name: 'Compras' }),
     };
     cardsRepository = {
       findById: jest.fn().mockResolvedValue({ id: 'card1', name: 'Nubank' }),
@@ -135,10 +139,27 @@ describe('CreateInstallmentsUseCase', () => {
   });
 
   it('lança NotFound quando a categoria não existe', async () => {
-    categoriesRepository.findById.mockResolvedValue(null);
+    categoriesRepository.findAccessible.mockResolvedValue(null);
 
     await expect(useCase.execute(baseParams)).rejects.toBeInstanceOf(
       NotFoundException,
+    );
+    expect(transactionsRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('valida a categoria ESCOPADA à família (fecha o IDOR de categoria alheia)', async () => {
+    // findAccessible só devolve categoria de sistema ou da família; uma categoria
+    // privada de outro usuário volta null e a criação é barrada. Aqui garantimos
+    // que a checagem é feita com os userIds da família, não global.
+    categoriesRepository.findAccessible.mockResolvedValue(null);
+
+    await expect(
+      useCase.execute({ ...baseParams, categoryId: 'cat-de-outra-familia' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(categoriesRepository.findAccessible).toHaveBeenCalledWith(
+      'cat-de-outra-familia',
+      ['u1'],
     );
     expect(transactionsRepository.create).not.toHaveBeenCalled();
   });
