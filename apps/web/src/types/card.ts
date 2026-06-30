@@ -17,6 +17,15 @@ export interface Card {
 
 export type InvoicePaymentStatus = "open" | "partial" | "paid";
 
+// Estado de CICLO da fatura (futura/aberta/fechada-a-vencer/parcial/paga).
+// Diferente de InvoicePaymentStatus: combina o tempo do ciclo com o pagamento.
+export type InvoiceCycleState =
+  | "future"
+  | "open"
+  | "closed"
+  | "partial"
+  | "paid";
+
 export interface InvoicePayment {
   id: string;
   amount: number;
@@ -30,6 +39,11 @@ export interface CardInvoice {
   // Soma do ciclo FILTRADO inteiro (não só a página atual).
   total: number;
   isClosed: boolean;
+  // Estado de ciclo (badge) + datas prontas para exibição. closeDate = fim do
+  // ciclo; dueDate = vencimento (null se o cartão não tem dueDay). Ambas ISO.
+  cycleState: InvoiceCycleState;
+  closeDate: string;
+  dueDate: string | null;
   // Pagamento da fatura: total já pago no ciclo, status derivado e a lista de
   // pagamentos (para histórico/desfazer).
   paid: number;

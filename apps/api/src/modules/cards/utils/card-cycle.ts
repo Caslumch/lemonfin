@@ -48,3 +48,58 @@ export function invoicePaymentStatus(
   if (paid + 0.005 >= total) return 'paid';
   return 'partial';
 }
+
+/**
+ * Próxima data de vencimento (dueDay) a partir do fechamento da fatura. A fatura
+ * fecha em `closeDate` (o `end` do ciclo); o vencimento é a primeira ocorrência
+ * do dueDay em ou após o dia seguinte ao fechamento. Ancorada ao meio-dia UTC
+ * para exibição (timeZone UTC) não deslocar o dia. Tudo lido/montado em UTC.
+ */
+export function nextDueDate(dueDay: number, closeDate: Date): Date {
+  const year = closeDate.getUTCFullYear();
+  // Se o dueDay deste mês já passou (<= dia do fechamento), vai pro mês seguinte.
+  // Date.UTC normaliza o overflow de mês (12 → jan do ano seguinte).
+  const month =
+    dueDay <= closeDate.getUTCDate()
+      ? closeDate.getUTCMonth() + 1
+      : closeDate.getUTCMonth();
+  // Clampa ao último dia do mês (ex.: dueDay 31 em fevereiro).
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const day = Math.min(dueDay, lastDay);
+  return new Date(Date.UTC(year, month, day, 12, 0, 0));
+}
+
+export type InvoiceCycleState =
+  | 'future' // ciclo ainda não começou (hoje < start)
+  | 'open' // ciclo em andamento (start <= hoje <= end), nada pago
+  | 'closed' // ciclo fechado (hoje > end), não pago
+  | 'partial' // pago em parte (independe de estar aberto/fechado)
+  | 'paid'; // quitado (ou nada a pagar)
+
+/**
+ * Estado de CICLO da fatura, combinando o tempo (futura/aberta/fechada via
+ * start/end vs agora) com o pagamento (parcial/paga via invoicePaymentStatus).
+ * O pagamento tem prioridade: uma fatura paga é 'paid' mesmo se o ciclo segue
+ * aberto, e 'partial' idem. Sem pagamento, o estado vem do tempo do ciclo.
+ *
+ * Usado pela tela de fatura para o badge e para liberar "Pagar fatura" só quando
+ * a fatura fechou (estado 'closed' ou 'partial').
+ */
+export function invoiceCycleState(params: {
+  total: number;
+  paid: number;
+  start: Date;
+  end: Date;
+  now: Date;
+}): InvoiceCycleState {
+  const { total, paid, start, end, now } = params;
+
+  const payment = invoicePaymentStatus(total, paid);
+  if (payment === 'paid') return 'paid';
+  if (payment === 'partial') return 'partial';
+
+  // Sem pagamento: o estado é dado pela posição de hoje no ciclo.
+  if (now < start) return 'future';
+  if (now > end) return 'closed';
+  return 'open';
+}
