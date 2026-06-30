@@ -118,13 +118,26 @@ export function CreditCardVisual({ card }: CreditCardVisualProps) {
       </p>
 
       <div className="relative mt-4 flex items-end justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-white/50">
-            Fechamento
-          </p>
-          <p className="font-[family-name:var(--font-mono)] text-sm">
-            dia {card.closingDay}
-          </p>
+        <div className="flex gap-5">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-white/50">
+              Fechamento
+            </p>
+            <p className="font-[family-name:var(--font-mono)] text-sm">
+              dia {card.closingDay}
+            </p>
+          </div>
+          {/* Vencimento só quando o cartão tem dueDay cadastrado. */}
+          {card.dueDay != null && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-white/50">
+                Vencimento
+              </p>
+              <p className="font-[family-name:var(--font-mono)] text-sm">
+                dia {card.dueDay}
+              </p>
+            </div>
+          )}
         </div>
         {limit !== null ? (
           <div className="text-right">
