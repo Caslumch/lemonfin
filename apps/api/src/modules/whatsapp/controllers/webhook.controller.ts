@@ -9,6 +9,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { WebhookSignatureGuard } from '../guards/webhook-signature.guard';
 import { WhatsappService } from '../services/whatsapp.service';
+import { ProcessedMessageRepository } from '../repositories/processed-message.repository';
 
 // Mídia embutida no webhook da WMode (base64). Para áudio, `data` traz o buffer
 // em base64; ausente quando a mídia excedeu o limite inline (`truncated: true`).
@@ -42,15 +43,17 @@ interface WebhookPayload {
 @Controller('whatsapp')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);
-  private readonly processedMessages = new Set<string>();
 
-  constructor(private readonly whatsappService: WhatsappService) {}
+  constructor(
+    private readonly whatsappService: WhatsappService,
+    private readonly processedMessages: ProcessedMessageRepository,
+  ) {}
 
   @Post('webhook')
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UseGuards(WebhookSignatureGuard)
-  handleWebhook(@Body() body: WebhookPayload) {
+  async handleWebhook(@Body() body: WebhookPayload) {
     this.logger.log(`Webhook received: ${body.event}`);
     this.logger.debug(`Webhook payload: ${JSON.stringify(body.payload)}`);
 
@@ -81,16 +84,16 @@ export class WebhookController {
       return { received: true, processed: false };
     }
 
-    // Deduplicate: ignore if already processed
-    if (messageId && this.processedMessages.has(messageId)) {
-      this.logger.warn(`Duplicate message ignored: ${messageId}`);
-      return { received: true, processed: false };
-    }
-
+    // Idempotência durável: reivindica o messageId no banco (unicidade). Se já
+    // foi processado (retry do WMode, redeploy, outra instância), ignora — evita
+    // registrar a mesma transação 2x. Substitui o Set em memória, que não
+    // sobrevivia a restart nem era compartilhado entre réplicas.
     if (messageId) {
-      this.processedMessages.add(messageId);
-      // Clean up old entries after 5 minutes
-      setTimeout(() => this.processedMessages.delete(messageId), 5 * 60 * 1000);
+      const isFirst = await this.processedMessages.claim(messageId);
+      if (!isFirst) {
+        this.logger.warn(`Duplicate message ignored: ${messageId}`);
+        return { received: true, processed: false };
+      }
     }
 
     // Process async to respond to webhook quickly

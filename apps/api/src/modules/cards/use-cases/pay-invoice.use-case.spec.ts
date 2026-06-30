@@ -29,7 +29,8 @@ describe('PayInvoiceUseCase', () => {
     };
     payments = {
       create: jest.fn().mockResolvedValue({ id: 'pay1' }),
-      sumByCycle: jest.fn().mockResolvedValue(6338.27),
+      // Já pago no ciclo ANTES deste pagamento (default: nada pago ainda).
+      sumByCycle: jest.fn().mockResolvedValue(0),
     };
     transactions = {
       create: jest.fn().mockImplementation((data: Record<string, unknown>) => {
@@ -92,18 +93,47 @@ describe('PayInvoiceUseCase', () => {
   });
 
   it('retorna status partial quando pago < total', async () => {
-    payments.sumByCycle.mockResolvedValue(3000);
     const res = await useCase.execute('card1', 'u1', {
       cycle: '2026-06',
       amount: 3000,
     });
     expect(res.paymentStatus).toBe('partial');
+    expect(res.amount).toBe(3000);
   });
 
   it('recusa valor não-positivo', async () => {
     await expect(
       useCase.execute('card1', 'u1', { cycle: '2026-06', amount: 0 }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('sem amount → paga o SALDO DEVEDOR (total − já pago), não o total cheio', async () => {
+    // Já pagou 5000 antes; deve apenas 1338.27.
+    payments.sumByCycle.mockResolvedValue(5000);
+    const res = await useCase.execute('card1', 'u1', { cycle: '2026-06' });
+    expect(createdTx).toMatchObject({ amount: 1338.27 });
+    expect(res.amount).toBe(1338.27);
+    expect(res.paid).toBe(6338.27);
+    expect(res.paymentStatus).toBe('paid');
+  });
+
+  it('barra pagamento quando a fatura JÁ está quitada (não cobra em dobro)', async () => {
+    payments.sumByCycle.mockResolvedValue(6338.27); // já pago = total
+    await expect(
+      useCase.execute('card1', 'u1', { cycle: '2026-06' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transactions.create).not.toHaveBeenCalled();
+  });
+
+  it('clampa o valor ao saldo devedor quando o usuário tenta pagar mais', async () => {
+    // Deve 6338.27; tenta pagar 10000 → registra só 6338.27.
+    const res = await useCase.execute('card1', 'u1', {
+      cycle: '2026-06',
+      amount: 10000,
+    });
+    expect(createdTx).toMatchObject({ amount: 6338.27 });
+    expect(res.amount).toBe(6338.27);
+    expect(res.paymentStatus).toBe('paid');
   });
 
   it('404 se o cartão não é do usuário', async () => {

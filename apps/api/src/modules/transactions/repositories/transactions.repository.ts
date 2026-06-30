@@ -362,6 +362,24 @@ export class TransactionsRepository {
     });
   }
 
+  // Troca (ou remove, com cardId=null) o cartão de VÁRIAS transações de uma vez,
+  // escopado aos usuários (isolamento de tenant). Usado pela correção de cartão
+  // via WhatsApp ("não foi no Nubank, foi no Bradesco") quando a última ação foi
+  // um parcelamento/lote — todas as parcelas mudam de cartão juntas, não só uma.
+  // Retorna a contagem de linhas afetadas.
+  async updateCardManyByIds(
+    ids: string[],
+    userIds: string[],
+    cardId: string | null,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const { count } = await this.prisma.transaction.updateMany({
+      where: { id: { in: ids }, userId: { in: userIds } },
+      data: { cardId },
+    });
+    return count;
+  }
+
   // Exclui todas as parcelas de um grupo, escopadas aos usuários (isolamento de
   // tenant: nunca apaga parcela de outra família). Retorna a contagem removida.
   async deleteByInstallmentGroup(
