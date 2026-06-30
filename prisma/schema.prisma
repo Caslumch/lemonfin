@@ -374,3 +374,17 @@ model ConversationState {
 
   @@map("conversation_states")
 }
+
+// Idempotência do webhook do WhatsApp: cada mensagem entrante (messageId do
+// WMode) é registrada aqui ao ser aceita para processamento. Antes era um Set em
+// memória com TTL de 5min — que NÃO sobrevive a restart/redeploy nem é
+// compartilhado entre instâncias, então um retry do WMode podia processar a mesma
+// mensagem 2x (transação duplicada). A unicidade no banco torna o dedupe durável
+// e atômico (insert falha → já processada). Limpeza periódica por createdAt.
+model ProcessedMessage {
+  messageId String   @id @map("message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("processed_messages")
+}

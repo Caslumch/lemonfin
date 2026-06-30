@@ -42,6 +42,30 @@ export class CardsRepository {
     });
   }
 
+  // Resolve um cartão por nome aproximado: tenta match EXATO (case-insensitive)
+  // e, se não houver, match PARCIAL (contains) — para "no nubank" achar "Nubank
+  // Ultravioleta". Retorna a LISTA de candidatos para o chamador tratar
+  // ambiguidade (0 = não achou, 1 = resolvido, >1 = pedir desambiguação) em vez
+  // de registrar sem cartão silenciosamente. Escopo familiar (userIds).
+  async findByNameFuzzy(name: string, userIds: string[]) {
+    const exact = await this.prisma.card.findMany({
+      where: {
+        userId: { in: userIds },
+        name: { equals: name, mode: 'insensitive' },
+      },
+      orderBy: { name: 'asc' },
+    });
+    if (exact.length > 0) return exact;
+
+    return this.prisma.card.findMany({
+      where: {
+        userId: { in: userIds },
+        name: { contains: name, mode: 'insensitive' },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async findMany(userIds: string[]) {
     return this.prisma.card.findMany({
       where: { userId: { in: userIds } },

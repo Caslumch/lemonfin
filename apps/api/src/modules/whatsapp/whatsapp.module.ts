@@ -6,6 +6,7 @@ import { TranscriptionService } from './services/transcription.service';
 import { ReceiptExtractionService } from './services/receipt-extraction.service';
 import { WhatsappService } from './services/whatsapp.service';
 import { ConversationRepository } from './repositories/conversation.repository';
+import { ProcessedMessageRepository } from './repositories/processed-message.repository';
 import { WebhookSignatureGuard } from './guards/webhook-signature.guard';
 import { UsersModule } from '../users/users.module';
 import { CategoriesModule } from '../categories/categories.module';
@@ -43,6 +44,7 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
     ReceiptExtractionService,
     WhatsappService,
     ConversationRepository,
+    ProcessedMessageRepository,
     WebhookSignatureGuard,
   ],
   exports: [WmodeModule],

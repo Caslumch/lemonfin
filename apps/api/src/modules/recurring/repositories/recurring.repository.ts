@@ -41,6 +41,32 @@ export class RecurringRepository {
     });
   }
 
+  // Recorrência ATIVA equivalente já cadastrada: mesma descrição (case-insensitive),
+  // valor, dia e categoria. Usado para evitar duplicar uma conta fixa quando o
+  // usuário (ou um reenvio) cadastra a mesma coisa duas vezes — sem isto, a cron
+  // materializaria a despesa em DOBRO todo mês. Escopo familiar (userIds).
+  async findDuplicate(
+    userIds: string[],
+    params: {
+      description: string;
+      amount: number;
+      dayOfMonth: number;
+      categoryId: string;
+    },
+  ) {
+    return this.prisma.recurringTransaction.findFirst({
+      where: {
+        userId: { in: userIds },
+        active: true,
+        dayOfMonth: params.dayOfMonth,
+        categoryId: params.categoryId,
+        amount: new Prisma.Decimal(params.amount),
+        description: { equals: params.description, mode: 'insensitive' },
+      },
+      include: recurringInclude,
+    });
+  }
+
   async findMany(userIds: string[], activeOnly = false) {
     return this.prisma.recurringTransaction.findMany({
       where: {

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { CategoriesRepository } from '../../categories/repositories/categories.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
@@ -260,7 +260,12 @@ export class WhatsappService {
         await this.handleCorrection(from, user.id, result);
         break;
       case 'correction_card':
-        await this.handleCorrectionCard(from, user.id, result.cardName);
+        await this.handleCorrectionCard(
+          from,
+          user.id,
+          result.cardName,
+          phoneKey,
+        );
         break;
       case 'installment':
         await this.handleInstallment(from, user.id, result, phoneKey);
@@ -412,14 +417,38 @@ export class WhatsappService {
           return;
         }
       } else {
-        // Specific card name mentioned
-        const card = await this.cardsRepository.findByName(
+        // Nome de cartão específico mencionado. Usa match aproximado (exato →
+        // parcial) para "no nubank" achar "Nubank Ultravioleta".
+        const matches = await this.cardsRepository.findByNameFuzzy(
           data.cardName,
           userIds,
         );
-        if (card) {
-          cardId = card.id;
-          cardLabel = card.name;
+        if (matches.length === 1) {
+          cardId = matches[0].id;
+          cardLabel = matches[0].name;
+        } else {
+          // 0 ou vários: NÃO registra sem cartão calado — avisa e pede o nome
+          // certo (registrar silenciosamente no "sem cartão" bagunçava a fatura).
+          const cards = await this.cardsRepository.findMany(userIds);
+          const amountFmt = data.amount.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+          });
+          const tail =
+            cards.length > 0
+              ? `Seus cartões: ${cards.map((c) => c.name).join(', ')}. Em qual eu registro?`
+              : 'Você ainda não tem cartão cadastrado — quer registrar sem cartão?';
+          const lead =
+            matches.length > 1
+              ? `Achei mais de um cartão parecido com *${data.cardName}*.`
+              : `Não achei um cartão chamado *${data.cardName}*.`;
+          await this.wmodeClient.sendMessage({
+            to: from,
+            content:
+              `${lead} Ainda não registrei *${amountFmt}* em *${data.description}* ` +
+              `pra não vincular no cartão errado.\n\n${tail}`,
+          });
+          return;
         }
       }
     }
@@ -1177,63 +1206,88 @@ export class WhatsappService {
     ]);
   }
 
-  // Corrige o cartão da última transação. cardName=null remove o vínculo;
-  // string troca para o cartão informado (igual handleCorrection, mas no cartão).
+  // Corrige o cartão da ÚLTIMA AÇÃO. cardName=null remove o vínculo; string troca
+  // para o cartão informado. Quando a última ação foi um parcelamento/lote, troca
+  // o cartão de TODAS as transações dela (não só a parcela mais recente) — usa
+  // lastAction.transactionIds, com fallback à última transação para conversas
+  // sem lastAction (legado/registro pela web).
   private async handleCorrectionCard(
     from: string,
     userId: string,
     cardName: string | null,
+    phoneKey?: string,
   ) {
-    const last = await this.transactionsRepository.findLastByUser(userId);
-    if (!last) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: 'Não encontrei nenhuma transação recente pra trocar o cartão.',
-      });
-      return;
-    }
-
-    const fmt = (v: number) =>
-      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const desc = last.description || '-';
-    const amount = fmt(Number(last.amount));
-
-    // Remover o vínculo de cartão.
-    if (cardName === null) {
-      await this.transactionsRepository.update(last.id, { cardId: null });
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content:
-          `Feito! Tirei o cartão de *${desc}* (${amount}). ` +
-          `Agora tá sem cartão vinculado 👍`,
-      });
-      this.logger.log(`Transaction ${last.id} card removed by user ${userId}`);
-      return;
-    }
-
-    // Trocar para outro cartão.
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const card = await this.cardsRepository.findByName(cardName, userIds);
-    if (!card) {
-      const cards = await this.cardsRepository.findMany(userIds);
-      const tail =
-        cards.length > 0
-          ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}. Pra qual eu troco?`
-          : 'Você ainda não tem nenhum cartão cadastrado.';
+
+    // Conjunto de transações a corrigir: a ação inteira (parcelas/lote) se houver
+    // lastAction; senão, a última transação isolada.
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    let ids: string[];
+    let label: string;
+    if (lastAction && lastAction.transactionIds.length > 0) {
+      ids = lastAction.transactionIds;
+      label = lastAction.label;
+    } else {
+      const last = await this.transactionsRepository.findLastByUser(userId);
+      if (!last) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Não encontrei nenhuma transação recente pra trocar o cartão.',
+        });
+        return;
+      }
+      ids = [last.id];
+      label = last.description || last.category.name;
+    }
+
+    const plural = ids.length > 1 ? `as ${ids.length} parcelas de ` : '';
+
+    // Resolver cartão de destino (null = remover vínculo).
+    let targetCardId: string | null = null;
+    let cardLabel = '';
+    if (cardName !== null) {
+      const card = await this.cardsRepository.findByName(cardName, userIds);
+      if (!card) {
+        const cards = await this.cardsRepository.findMany(userIds);
+        const tail =
+          cards.length > 0
+            ? `Seus cartões são: ${cards.map((c) => c.name).join(', ')}. Pra qual eu troco?`
+            : 'Você ainda não tem nenhum cartão cadastrado.';
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
+        });
+        return;
+      }
+      targetCardId = card.id;
+      cardLabel = card.name;
+    }
+
+    const updated = await this.transactionsRepository.updateCardManyByIds(
+      ids,
+      userIds,
+      targetCardId,
+    );
+
+    if (updated === 0) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: `Não achei um cartão chamado *${cardName}*. ${tail}`,
+        content: 'Não consegui trocar o cartão dessa transação. Tenta de novo?',
       });
       return;
     }
 
-    await this.transactionsRepository.update(last.id, { cardId: card.id });
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `Trocado ✅ *${desc}* (${amount}) agora tá no *${card.name}* 💳`,
-    });
+    const content =
+      targetCardId === null
+        ? `Feito! Tirei o cartão de ${plural}*${label}*. Agora tá sem cartão vinculado 👍`
+        : `Trocado ✅ ${plural}*${label}* agora tá no *${cardLabel}* 💳`;
+    await this.wmodeClient.sendMessage({ to: from, content });
     this.logger.log(
-      `Transaction ${last.id} card changed to ${card.name} by user ${userId}`,
+      `Card correction: ${updated} tx -> ${cardLabel || 'sem cartão'} by user ${userId}`,
     );
   }
 
@@ -1550,8 +1604,35 @@ export class WhatsappService {
       }
     }
 
+    const description = data.description || category.name;
+
+    // Dedup: se já existe recorrência ATIVA igual (descrição/valor/dia/categoria),
+    // não cria outra — senão a cron lançaria a conta fixa em dobro todo mês.
+    // Avisa que já está cadastrada (provável reenvio ou esquecimento).
+    const existing = await this.recurringRepository.findDuplicate(userIds, {
+      description,
+      amount: data.amount,
+      dayOfMonth: data.dayOfMonth,
+      categoryId: category.id,
+    });
+    if (existing) {
+      const amountFmt = data.amount.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      });
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Essa conta fixa já está cadastrada 👍\n` +
+          `*${description}* de *${amountFmt}* todo dia *${data.dayOfMonth}*. ` +
+          `Não criei de novo pra não cobrar em dobro. ` +
+          `_Pra mudar o valor ou apagar, é só usar o app._`,
+      });
+      return;
+    }
+
     const recurring = await this.recurringRepository.create({
-      description: data.description || category.name,
+      description,
       amount: data.amount,
       type: data.type,
       dayOfMonth: data.dayOfMonth,
@@ -1567,12 +1648,11 @@ export class WhatsappService {
     const typeLabel = data.type === 'INCOME' ? 'entrada fixa' : 'conta fixa';
     const emoji = data.type === 'INCOME' ? '💰' : '🔁';
     const cardInfo = cardLabel ? ` no *${cardLabel}*` : '';
-    const desc = data.description || category.name;
 
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `${emoji} Anotei sua ${typeLabel}: *${desc}* de *${amountFormatted}* ` +
+        `${emoji} Anotei sua ${typeLabel}: *${description}* de *${amountFormatted}* ` +
         `todo dia *${data.dayOfMonth}*${cardInfo} (${category.icon} ${category.name}).\n\n` +
         `_Eu lanço sozinho todo mês — pode esquecer 😉_`,
     });
@@ -1807,48 +1887,52 @@ export class WhatsappService {
     // (chave do InvoicePayment) bater com o derivado no web em get-card-invoice.
     const now = new Date();
     const cycle = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-    const { start, end } = cardCycleRange(
-      card.closingDay,
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
-    );
-    const { total } = await this.transactionsRepository.getCardSummary(
-      userIds,
-      card.id,
-      start.toISOString(),
-      end.toISOString(),
-    );
 
-    const amount = result.amount ?? total;
-    if (amount <= 0) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: `A fatura do *${card.name}* está zerada — nada a pagar 👍`,
+    // O use-case calcula o SALDO DEVEDOR (total − já pago), usa-o como default
+    // quando o usuário não disse o valor ("paguei a fatura"), valida o teto e
+    // barra fatura já quitada — evitando a cobrança em dobro. Passamos amount
+    // só quando o usuário informou um valor.
+    let res;
+    try {
+      res = await this.payInvoiceUseCase.execute(card.id, userId, {
+        cycle,
+        ...(result.amount != null ? { amount: result.amount } : {}),
       });
+    } catch (error) {
+      // Fatura quitada (ou valor inválido): responde amigável, não vaza erro.
+      const msg =
+        error instanceof BadRequestException
+          ? `A fatura do *${card.name}* já está quitada — nada a pagar 👍`
+          : `Não consegui registrar o pagamento da fatura do *${card.name}* agora. Tenta de novo?`;
+      await this.wmodeClient.sendMessage({ to: from, content: msg });
       return;
     }
-
-    const res = await this.payInvoiceUseCase.execute(card.id, userId, {
-      cycle,
-      amount,
-    });
 
     const statusLabel =
       res.paymentStatus === 'paid'
         ? 'Fatura quitada ✅'
         : `Parcial: ${fmt(res.paid)} de ${fmt(res.total)}`;
 
+    // res.amount = valor efetivamente pago (clampado ao saldo devedor se o
+    // usuário tentou pagar mais do que devia).
+    const requested = result.amount;
+    const clampNote =
+      requested != null && res.amount < requested
+        ? ` _(ajustei pro saldo devedor; você tinha dito ${fmt(requested)})_`
+        : '';
+
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `✅ Registrei o pagamento de *${fmt(amount)}* na fatura do ` +
-        `*${card.name}*.\n${statusLabel}`,
+        `✅ Registrei o pagamento de *${fmt(res.amount)}* na fatura do ` +
+        `*${card.name}*.${clampNote}\n${statusLabel}`,
     });
 
     if (phoneKey) {
       await this.conversation.appendHistory(phoneKey, [
         {
           role: 'bot',
-          text: `Pagamento de fatura registrado: ${card.name} ${fmt(amount)}`,
+          text: `Pagamento de fatura registrado: ${card.name} ${fmt(res.amount)}`,
         },
       ]);
     }
