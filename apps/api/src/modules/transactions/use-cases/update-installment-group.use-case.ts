@@ -23,7 +23,11 @@ export class UpdateInstallmentGroupUseCase {
   // apaga todas as parcelas atuais e recria o cronograma (novo valor total, nº
   // de parcelas e data da 1ª), preservando o mesmo installmentGroupId. Tudo
   // numa transação no repositório (sem estado parcial se algo falhar).
-  async execute(id: string, userId: string, input: UpdateInstallmentGroupInput) {
+  async execute(
+    id: string,
+    userId: string,
+    input: UpdateInstallmentGroupInput,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
 
     // A transação informada precisa existir, pertencer ao usuário/família e
@@ -38,15 +42,19 @@ export class UpdateInstallmentGroupUseCase {
       );
     }
 
-    const category = await this.categoriesRepository.findById(input.categoryId);
+    // Escopa a categoria ao chamador (sistema ou da família) — fecha o IDOR de
+    // reatribuir as parcelas a uma categoria privada de outra família.
+    const category = await this.categoriesRepository.findAccessible(
+      input.categoryId,
+      userIds,
+    );
     if (!category) {
       throw new NotFoundException('Categoria nao encontrada');
     }
 
     // Valida ownership do cartão (mesmo motivo do create: evita IDOR de escrita
     // vinculando a um cartão de outro usuário/família). `null`/ausente = sem cartão.
-    const cardId =
-      typeof input.cardId === 'string' ? input.cardId : undefined;
+    const cardId = typeof input.cardId === 'string' ? input.cardId : undefined;
     if (cardId) {
       const card = await this.cardsRepository.findById(cardId, userIds);
       if (!card) {

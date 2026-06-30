@@ -44,7 +44,15 @@ export class CreateTransactionUseCase {
       return { installmentGroupId, count: transactionIds.length };
     }
 
-    const category = await this.categoriesRepository.findById(input.categoryId);
+    const userIds = await this.familyContext.resolveUserIds(userId);
+
+    // Escopa a categoria ao chamador (sistema ou da família). findAccessible
+    // fecha o IDOR de vincular a transação a uma categoria privada de outra
+    // família passando o id dela.
+    const category = await this.categoriesRepository.findAccessible(
+      input.categoryId,
+      userIds,
+    );
     if (!category) {
       throw new NotFoundException('Categoria nao encontrada');
     }
@@ -52,7 +60,6 @@ export class CreateTransactionUseCase {
     // Valida ownership do cartão: sem isso, o `connect` do Prisma vincularia a
     // transação a um cartão de outro usuário/família (IDOR de escrita).
     if (input.cardId) {
-      const userIds = await this.familyContext.resolveUserIds(userId);
       const card = await this.cardsRepository.findById(input.cardId, userIds);
       if (!card) {
         throw new NotFoundException('Cartao nao encontrado');

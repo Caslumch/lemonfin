@@ -17,12 +17,18 @@ export class CreateGoalUseCase {
   ) {}
 
   async execute(userId: string, input: CreateGoalInput) {
-    const category = await this.categoriesRepository.findById(input.categoryId);
+    const userIds = await this.familyContext.resolveUserIds(userId);
+
+    // Escopa a categoria ao chamador (sistema ou da família) — fecha o IDOR de
+    // criar uma meta sobre uma categoria privada de outra família.
+    const category = await this.categoriesRepository.findAccessible(
+      input.categoryId,
+      userIds,
+    );
     if (!category) {
       throw new NotFoundException('Categoria nao encontrada');
     }
 
-    const userIds = await this.familyContext.resolveUserIds(userId);
     const existing = await this.goalsRepository.findByCategory(
       userIds,
       input.categoryId,
