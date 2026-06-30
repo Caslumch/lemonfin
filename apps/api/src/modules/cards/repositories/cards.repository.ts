@@ -74,19 +74,16 @@ export class CardsRepository {
     if (cards.length === 0) return result;
 
     // Referência = mês corrente. O ciclo aberto é a fatura que fecha neste mês.
-    const ref = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Tudo em UTC para casar com cardCycleRange e a gravação noon-UTC (ver util).
+    const ref = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
     // Janela de busca ampla cobrindo o ciclo aberto de qualquer closingDay:
     // do início do mês anterior ao fim do mês corrente.
-    const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const windowStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+    );
     const windowEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
     );
 
     const transactions = await this.prisma.transaction.findMany({
@@ -148,6 +145,11 @@ export class CardsRepository {
   // Como previsto no comentário antigo, paginamos AQUI com orderBy + skip/take
   // acoplados. O total (R$) e a contagem são do ciclo FILTRADO inteiro (via
   // aggregate/count), não da página — senão o rodapé "Total" mostraria só a fatia.
+  //
+  // Só EXPENSE entra na fatura. Sem esse filtro, uma INCOME lançada no cartão
+  // (ex.: estorno registrado como receita) era somada ao total e bagunçava a
+  // fatura — foi a causa raiz do incidente da fatura Bradesco. Mesmo critério de
+  // getCurrentCycleSpendByCard, mantendo o total da tela igual ao "limite usado".
   async getInvoice(
     cardId: string,
     userIds: string[],
@@ -166,6 +168,7 @@ export class CardsRepository {
     const where: Prisma.TransactionWhereInput = {
       userId: { in: userIds },
       cardId,
+      type: 'EXPENSE',
       date: { gte: startDate, lte: endDate },
     };
 

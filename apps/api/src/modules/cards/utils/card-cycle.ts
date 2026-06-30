@@ -10,15 +10,24 @@
  * junho" é sempre 25/mai → 24/jun, independente de hoje ser dia 10 ou 25. Isso
  * mantém o número estável e idêntico entre a tela /cartoes, o card de limite
  * usado e o WhatsApp.
+ *
+ * Os limites são construídos em UTC (`Date.UTC`), não em horário local. As
+ * transações são gravadas ao meio-dia UTC (ver create-installments / whatsapp),
+ * então a régua precisa estar na MESMA referência de fuso — senão o resultado
+ * depende do `TZ` do servidor (Render roda em UTC, mas um `TZ=America/Sao_Paulo`
+ * deslocaria as bordas em 3h e poderia vazar compras do dia do fechamento para o
+ * ciclo errado). O `ref` é lido em UTC para extrair ano/mês de referência.
  */
 export function cardCycleRange(
   closingDay: number,
   ref: Date,
 ): { start: Date; end: Date } {
-  const year = ref.getFullYear();
-  const monthIndex = ref.getMonth();
-  const start = new Date(year, monthIndex - 1, closingDay);
-  const end = new Date(year, monthIndex, closingDay - 1, 23, 59, 59, 999);
+  const year = ref.getUTCFullYear();
+  const monthIndex = ref.getUTCMonth();
+  const start = new Date(Date.UTC(year, monthIndex - 1, closingDay));
+  const end = new Date(
+    Date.UTC(year, monthIndex, closingDay - 1, 23, 59, 59, 999),
+  );
   return { start, end };
 }
 

@@ -21,8 +21,8 @@ export class GetCardInvoiceUseCase {
     }
 
     const now = new Date();
-    let year = now.getFullYear();
-    let monthIndex = now.getMonth();
+    let year = now.getUTCFullYear();
+    let monthIndex = now.getUTCMonth();
 
     if (query.month) {
       const [y, m] = query.month.split('-').map(Number);
@@ -31,9 +31,10 @@ export class GetCardInvoiceUseCase {
     }
 
     // Ciclo de fatura — ver cardCycleRange (fonte única, convenção estilo Nubank).
+    // ref em UTC para casar com a régua (que opera em UTC, igual à gravação noon-UTC).
     const { start: startDate, end: endDate } = cardCycleRange(
       card.closingDay,
-      new Date(year, monthIndex, 1),
+      new Date(Date.UTC(year, monthIndex, 1)),
     );
 
     const skip = (query.page - 1) * query.perPage;

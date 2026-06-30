@@ -833,10 +833,11 @@ export class WhatsappService {
 
     // Fatura ABERTA = ciclo de fechamento (mesmo critério da tela /cartoes),
     // não o gasto do mês civil. Assim "qual minha fatura?" bate com o app.
+    // ref em UTC para casar com cardCycleRange (régua em UTC).
     const now = new Date();
     const { start, end } = cardCycleRange(
       card.closingDay,
-      new Date(now.getFullYear(), now.getMonth(), 1),
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
     );
 
     const { total, count } = await this.transactionsRepository.getCardSummary(
@@ -877,13 +878,15 @@ export class WhatsappService {
   // em ou após o dia seguinte ao fechamento. Ancorada ao meio-dia UTC para a
   // exibição (timeZone UTC em formatTxDate) não deslocar o dia.
   private nextDueDate(dueDay: number, closeDate: Date): Date {
-    const year = closeDate.getFullYear();
+    // closeDate é o `end` do ciclo, um instante em UTC — lemos com getUTC* para
+    // não deslocar o dia conforme o fuso do servidor.
+    const year = closeDate.getUTCFullYear();
     // Se o dueDay deste mês já passou (<= dia do fechamento), vai pro mês
     // seguinte. Date.UTC normaliza o overflow de mês (12 → jan do ano seguinte).
     const month =
-      dueDay <= closeDate.getDate()
-        ? closeDate.getMonth() + 1
-        : closeDate.getMonth();
+      dueDay <= closeDate.getUTCDate()
+        ? closeDate.getUTCMonth() + 1
+        : closeDate.getUTCMonth();
     // Clampa ao último dia do mês (ex.: dueDay 31 em fevereiro).
     const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const day = Math.min(dueDay, lastDay);
@@ -1791,12 +1794,13 @@ export class WhatsappService {
     );
     if (!card) return;
 
-    // Ciclo aberto = mês corrente (mesma régua de getInvoice).
+    // Ciclo aberto = mês corrente (mesma régua de getInvoice). UTC para o `cycle`
+    // (chave do InvoicePayment) bater com o derivado no web em get-card-invoice.
     const now = new Date();
-    const cycle = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const cycle = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     const { start, end } = cardCycleRange(
       card.closingDay,
-      new Date(now.getFullYear(), now.getMonth(), 1),
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
     );
     const { total } = await this.transactionsRepository.getCardSummary(
       userIds,
