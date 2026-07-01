@@ -95,6 +95,12 @@ export type ParseResult =
       // Janela de tempo da consulta. Ausente = mês corrente (padrão). "today" e
       // "week" recortam hoje / últimos 7 dias; o handler resolve no fuso BR.
       period?: 'today' | 'week' | 'month';
+      // Só para queryType === 'card': mês da FATURA pedida ("fatura de junho"),
+      // formato "YYYY-MM" = mês em que o ciclo FECHA. Ausente = fatura aberta.
+      invoiceMonth?: string;
+      // Só para queryType === 'card': o usuário pediu as COMPRAS/itens/parcelas
+      // da fatura (não só o total).
+      wantItems?: boolean;
     }
   | { intent: 'cancel' }
   | { intent: 'correction'; newAmount: number }
@@ -190,6 +196,7 @@ Categorias disponíveis (use exatamente o slug):
 ${buildCategoryList(custom)}
 
 Responda: {"intent": "transaction", "amount": number, "type": "INCOME" | "EXPENSE", "categorySlug": string, "categoryConfidence": number, "description": string, "cardName": string | null, "purchaseDate": string | null}
+- description: o ESTABELECIMENTO ou o ITEM comprado, LIMPO — NÃO copie a frase literal. Extraia só o "onde/o quê" e capitalize. Remova verbos e conectores ("gastei", "gasto", "paguei", "comprei", "no", "na", "em", "de", "reais", "hoje", "ontem", menção de cartão/valor/data). Exemplos: "Gastei 19 no mambo cartão Bradesco hoje" → "Mambo"; "gastei 10 reais na padaria agora de noite" → "Padaria"; "paguei 50 de uber" → "Uber"; "comprei um tênis na Nike" → "Tênis Nike"; "almoço no ifood" → "iFood". Se não der pra identificar o lugar/item, use algo curto e neutro (ex.: "Compra"), nunca a frase inteira.
 - cardName: nome específico do cartão se mencionado (ex: "Nubank", "Inter", "Bradesco"), senão null. Se o usuário diz apenas "cartão", "cartão de crédito" ou "crédito" sem nome específico, use "cartao" como valor.
 - categoryConfidence: número de 0 a 1 indicando sua confiança na categoria escolhida. Use ALTO (0.9+) quando o texto deixa claro (ex: "mercado", "uber", "salário"). Use BAIXO (< 0.6) quando é vago e você teve que adivinhar (ex: "gastei 50 ali", "paguei 30", "comprei uma coisa"). Seja honesto na incerteza.
 - purchaseDate: data em que o gasto/recebimento ACONTECEU, no formato ISO "YYYY-MM-DD", SOMENTE se o usuário mencionar quando foi ("ontem", "anteontem", "dia 5", "semana passada", "segunda-feira", "no dia 10"). Resolva a expressão relativa usando a data de HOJE informada acima. Se NÃO houver menção de data, retorne null (vai usar hoje). Não invente datas nem use datas no futuro.
@@ -206,7 +213,7 @@ Para um CARTÃO específico: "como está meu cartão Bradesco?", "gastos no Nuba
 Para a ÚLTIMA transação (mais recente): "qual foi minha última compra?", "qual foi meu último gasto?", "minha última transação", "o que registrei por último?", "qual foi a última coisa que gastei?"
 Para a transação MAIS CARA (maior valor do mês): "qual foi minha compra mais cara?", "qual o maior gasto do mês?", "qual foi minha transação mais alta?", "no que gastei mais de uma vez só?", "minha maior despesa"
 
-Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card" | "last_transaction" | "top_transaction", "cardName": string | null, "categorySlug": string | null, "memberName": string | null, "period": "today" | "week" | "month" | null}
+Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "balance" | "forecast" | "budget" | "reserves" | "recurring" | "category" | "card" | "last_transaction" | "top_transaction", "cardName": string | null, "categorySlug": string | null, "memberName": string | null, "period": "today" | "week" | "month" | null, "invoiceMonth": string | null, "wantItems": boolean}
 - summary: resumo geral (gastos + receitas + saldo)
 - expenses: foco em despesas
 - income: foco em receitas
@@ -220,6 +227,8 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - last_transaction: a ÚLTIMA transação registrada (a mais recente), com valor, categoria e quando
 - top_transaction: a transação de MAIOR valor (mais cara) do mês
 - cardName: SÓ quando queryType="card". Nome do cartão mencionado (ex: "Bradesco", "Nubank"), ou "cartao" se disser só "meu cartão" sem nome. Nos outros queryTypes, null.
+- invoiceMonth: SÓ quando queryType="card" E o usuário cita o MÊS de uma fatura específica ("fatura de junho", "fatura do Bradesco de maio", "o que fechou em junho"). Formato "YYYY-MM" = o mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Se NÃO citar mês, ou disser "fatura aberta"/"fatura atual"/"esse mês", retorne null (= fatura aberta corrente). Nos outros queryTypes, null.
+- wantItems: SÓ quando queryType="card". true se o usuário pede as COMPRAS/itens/parcelas/lançamentos da fatura ("as parcelas da fatura", "o que tem na fatura", "quais compras", "me lista a fatura"); false se pede só o total/vencimento ("qual minha fatura", "quanto devo no cartão"). Nos outros queryTypes, false.
 - categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
 - memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com qualquer queryType de gasto/resumo.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
 IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
@@ -491,6 +500,12 @@ export class MessageParserService {
             json.period === 'month'
               ? json.period
               : undefined;
+          const invoiceMonth =
+            typeof json.invoiceMonth === 'string' &&
+            /^\d{4}-\d{2}$/.test(json.invoiceMonth)
+              ? json.invoiceMonth
+              : undefined;
+          const wantItems = json.wantItems === true;
           const out: Extract<ParseResult, { intent: 'query' }> = {
             intent: 'query',
             queryType,
@@ -499,6 +514,8 @@ export class MessageParserService {
           if (categorySlug) out.categorySlug = categorySlug;
           if (memberName) out.memberName = memberName;
           if (period) out.period = period;
+          if (invoiceMonth) out.invoiceMonth = invoiceMonth;
+          if (wantItems) out.wantItems = wantItems;
           return out;
         }
 
