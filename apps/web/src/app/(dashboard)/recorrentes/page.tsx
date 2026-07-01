@@ -18,9 +18,9 @@ import { useApi } from "@/hooks/use-api";
 import { useMemberFilter } from "@/hooks/use-member-filter";
 import { useRecurring } from "@/hooks/use-resource-queries";
 import { useCategories, useCards } from "@/hooks/use-transactions-data";
-import { invalidateRecurring } from "@/lib/query-keys";
+import { invalidateRecurring, queryKeys } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
-import type { Recurring } from "@/types/recurring";
+import type { Recurring, RecurringListResponse } from "@/types/recurring";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -105,13 +105,36 @@ function RecorrentesPageInner() {
   }
 
   async function handleToggleActive(item: Recurring) {
+    const nextActive = !item.active;
+    // Entrada exata do cache desta lista (mesma chave do useRecurring).
+    const listKey = [...queryKeys.recurring, page, memberId ?? null];
+
+    // Optimistic update: vira o switch NA HORA (sem esperar a request). Guarda o
+    // cache atual para reverter se a request falhar.
+    await queryClient.cancelQueries({ queryKey: listKey });
+    const previous =
+      queryClient.getQueryData<RecurringListResponse>(listKey);
+    queryClient.setQueryData<RecurringListResponse>(listKey, (old) =>
+      old
+        ? {
+            ...old,
+            data: old.data.map((r) =>
+              r.id === item.id ? { ...r, active: nextActive } : r,
+            ),
+          }
+        : old,
+    );
+
     try {
       await fetchApi(`/recurring/${item.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ active: !item.active }),
+        body: JSON.stringify({ active: nextActive }),
       });
+      // Sincroniza (totais do mês, forecast do painel) sem bloquear o visual.
       invalidateRecurring(queryClient);
     } catch {
+      // Falhou: desfaz a mudança visual e avisa.
+      if (previous) queryClient.setQueryData(listKey, previous);
       toast.error("Erro ao atualizar recorrência");
     }
   }
