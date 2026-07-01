@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -37,6 +37,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Aviso quando o usuário caiu aqui por sessão expirada (api.ts manda
+  // ?expired=1 ao receber 401). Lido no client para evitar Suspense de
+  // useSearchParams. Some se ele começar a digitar (o erro de login assume).
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("expired") === "1") setExpired(true);
+  }, []);
 
   // 2FA step state
   const [tempToken, setTempToken] = useState<string | null>(null);
@@ -160,6 +169,12 @@ export default function LoginPage() {
               : "Entre na sua conta para continuar"}
           </p>
         </div>
+
+        {expired && !tempToken && (
+          <div className="mb-5 rounded-xl border border-border bg-subtle/60 px-4 py-3 text-sm text-fg-secondary text-center">
+            Sua sessão expirou. Entre de novo para continuar. 🔒
+          </div>
+        )}
 
         {tempToken ? (
           <form onSubmit={handleVerify2fa} className="space-y-4">

@@ -87,5 +87,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    // Alinhado ao token da API (7d, ver auth.module.ts). Sem isto a sessão
+    // NextAuth durava o default (30d) e sobrevivia ao token: entre o 7º e o 30º
+    // dia o proxy deixava navegar (sessão válida) mas TODA request à API dava
+    // 401 (token expirado) — app "logado mas quebrado". Igualando as durações,
+    // a sessão expira junto com o token e o usuário é levado ao login.
+    maxAge: 7 * 24 * 60 * 60, // 7 dias
   },
 });
