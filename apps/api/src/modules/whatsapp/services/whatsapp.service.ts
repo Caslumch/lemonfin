@@ -1023,10 +1023,12 @@ export class WhatsappService {
     });
   }
 
-  // "Qual foi minha última transação?" — a mais recente (por data do gasto).
+  // "Qual foi minha última transação?" — a REGISTRADA por último (createdAt).
+  // Não usa findLatest (por `date`): numa compra parcelada, a parcela mais
+  // futura (date em 2027) ganharia o `date desc` e viraria a "última".
   private async handleLastTransactionQuery(from: string, userId: string) {
     const userIds = await this.familyContext.resolveUserIds(userId);
-    const tx = await this.transactionsRepository.findLatest(userIds);
+    const tx = await this.transactionsRepository.findLastCreated(userIds);
 
     if (!tx) {
       await this.wmodeClient.sendMessage({

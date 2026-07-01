@@ -262,7 +262,8 @@ Responda: {"intent": "recurring", "amount": number, "type": "INCOME" | "EXPENSE"
 - cardName: nome do cartão se mencionado, senão null
 
 ### 7. BATCH — Vários itens numa mensagem
-Quando a mensagem contém MAIS DE UM lançamento (várias transações, contas fixas ou parcelamentos numa frase só). Exemplos: "gastei 50 no mercado e 30 no uber", "todo dia 5 pago 227 de seguro, internet 157 e aluguel 1500".
+Quando a mensagem contém MAIS DE UM lançamento NOVO (várias transações, contas fixas ou parcelamentos numa frase só). Exemplos: "gastei 50 no mercado e 30 no uber", "todo dia 5 pago 227 de seguro, internet 157 e aluguel 1500".
+ATENÇÃO: batch é só para REGISTRAR gastos novos com VALORES. Uma PERGUNTA que cita nomes de compras já feitas ("essas compras, dermo vida e amazon, foram feitas hoje?") NÃO é batch — é advice (pergunta factual). Se a mensagem é interrogativa e não traz valores novos a registrar, nunca use batch.
 Quebre em itens INDEPENDENTES. Cada item segue o mesmo formato da sua intenção (transaction, installment ou recurring).
 Se um item for descrito mas você NÃO conseguir extrair um valor único e definido (ex.: "água e luz varia entre 80 e 90"), NÃO invente: coloque-o em "skipped" com o motivo.
 
@@ -291,7 +292,8 @@ Responda: {"intent": "reserve_contribution", "amount": number}
 ### 10. ADVICE — Conversa aberta, dicas, análise dos gastos e small talk
 Use para QUALQUER mensagem que NÃO seja um comando estruturado das outras intenções: pedidos de dica/conselho, perguntas abertas/analíticas sobre as finanças, e também saudações ou perguntas pessoais leves.
 Exemplos: "me ajuda a organizar meus gastos", "no que eu mais tenho gastado?", "como posso gastar menos com ifood?", "como anda minha vida financeira?", "me dá uma dica", "como economizar?", "qual seria um bom plano pra mim?", "oi", "bom dia", "tudo bem?", "qual é o meu nome?".
-Diferença para QUERY: query é um número/resumo pronto e direto (totais, saldo, gastos de uma categoria/cartão). advice é quando a pessoa quer ANÁLISE, CONSELHO, COMPARAÇÃO, PLANO ou conversa — algo que exige raciocínio sobre os dados, não só um total.
+TAMBÉM use advice para PERGUNTAS FACTUAIS sobre transações que JÁ EXISTEM — especialmente perguntas sobre QUANDO/SE algo foi comprado: "a camisa do brasil foi comprada hoje?", "essas compras (dermo vida, amazon) foram feitas hoje?", "quando comprei o tênis?", "a amazon foi esse mês?". Mesmo citando nomes de compras, é uma PERGUNTA (interrogação), não um registro novo — o assessor consulta os dados e responde. NUNCA classifique uma pergunta dessas como transaction nem batch.
+Diferença para QUERY: query é um número/resumo pronto e direto (totais, saldo, gastos de uma categoria/cartão). advice é quando a pessoa quer ANÁLISE, CONSELHO, COMPARAÇÃO, PLANO, conversa, ou uma PERGUNTA sobre transações existentes (quando/se/qual) — algo que exige raciocínio/consulta sobre os dados, não só um total.
 
 Responda: {"intent": "advice"}
 NÃO escreva a resposta aqui — outro componente (com acesso aos dados do usuário) vai responder. Só identifique a intenção.

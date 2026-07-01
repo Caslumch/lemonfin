@@ -51,7 +51,7 @@ const tools: ChatCompletionTool[] = [
     function: {
       name: 'queryTransactions',
       description:
-        'Busca transacoes do usuario em um periodo especifico. Use quando o usuario perguntar sobre transacoes de um periodo como "hoje", "ontem", "semana passada", "mes passado", etc.',
+        'Busca transacoes do usuario num periodo. Use para "o que gastei hoje/ontem/semana passada", "minhas compras de X". O campo `date` de cada item e a DATA DA COMPRA (nao a data de vencimento de parcela). Compras parceladas vem como UMA linha com `amount` = valor TOTAL da compra e `parcelado` = "Nx"; elas aparecem no periodo em que foram COMPRADAS, entao se uma compra parcelada nao esta no resultado de "hoje", ela NAO foi comprada hoje.',
       parameters: {
         type: 'object',
         properties: {
@@ -78,7 +78,7 @@ const tools: ChatCompletionTool[] = [
     function: {
       name: 'getSummaryByPeriod',
       description:
-        'Retorna o resumo financeiro (receitas, despesas, saldo) de um periodo especifico. Use quando o usuario perguntar "quanto gastei ontem", "quanto entrou semana passada", etc.',
+        'Resumo financeiro de um periodo. Use para "quanto gastei ontem", "quanto entrou semana passada". O campo `expense` ja e o gasto TOTAL (inclui cartao) — use ele para "quanto gastei". `expenseOnCard` e a parte no cartao e `expenseOutOfCard` a parte fora do cartao (que sai do bolso); `balance` desconta so o fora-cartao.',
       parameters: {
         type: 'object',
         properties: {
@@ -299,26 +299,47 @@ export class ChatCompletionUseCase {
 
     switch (name) {
       case 'queryTransactions': {
-        const { data, total } = await this.transactionsRepository.findMany({
-          userIds,
-          startDate: args.startDate,
-          endDate: args.endDate,
-          type: args.type as 'INCOME' | 'EXPENSE' | undefined,
-          skip: 0,
-          take: 20,
-          order: 'desc',
-          orderBy: 'date',
-        });
+        // AGRUPA compras parceladas numa linha (a compra), ancorada na DATA DA
+        // COMPRA (1ª parcela). Sem isto (findMany flat) o assessor via cada
+        // parcela solta com a `date` do vencimento — uma parcela de uma compra
+        // antiga aparecia com data futura (ex. 2027) e ele dizia "comprou hoje".
+        const { data, total } =
+          await this.transactionsRepository.findManyGrouped({
+            userIds,
+            startDate: args.startDate,
+            endDate: args.endDate,
+            type: args.type as 'INCOME' | 'EXPENSE' | undefined,
+            skip: 0,
+            take: 20,
+            order: 'desc',
+            orderBy: 'date',
+          });
 
         return {
           total,
-          transactions: data.map((tx) => ({
-            date: new Date(tx.date).toLocaleDateString('pt-BR'),
-            amount: Number(tx.amount).toFixed(2),
-            type: tx.type,
-            description: tx.description || (tx as any).category?.name || '',
-            category: (tx as any).category?.name || '',
-          })),
+          transactions: data.map((tx) => {
+            const t = tx as typeof tx & {
+              installmentTotal?: number | null;
+              installmentSum?: number | null;
+              category?: { name?: string };
+            };
+            const isParcelada =
+              (t.installmentTotal ?? 0) >= 2 && t.installmentSum != null;
+            return {
+              // Para compra parcelada, esta é a DATA DA COMPRA (1ª parcela), não
+              // a do vencimento de cada parcela.
+              date: new Date(tx.date).toLocaleDateString('pt-BR'),
+              // Compra parcelada: valor TOTAL da compra; senão o valor da transação.
+              amount: (isParcelada
+                ? t.installmentSum!
+                : Number(tx.amount)
+              ).toFixed(2),
+              type: tx.type,
+              description: tx.description || t.category?.name || '',
+              category: t.category?.name || '',
+              ...(isParcelada ? { parcelado: `${t.installmentTotal}x` } : {}),
+            };
+          }),
         };
       }
 
@@ -328,10 +349,18 @@ export class ChatCompletionUseCase {
           args.startDate,
           args.endDate,
         );
+        // `expense` do getSummary é só fora-cartão (gasto que sai do bolso); o
+        // gasto no cartão vira `cardExpense`. Para o assessor, "quanto gastei" =
+        // gasto TOTAL — senão num período em que tudo foi no cartão respondia
+        // R$ 0,00. Expomos os três: total, fora-cartão e cartão, sem ambiguidade.
+        const totalExpense = summary.expense + summary.cardExpense;
         return {
           period: `${args.startDate} a ${args.endDate}`,
           income: summary.income.toFixed(2),
-          expense: summary.expense.toFixed(2),
+          // expense = gasto TOTAL (fora-cartão + cartão) — use este para "quanto gastei".
+          expense: totalExpense.toFixed(2),
+          expenseOutOfCard: summary.expense.toFixed(2),
+          expenseOnCard: summary.cardExpense.toFixed(2),
           balance: summary.balance.toFixed(2),
           incomeCount: summary.incomeCount,
           expenseCount: summary.expenseCount,
