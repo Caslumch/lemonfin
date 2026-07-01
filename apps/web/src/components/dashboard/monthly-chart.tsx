@@ -65,7 +65,10 @@ export function MonthlyChart({ data, loading }: MonthlyChartProps) {
         Gastos mensais
       </h3>
       <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
+        {/* minWidth/minHeight evita o warning "width(-1) height(-1)" do recharts
+            quando o container é medido com 0 no primeiro paint (antes do
+            ResizeObserver). */}
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart data={chartData} barSize={28}>
             <XAxis
               dataKey="label"

@@ -38,12 +38,26 @@ function loadStoredMessages(): Message[] {
 }
 
 export function ChatPanel({ isOpen }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>(loadStoredMessages);
+  // Começa VAZIO (igual no servidor e no cliente) e carrega o histórico do
+  // localStorage só APÓS a hidratação, num effect. Ler o storage no
+  // inicializador do useState fazia o servidor renderizar vazio e o cliente
+  // renderizar a lista salva → hydration mismatch (React #418). `hydrated`
+  // também evita que o effect de persistência apague o storage com [] antes de
+  // carregar.
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { token } = useApi();
+
+  // Carrega o histórico salvo após montar (client-only).
+  useEffect(() => {
+    const stored = loadStoredMessages();
+    if (stored.length > 0) setMessages(stored);
+    setHydrated(true);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
@@ -56,8 +70,10 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
   }, [messages, scrollToBottom]);
 
   // Persiste o histórico (sem mensagens vazias do streaming em andamento).
+  // Só depois de hidratar, senão salvaria [] por cima do histórico antes do
+  // carregamento inicial.
   useEffect(() => {
-    if (isLoading) return;
+    if (!hydrated || isLoading) return;
     try {
       const toStore = messages
         .filter((m) => m.content.trim().length > 0)
@@ -66,7 +82,7 @@ export function ChatPanel({ isOpen }: ChatPanelProps) {
     } catch {
       // storage cheio/indisponível — ignora
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, hydrated]);
 
   useEffect(() => {
     if (isOpen) {
