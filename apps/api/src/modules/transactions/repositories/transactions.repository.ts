@@ -7,6 +7,7 @@ interface FindManyOptions {
   userIds: string[];
   type?: 'INCOME' | 'EXPENSE';
   categoryId?: string;
+  cardId?: string;
   search?: string;
   startDate?: string;
   endDate?: string;
@@ -212,6 +213,7 @@ export class TransactionsRepository {
 
     if (options.type) where.type = options.type;
     if (options.categoryId) where.categoryId = options.categoryId;
+    if (options.cardId) where.cardId = options.cardId;
     if (options.search)
       where.description = {
         contains: options.search,
@@ -260,6 +262,7 @@ export class TransactionsRepository {
 
     if (options.type) where.type = options.type;
     if (options.categoryId) where.categoryId = options.categoryId;
+    if (options.cardId) where.cardId = options.cardId;
     if (options.search)
       where.description = {
         contains: options.search,

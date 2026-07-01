@@ -835,7 +835,10 @@ export class WhatsappService {
     }
 
     if (result.queryType === 'card') {
-      await this.handleCardQuery(from, userId, result.cardName);
+      await this.handleCardQuery(from, userId, result.cardName, {
+        invoiceMonth: result.invoiceMonth,
+        wantItems: result.wantItems,
+      });
       return;
     }
 
@@ -973,6 +976,7 @@ export class WhatsappService {
     from: string,
     userId: string,
     cardName?: string,
+    opts?: { invoiceMonth?: string; wantItems?: boolean },
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const fmt = (v: number) =>
@@ -981,14 +985,32 @@ export class WhatsappService {
     const card = await this.resolveCardForCommand(from, userIds, cardName);
     if (!card) return;
 
-    // Fatura ABERTA = ciclo de fechamento (mesmo critério da tela /cartoes),
-    // não o gasto do mês civil. Assim "qual minha fatura?" bate com o app.
-    // ref em UTC para casar com cardCycleRange (régua em UTC).
+    // Mês de referência do ciclo: o mês pedido ("fatura de junho" → 2026-06) ou
+    // o mês corrente (fatura ABERTA). O invoiceMonth é o mês em que a fatura
+    // FECHA — mesma régua da tela /cartoes (cardCycleRange, em UTC).
     const now = new Date();
+    let refYear = now.getUTCFullYear();
+    let refMonth = now.getUTCMonth();
+    let isCurrent = true;
+    if (opts?.invoiceMonth) {
+      const [y, m] = opts.invoiceMonth.split('-').map(Number);
+      refYear = y;
+      refMonth = m - 1;
+      isCurrent =
+        refYear === now.getUTCFullYear() && refMonth === now.getUTCMonth();
+    }
     const { start, end } = cardCycleRange(
       card.closingDay,
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      new Date(Date.UTC(refYear, refMonth, 1)),
     );
+
+    const monthLabel = new Date(
+      Date.UTC(refYear, refMonth, 1),
+    ).toLocaleDateString('pt-BR', { month: 'long', timeZone: 'UTC' });
+    // "fatura aberta" só quando é o ciclo corrente; senão nomeia pelo mês.
+    const faturaLabel = isCurrent
+      ? 'A fatura aberta'
+      : `A fatura de ${monthLabel}`;
 
     const { total, count } = await this.transactionsRepository.getCardSummary(
       userIds,
@@ -1008,18 +1030,60 @@ export class WhatsappService {
       await this.wmodeClient.sendMessage({
         to: from,
         content:
-          `Nada no *${card.name}* nesta fatura ainda — fatura limpa 👍` +
+          `${faturaLabel} do *${card.name}* está limpa — nada lançado 👍` +
           dueLine,
       });
       return;
     }
 
+    // Cabeçalho com total + contagem.
+    const header =
+      `💳 ${faturaLabel} do *${card.name}* está em *${fmt(total)}* ` +
+      `(${count} ${count === 1 ? 'compra' : 'compras'}).`;
+
+    // Sem pedido de itens: só o total + vencimento.
+    if (!opts?.wantItems) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: header + dueLine,
+      });
+      return;
+    }
+
+    // Pediu as compras/itens: lista agrupada (parcelas viram 1 linha, valor
+    // total da compra), até 15 linhas. Mesma régua de ciclo (start/end).
+    const { data } = await this.transactionsRepository.findManyGrouped({
+      userIds,
+      cardId: card.id,
+      type: 'EXPENSE',
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      skip: 0,
+      take: 15,
+      order: 'desc',
+      orderBy: 'date',
+    });
+
+    const lines = data.map((tx) => {
+      const t = tx as typeof tx & {
+        installmentTotal?: number | null;
+        installmentSum?: number | null;
+        category?: { name?: string };
+      };
+      const isParc = (t.installmentTotal ?? 0) >= 2 && t.installmentSum != null;
+      const valor = isParc ? t.installmentSum! : tx.amount.toNumber();
+      const parc = isParc ? ` (${t.installmentTotal}x)` : '';
+      const desc = tx.description || t.category?.name || 'compra';
+      return `• ${fmt(valor)} — ${desc}${parc}`;
+    });
+    const extra =
+      count > lines.length
+        ? `\n_…e mais ${count - lines.length}. Veja tudo no app._`
+        : '';
+
     await this.wmodeClient.sendMessage({
       to: from,
-      content:
-        `💳 A fatura aberta do *${card.name}* está em *${fmt(total)}* ` +
-        `(${count} ${count === 1 ? 'compra' : 'compras'}).` +
-        dueLine,
+      content: `${header}${dueLine}\n\n${lines.join('\n')}${extra}`,
     });
   }
 
