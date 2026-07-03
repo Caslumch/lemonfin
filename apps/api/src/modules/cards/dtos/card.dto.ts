@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+// Chaves de cor do cartão. Fonte da verdade do conjunto aceito; o web resolve
+// cada chave para o gradiente/tema correspondente (ver credit-card-visual).
+// Nulo/ausente = sem escolha → o visual cai no tema derivado da bandeira.
+export const CARD_COLOR_PRESET_KEYS = [
+  'grafite',
+  'azul',
+  'roxo',
+  'verde',
+  'vinho',
+  'teal',
+  'ambar',
+  'indigo',
+] as const;
+
+const colorPresetSchema = z.enum(CARD_COLOR_PRESET_KEYS);
+
 export const createCardSchema = z.object({
   name: z.string().min(1, 'Nome e obrigatorio'),
   brand: z.string().optional(),
@@ -15,6 +31,7 @@ export const createCardSchema = z.object({
     .min(1)
     .max(31, 'Dia de vencimento deve ser entre 1 e 31')
     .optional(),
+  colorPreset: colorPresetSchema.nullable().optional(),
 });
 
 export const updateCardSchema = z.object({
@@ -23,6 +40,7 @@ export const updateCardSchema = z.object({
   limit: z.number().positive().optional(),
   closingDay: z.number().int().min(1).max(31).optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
+  colorPreset: colorPresetSchema.nullable().optional(),
 });
 
 export type CreateCardInput = z.infer<typeof createCardSchema>;

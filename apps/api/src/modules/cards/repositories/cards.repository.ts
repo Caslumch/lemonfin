@@ -13,6 +13,7 @@ export class CardsRepository {
     limit?: number;
     closingDay: number;
     dueDay?: number;
+    colorPreset?: string | null;
     userId: string;
   }) {
     return this.prisma.card.create({
@@ -22,6 +23,7 @@ export class CardsRepository {
         limit: data.limit ? new Prisma.Decimal(data.limit) : undefined,
         closingDay: data.closingDay,
         dueDay: data.dueDay,
+        colorPreset: data.colorPreset ?? undefined,
         userId: data.userId,
       },
     });
@@ -141,6 +143,7 @@ export class CardsRepository {
       limit?: number;
       closingDay?: number;
       dueDay?: number;
+      colorPreset?: string | null;
     },
   ) {
     const updateData: Prisma.CardUpdateInput = {};
@@ -150,6 +153,9 @@ export class CardsRepository {
       updateData.limit = new Prisma.Decimal(data.limit);
     if (data.closingDay !== undefined) updateData.closingDay = data.closingDay;
     if (data.dueDay !== undefined) updateData.dueDay = data.dueDay;
+    // null = limpar (voltar ao tema da bandeira); string = definir a cor.
+    if (data.colorPreset !== undefined)
+      updateData.colorPreset = data.colorPreset;
 
     return this.prisma.card.update({
       where: { id },

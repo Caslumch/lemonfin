@@ -7,6 +7,9 @@ export interface Card {
   limit: string | null;
   closingDay: number;
   dueDay: number | null;
+  // Cor escolhida pelo usuário (chave de preset, ex.: "azul"). Null = sem
+  // escolha → o visual cai no tema derivado da bandeira. Ver CARD_COLOR_PRESETS.
+  colorPreset: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;

@@ -48,12 +48,68 @@ const BRAND_THEMES: Record<string, BrandTheme> = {
   },
 };
 
-// Exportado para a pilha pintar a lombada de trás com a cor real do cartão que
-// virá a seguir (mesma paleta por bandeira do cartão da frente).
-export function themeFor(brand?: string | null): BrandTheme {
-  if (!brand) return BRAND_THEMES.default;
-  const key = brand.trim().toLowerCase();
-  return BRAND_THEMES[key] ?? BRAND_THEMES.default;
+// Cores escolhíveis pelo usuário (chaves batem com CARD_COLOR_PRESET_KEYS do
+// backend). Mesma linguagem sóbria/escura dos temas por bandeira — gradientes
+// grafite com um acento próprio — para não destoar do visual do cartão. Quando
+// o cartão tem colorPreset, ESTE tema vence o da bandeira.
+export const CARD_COLOR_PRESETS: Record<string, BrandTheme> = {
+  grafite: {
+    gradient: "from-[#26262A] to-[#121214]",
+    accent: "text-white/70",
+    chip: "from-[#D4D4D8] to-[#A1A1AA]",
+  },
+  azul: {
+    gradient: "from-[#1A2A3A] to-[#0C1622]",
+    accent: "text-[#8FB3D9]",
+    chip: "from-[#C9D6E3] to-[#9FB2C6]",
+  },
+  roxo: {
+    gradient: "from-[#2A2140] to-[#140F22]",
+    accent: "text-[#B9A8E3]",
+    chip: "from-[#D6CCE9] to-[#B2A3C6]",
+  },
+  verde: {
+    gradient: "from-[#1C2E22] to-[#0C160F]",
+    accent: "text-[#9FD9AF]",
+    chip: "from-[#C9E3D2] to-[#9FC6AC]",
+  },
+  vinho: {
+    gradient: "from-[#3A1C24] to-[#1A0C12]",
+    accent: "text-[#D98FA3]",
+    chip: "from-[#E3C9D2] to-[#C69FAC]",
+  },
+  teal: {
+    gradient: "from-[#16302E] to-[#0A1614]",
+    accent: "text-[#8FD9CE]",
+    chip: "from-[#C9E3DE] to-[#9FC6BF]",
+  },
+  ambar: {
+    gradient: "from-[#332616] to-[#16100A]",
+    accent: "text-[#E3C48F]",
+    chip: "from-[#E9DCC6] to-[#C6B79F]",
+  },
+  indigo: {
+    gradient: "from-[#1E2140] to-[#0C0E22]",
+    accent: "text-[#A3AEE3]",
+    chip: "from-[#CCD2E9] to-[#9FA6C6]",
+  },
+};
+
+// Tema do cartão: a cor ESCOLHIDA (colorPreset) tem prioridade; sem ela, cai no
+// tema derivado da bandeira; sem nada, no neutro. Exportado para a pilha pintar
+// a lombada de trás com a cor real do próximo cartão.
+export function themeFor(card?: {
+  brand?: string | null;
+  colorPreset?: string | null;
+}): BrandTheme {
+  if (!card) return BRAND_THEMES.default;
+  if (card.colorPreset) {
+    const preset = CARD_COLOR_PRESETS[card.colorPreset];
+    if (preset) return preset;
+  }
+  const brand = card.brand?.trim().toLowerCase();
+  if (brand) return BRAND_THEMES[brand] ?? BRAND_THEMES.default;
+  return BRAND_THEMES.default;
 }
 
 function maskedNumber(id: string): string {
@@ -83,7 +139,7 @@ function usageBarColor(ratio: number): string {
 export function CreditCardVisual({ card }: CreditCardVisualProps) {
   const brand = (card.brand || "").trim();
   const brandLabel = brand ? brand.toUpperCase() : "CARTÃO";
-  const theme = themeFor(brand);
+  const theme = themeFor(card);
 
   const spent = card.currentSpend ?? 0;
   const limit = card.limit ? Number(card.limit) : null;
