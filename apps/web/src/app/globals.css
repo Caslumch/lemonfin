@@ -1,4 +1,11 @@
 @import "tailwindcss";
+/* Estilos-base do react-day-picker (posicionamento do nav/caption, --rdp-*).
+   Importado AQUI, não no client component: no Next 16 o `import "…style.css"`
+   de dentro de um componente "use client" pode não ser emitido / entrar com
+   prioridade abaixo do preflight do Tailwind, o que colapsava o cabeçalho de
+   navegação (mês/ano + setas). Aqui a ordem de cascata é garantida. As
+   sobrescritas de tema ficam em .lemon-daypicker mais abaixo. */
+@import "react-day-picker/style.css";
 
 /* ===== Dark mode variant (class-based) ===== */
 @custom-variant dark (&:where(.dark, .dark *));
