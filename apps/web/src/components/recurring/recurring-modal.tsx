@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { Category } from "@/types/transaction";
 import type { Card } from "@/types/card";
-import type { Recurring } from "@/types/recurring";
+import type { Recurring, BusinessDayAdjustment } from "@/types/recurring";
 
 const recurringSchema = z.object({
   description: z.string().min(1, "Descrição é obrigatória"),
   amount: z.number().positive("Valor deve ser positivo"),
   type: z.enum(["INCOME", "EXPENSE"]),
   dayOfMonth: z.number().int().min(1, "Dia inválido").max(31, "Dia inválido"),
+  businessDayAdjustment: z.enum(["EXACT", "PREVIOUS", "NEXT"]),
   categoryId: z.string().min(1, "Categoria é obrigatória"),
   cardId: z.string().optional(),
 });
@@ -24,9 +25,28 @@ export interface RecurringFormData {
   amount: number;
   type: "INCOME" | "EXPENSE";
   dayOfMonth: number;
+  businessDayAdjustment: BusinessDayAdjustment;
   categoryId: string;
   cardId?: string;
 }
+
+const ADJUSTMENT_OPTIONS: {
+  value: BusinessDayAdjustment;
+  label: string;
+  hint: string;
+}[] = [
+  { value: "EXACT", label: "Dia exato", hint: "Lança sempre no dia escolhido" },
+  {
+    value: "PREVIOUS",
+    label: "Antecipa",
+    hint: "Cai em fim de semana/feriado → dia útil anterior (ex: salário)",
+  },
+  {
+    value: "NEXT",
+    label: "Posterga",
+    hint: "Cai em fim de semana/feriado → dia útil seguinte",
+  },
+];
 
 interface RecurringModalProps {
   open: boolean;
@@ -49,6 +69,8 @@ export function RecurringModal({
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [dayOfMonth, setDayOfMonth] = useState("1");
+  const [businessDayAdjustment, setBusinessDayAdjustment] =
+    useState<BusinessDayAdjustment>("EXACT");
   const [categoryId, setCategoryId] = useState("");
   const [cardId, setCardId] = useState("");
   const [error, setError] = useState("");
@@ -62,6 +84,7 @@ export function RecurringModal({
       setAmount(String(recurring.amount));
       setType(recurring.type);
       setDayOfMonth(String(recurring.dayOfMonth));
+      setBusinessDayAdjustment(recurring.businessDayAdjustment ?? "EXACT");
       setCategoryId(recurring.categoryId);
       setCardId(recurring.cardId ?? "");
     } else {
@@ -69,6 +92,7 @@ export function RecurringModal({
       setAmount("");
       setType("EXPENSE");
       setDayOfMonth("1");
+      setBusinessDayAdjustment("EXACT");
       setCategoryId("");
       setCardId("");
     }
@@ -86,6 +110,7 @@ export function RecurringModal({
       amount: parseFloat(amount),
       type,
       dayOfMonth: parseInt(dayOfMonth, 10),
+      businessDayAdjustment,
       categoryId,
       cardId: cardId || undefined,
     });
@@ -202,6 +227,35 @@ export function RecurringModal({
               onChange={(e) => setDayOfMonth(e.target.value)}
               required
             />
+
+            <div className="w-full">
+              <label className="block text-sm font-medium text-fg mb-1.5">
+                Se cair em fim de semana ou feriado
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {ADJUSTMENT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setBusinessDayAdjustment(opt.value)}
+                    className={`rounded-md border-[1.5px] px-2 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                      businessDayAdjustment === opt.value
+                        ? "border-lima bg-lima/10 text-fg"
+                        : "border-border text-fg-muted hover:text-fg"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-fg-muted mt-1.5">
+                {
+                  ADJUSTMENT_OPTIONS.find(
+                    (o) => o.value === businessDayAdjustment,
+                  )?.hint
+                }
+              </p>
+            </div>
 
             <div className="w-full">
               <label

@@ -1,10 +1,19 @@
 import { z } from 'zod';
 
+// Ajuste de dia útil: quando o dia da recorrência cai em fim de semana ou
+// feriado nacional. Default EXACT preserva o comportamento anterior.
+export const businessDayAdjustmentSchema = z.enum([
+  'EXACT',
+  'PREVIOUS',
+  'NEXT',
+]);
+
 export const createRecurringSchema = z.object({
   description: z.string().min(1, 'Descricao e obrigatoria'),
   amount: z.number().positive('Valor deve ser positivo'),
   type: z.enum(['INCOME', 'EXPENSE']),
   dayOfMonth: z.number().int().min(1).max(31),
+  businessDayAdjustment: businessDayAdjustmentSchema.default('EXACT'),
   categoryId: z.string().cuid(),
   cardId: z.string().cuid().optional(),
 });
@@ -14,6 +23,7 @@ export const updateRecurringSchema = z.object({
   amount: z.number().positive('Valor deve ser positivo').optional(),
   type: z.enum(['INCOME', 'EXPENSE']).optional(),
   dayOfMonth: z.number().int().min(1).max(31).optional(),
+  businessDayAdjustment: businessDayAdjustmentSchema.optional(),
   categoryId: z.string().cuid().optional(),
   cardId: z.string().cuid().nullable().optional(),
   active: z.boolean().optional(),

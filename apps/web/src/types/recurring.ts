@@ -5,12 +5,17 @@ export interface RecurringCard {
   name: string;
 }
 
+// Ajuste de dia útil quando o dia cai em fim de semana ou feriado nacional.
+// EXACT = dia exato; PREVIOUS = antecipa p/ útil anterior; NEXT = posterga.
+export type BusinessDayAdjustment = "EXACT" | "PREVIOUS" | "NEXT";
+
 export interface Recurring {
   id: string;
   description: string;
   amount: number;
   type: "INCOME" | "EXPENSE";
   dayOfMonth: number;
+  businessDayAdjustment: BusinessDayAdjustment;
   active: boolean;
   userId: string;
   categoryId: string;

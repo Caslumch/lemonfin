@@ -171,6 +171,69 @@ async function main() {
     (await countMaterialized(rec4.id)) === 1,
   );
 
+  // --- Cenario 6: ajuste de dia util PREVIOUS (salario dia 5 num domingo) ---
+  console.log('\nCENARIO 6 — Dia util PREVIOUS (dia 5 domingo → sexta 3)');
+  const rec5 = await recurringRepo.create({
+    description: 'Salario dia util teste',
+    amount: 8000,
+    type: 'INCOME',
+    dayOfMonth: 5,
+    businessDayAdjustment: 'PREVIOUS',
+    userId: user.id,
+    categoryId: category.id,
+  });
+  recurringIds.push(rec5.id);
+
+  // 05/07/2026 e domingo → PREVIOUS materializa na sexta 03/07.
+  const jul5 = new Date(Date.UTC(2026, 6, 5, 12, 0, 0)); // domingo
+  const jul3 = new Date(Date.UTC(2026, 6, 3, 12, 0, 0)); // sexta
+
+  // Rodando NO dia 5 (domingo) NAO deve materializar — o dia efetivo e o 3.
+  await materializer.materializeDueRecurrences(jul5);
+  check(
+    'PREVIOUS: NAO materializa no dia 5 (domingo)',
+    (await countMaterialized(rec5.id)) === 0,
+  );
+
+  // Rodando no dia 3 (sexta) DEVE materializar, com a data ancorada no dia 3.
+  await materializer.materializeDueRecurrences(jul3);
+  check(
+    'PREVIOUS: materializa no dia util anterior (sexta 3)',
+    (await countMaterialized(rec5.id)) === 1,
+  );
+  const tx5 = await prisma.transaction.findFirst({
+    where: { recurringId: rec5.id },
+  });
+  check(
+    'PREVIOUS: transacao datada em 03/07 (noon UTC)',
+    tx5?.date.toISOString() === '2026-07-03T12:00:00.000Z',
+  );
+
+  // --- Cenario 7: ajuste de dia util NEXT (dia 5 domingo → segunda 6) ---
+  console.log('\nCENARIO 7 — Dia util NEXT (dia 5 domingo → segunda 6)');
+  const rec6 = await recurringRepo.create({
+    description: 'Boleto dia util teste',
+    amount: 250,
+    type: 'EXPENSE',
+    dayOfMonth: 5,
+    businessDayAdjustment: 'NEXT',
+    userId: user.id,
+    categoryId: category.id,
+  });
+  recurringIds.push(rec6.id);
+
+  const jul6 = new Date(Date.UTC(2026, 6, 6, 12, 0, 0)); // segunda
+  await materializer.materializeDueRecurrences(jul5);
+  check(
+    'NEXT: NAO materializa no dia 5 (domingo)',
+    (await countMaterialized(rec6.id)) === 0,
+  );
+  await materializer.materializeDueRecurrences(jul6);
+  check(
+    'NEXT: materializa no dia util seguinte (segunda 6)',
+    (await countMaterialized(rec6.id)) === 1,
+  );
+
   console.log(`\n========================================`);
   console.log(`RESULTADO: ${pass} passou, ${fail} falhou`);
   console.log(`========================================\n`);

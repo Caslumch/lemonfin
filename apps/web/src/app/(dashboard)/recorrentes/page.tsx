@@ -236,6 +236,22 @@ function RecorrentesPageInner() {
                   </p>
                   <p className="text-xs text-fg-muted flex items-center gap-1.5">
                     {item.category?.name} · todo dia {item.dayOfMonth}
+                    {item.businessDayAdjustment === "PREVIOUS" && (
+                      <span
+                        className="text-lima"
+                        title="Antecipa para o dia útil anterior"
+                      >
+                        · dia útil ↤
+                      </span>
+                    )}
+                    {item.businessDayAdjustment === "NEXT" && (
+                      <span
+                        className="text-lima"
+                        title="Posterga para o dia útil seguinte"
+                      >
+                        · dia útil ↦
+                      </span>
+                    )}
                     {item.card && (
                       <>
                         {" · "}
