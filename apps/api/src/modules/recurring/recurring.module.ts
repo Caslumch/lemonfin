@@ -6,6 +6,7 @@ import { CreateRecurringUseCase } from './use-cases/create-recurring.use-case';
 import { ListRecurringUseCase } from './use-cases/list-recurring.use-case';
 import { UpdateRecurringUseCase } from './use-cases/update-recurring.use-case';
 import { DeleteRecurringUseCase } from './use-cases/delete-recurring.use-case';
+import { MaterializeRecurringUseCase } from './use-cases/materialize-recurring.use-case';
 import { CategoriesModule } from '../categories/categories.module';
 import { CardsModule } from '../cards/cards.module';
 import { TransactionsModule } from '../transactions/transactions.module';
@@ -28,6 +29,7 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     ListRecurringUseCase,
     UpdateRecurringUseCase,
     DeleteRecurringUseCase,
+    MaterializeRecurringUseCase,
   ],
   exports: [RecurringRepository],
 })

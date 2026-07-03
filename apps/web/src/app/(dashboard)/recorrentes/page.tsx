@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Repeat, Pencil, Trash2, CreditCard } from "lucide-react";
+import { Repeat, Pencil, Trash2, CreditCard, Zap } from "lucide-react";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,13 @@ import { useApi } from "@/hooks/use-api";
 import { useMemberFilter } from "@/hooks/use-member-filter";
 import { useRecurring } from "@/hooks/use-resource-queries";
 import { useCategories, useCards } from "@/hooks/use-transactions-data";
-import { invalidateRecurring, queryKeys } from "@/lib/query-keys";
+import {
+  invalidateRecurring,
+  invalidateTransactionData,
+  queryKeys,
+} from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
+import { ApiError } from "@/lib/api";
 import type { Recurring, RecurringListResponse } from "@/types/recurring";
 
 function formatBRL(value: number) {
@@ -73,6 +78,29 @@ function RecorrentesPageInner() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [deleting, setDeleting] = useState<Recurring | null>(null);
+  // Id da recorrente sendo lançada agora (evita duplo clique enquanto envia).
+  const [materializingId, setMaterializingId] = useState<string | null>(null);
+
+  // "Lançar agora": materializa a recorrente como transação de hoje, sem esperar
+  // o cron. 409 = já lançada este mês (idempotência) → aviso informativo.
+  async function handleMaterialize(item: Recurring) {
+    if (materializingId) return;
+    setMaterializingId(item.id);
+    try {
+      await fetchApi(`/recurring/${item.id}/materialize`, { method: "POST" });
+      toast.success("Lançado em Transações");
+      invalidateTransactionData(queryClient);
+      invalidateRecurring(queryClient);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        toast(err.message || "Essa recorrente já foi lançada este mês");
+      } else {
+        toast.error("Erro ao lançar recorrência");
+      }
+    } finally {
+      setMaterializingId(null);
+    }
+  }
 
   async function handleCreate(data: RecurringFormData) {
     try {
@@ -286,6 +314,17 @@ function RecorrentesPageInner() {
                 </button>
 
                 <div className="flex gap-1 shrink-0">
+                  {/* Lançar agora — só faz sentido para recorrentes ativas. */}
+                  {item.active && (
+                    <button
+                      onClick={() => handleMaterialize(item)}
+                      disabled={materializingId === item.id}
+                      title="Lançar agora em Transações"
+                      className="p-1.5 rounded text-fg-muted hover:text-lima hover:bg-subtle transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Zap size={14} />
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setEditing(item);

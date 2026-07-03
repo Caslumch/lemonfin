@@ -28,9 +28,6 @@ export class RecurringMaterializerService {
     const month = now.getUTCMonth();
     const today = now.getUTCDate();
 
-    const monthStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-    const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-
     // O dia efetivo de cada recorrência é DERIVADO: o dayOfMonth é clampado ao
     // fim do mês e, conforme o ajuste de dia útil (EXACT/PREVIOUS/NEXT), pode ser
     // deslocado para o dia útil vizinho. Por isso não dá para filtrar por
@@ -40,7 +37,8 @@ export class RecurringMaterializerService {
     let created = 0;
     for (const recurring of recurrences) {
       try {
-        const adjustment = recurring.businessDayAdjustment as BusinessDayAdjustment;
+        const adjustment =
+          recurring.businessDayAdjustment as BusinessDayAdjustment;
         const dueDay = resolveRecurringDay(
           year,
           month,
@@ -51,14 +49,7 @@ export class RecurringMaterializerService {
         // Só materializa no dia efetivo (após clamp + ajuste de dia útil).
         if (dueDay !== today) continue;
 
-        // Idempotency: skip if already materialized this month.
-        const already = await this.recurringRepository.hasMaterializedBetween(
-          recurring.id,
-          monthStart,
-          monthEnd,
-        );
-        if (already) continue;
-
+        // Data derivada do dia efetivo (noon-UTC). O clique manual usa hoje.
         const date = resolveRecurringDate(
           year,
           month,
@@ -66,18 +57,8 @@ export class RecurringMaterializerService {
           adjustment,
         );
 
-        await this.transactionsRepository.create({
-          amount: recurring.amount.toNumber(),
-          type: recurring.type,
-          description: recurring.description,
-          date: date.toISOString(),
-          source: 'RECURRING',
-          userId: recurring.userId,
-          categoryId: recurring.categoryId,
-          cardId: recurring.cardId ?? undefined,
-          recurringId: recurring.id,
-        });
-        created++;
+        const result = await this.materializeOne(recurring, date);
+        if (result.created) created++;
       } catch (error) {
         this.logger.error(
           `Failed to materialize recurring ${recurring.id}: ${error}`,
@@ -88,5 +69,50 @@ export class RecurringMaterializerService {
     if (created > 0) {
       this.logger.log(`Materialized ${created} recurring transaction(s)`);
     }
+  }
+
+  /**
+   * Materializa UMA recorrência como transação, com a data dada (ISO ou Date).
+   * Idempotente por mês civil (UTC): se já existe transação desta recorrência no
+   * mês da data, NÃO cria de novo e retorna { created: false }. Usado tanto pelo
+   * cron (data = dia efetivo derivado) quanto pelo "Lançar agora" (data = hoje).
+   */
+  async materializeOne(
+    recurring: {
+      id: string;
+      amount: { toNumber(): number };
+      type: 'INCOME' | 'EXPENSE';
+      description: string;
+      userId: string;
+      categoryId: string;
+      cardId: string | null;
+    },
+    date: Date,
+  ): Promise<{ created: boolean }> {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const monthStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+
+    // Idempotência: pula se já materializou no mês da data.
+    const already = await this.recurringRepository.hasMaterializedBetween(
+      recurring.id,
+      monthStart,
+      monthEnd,
+    );
+    if (already) return { created: false };
+
+    await this.transactionsRepository.create({
+      amount: recurring.amount.toNumber(),
+      type: recurring.type,
+      description: recurring.description,
+      date: date.toISOString(),
+      source: 'RECURRING',
+      userId: recurring.userId,
+      categoryId: recurring.categoryId,
+      cardId: recurring.cardId ?? undefined,
+      recurringId: recurring.id,
+    });
+    return { created: true };
   }
 }

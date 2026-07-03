@@ -17,6 +17,7 @@ import { CreateRecurringUseCase } from '../use-cases/create-recurring.use-case';
 import { ListRecurringUseCase } from '../use-cases/list-recurring.use-case';
 import { UpdateRecurringUseCase } from '../use-cases/update-recurring.use-case';
 import { DeleteRecurringUseCase } from '../use-cases/delete-recurring.use-case';
+import { MaterializeRecurringUseCase } from '../use-cases/materialize-recurring.use-case';
 import {
   createRecurringSchema,
   updateRecurringSchema,
@@ -36,6 +37,7 @@ export class RecurringController {
     private readonly listRecurring: ListRecurringUseCase,
     private readonly updateRecurring: UpdateRecurringUseCase,
     private readonly deleteRecurring: DeleteRecurringUseCase,
+    private readonly materializeRecurring: MaterializeRecurringUseCase,
   ) {}
 
   @Post()
@@ -69,5 +71,12 @@ export class RecurringController {
   @Delete(':id')
   remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.deleteRecurring.execute(id, user.id);
+  }
+
+  // "Lançar agora": materializa a recorrência como transação de hoje, sem
+  // esperar o cron diário. 409 se já foi lançada este mês (idempotência).
+  @Post(':id/materialize')
+  materialize(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.materializeRecurring.execute(id, user.id);
   }
 }
