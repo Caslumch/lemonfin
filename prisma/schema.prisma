@@ -12,59 +12,59 @@ datasource db {
 }
 
 model User {
-  id                String                 @id @default(cuid())
-  email             String                 @unique
-  name              String
-  passwordHash      String                 @map("password_hash")
-  phone             String?                @unique
-  avatarUrl         String?                @map("avatar_url")
-  onboardedAt       DateTime?              @map("onboarded_at")
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  name                 String
+  passwordHash         String                 @map("password_hash")
+  phone                String?                @unique
+  avatarUrl            String?                @map("avatar_url")
+  onboardedAt          DateTime?              @map("onboarded_at")
   // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
   // o app só exibe um banner pedindo confirmação enquanto for null.
-  emailVerifiedAt   DateTime?              @map("email_verified_at")
+  emailVerifiedAt      DateTime?              @map("email_verified_at")
   // Fim do período de teste grátis (7 dias). Setado no sign-up; explícito (não
   // derivado de createdAt) para permitir estender. Hoje o pós-trial é SOFT: ao
   // expirar, só exibe aviso, não bloqueia. O Stripe endurece isso depois.
-  trialEndsAt       DateTime?              @map("trial_ends_at")
-  twoFactorEnabled  Boolean                @default(false) @map("two_factor_enabled")
-  twoFactorSecret   String?                @map("two_factor_secret") // criptografado
-  backupCodes       String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  trialEndsAt          DateTime?              @map("trial_ends_at")
+  twoFactorEnabled     Boolean                @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String?                @map("two_factor_secret") // criptografado
+  backupCodes          String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
   // Super-admin da PLATAFORMA (dono), não o papel ADMIN de família. Setado
   // manualmente no banco; protege os endpoints /admin/*. Default false.
-  isSuperAdmin      Boolean                @default(false) @map("is_super_admin")
+  isSuperAdmin         Boolean                @default(false) @map("is_super_admin")
   // Última atividade do usuário (qualquer request autenticado). Atualizado com
   // throttle (no máx 1x a cada 15min) pelo LoggingInterceptor — não é login,
   // é "visto por último". Usado no painel admin p/ ativo vs. abandonado.
-  lastSeenAt        DateTime?              @map("last_seen_at")
+  lastSeenAt           DateTime?              @map("last_seen_at")
   // Assinatura (Stripe). Default TRIALING cobre quem cadastrou antes do billing —
   // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
   // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
   // A fonte da verdade do status é o webhook do Stripe, não a resposta do checkout.
-  stripeCustomerId     String?             @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?             @unique @map("stripe_subscription_id")
-  subscriptionStatus   SubscriptionStatus  @default(TRIALING) @map("subscription_status")
-  currentPeriodEnd     DateTime?           @map("current_period_end") // fim do ciclo pago
-  createdAt         DateTime               @default(now()) @map("created_at")
-  updatedAt         DateTime               @updatedAt @map("updated_at")
-  transactions      Transaction[]
-  cards             Card[]
-  goals             Goal[]
-  reserves          Reserve[]
-  recurring         RecurringTransaction[]
-  invoicePayments   InvoicePayment[]
-  budgets           Budget[]
-  ownedFamilies     Family[]               @relation("FamilyOwner")
-  familyMembers     FamilyMember[]
-  verificationCodes VerificationCode[]
-  categories        Category[]
-  aiUsage           AiUsage[]
+  stripeCustomerId     String?                @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?                @unique @map("stripe_subscription_id")
+  subscriptionStatus   SubscriptionStatus     @default(TRIALING) @map("subscription_status")
+  currentPeriodEnd     DateTime?              @map("current_period_end") // fim do ciclo pago
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  transactions         Transaction[]
+  cards                Card[]
+  goals                Goal[]
+  reserves             Reserve[]
+  recurring            RecurringTransaction[]
+  invoicePayments      InvoicePayment[]
+  budgets              Budget[]
+  ownedFamilies        Family[]               @relation("FamilyOwner")
+  familyMembers        FamilyMember[]
+  verificationCodes    VerificationCode[]
+  categories           Category[]
+  aiUsage              AiUsage[]
 
   @@map("users")
 }
 
 enum SubscriptionStatus {
   TRIALING // dentro do trial (ou conta antiga, ainda sem assinatura)
-  ACTIVE   // assinatura paga em dia
+  ACTIVE // assinatura paga em dia
   PAST_DUE // pagamento falhou, em retry pelo Stripe
   CANCELED // cancelada / expirada
 }
@@ -125,29 +125,29 @@ model Category {
 }
 
 model Transaction {
-  id          String            @id @default(cuid())
-  amount      Decimal           @db.Decimal(12, 2)
-  type        TransactionType
-  description String?
-  date        DateTime          @default(now())
-  source      TransactionSource @default(MANUAL)
-  userId      String            @map("user_id")
-  categoryId  String            @map("category_id")
-  cardId      String?           @map("card_id")
-  recurringId String?           @map("recurring_id")
+  id                 String            @id @default(cuid())
+  amount             Decimal           @db.Decimal(12, 2)
+  type               TransactionType
+  description        String?
+  date               DateTime          @default(now())
+  source             TransactionSource @default(MANUAL)
+  userId             String            @map("user_id")
+  categoryId         String            @map("category_id")
+  cardId             String?           @map("card_id")
+  recurringId        String?           @map("recurring_id")
   // Parcelamento: todas as parcelas de uma mesma compra compartilham o
   // installmentGroupId, permitindo excluir o grupo inteiro de uma vez.
   // Nulo em transações avulsas (e em parcelas criadas antes desta migration).
-  installmentGroupId String?    @map("installment_group_id")
-  installmentNumber  Int?       @map("installment_number")
-  installmentTotal   Int?       @map("installment_total")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  installmentGroupId String?           @map("installment_group_id")
+  installmentNumber  Int?              @map("installment_number")
+  installmentTotal   Int?              @map("installment_total")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category  Category              @relation(fields: [categoryId], references: [id])
-  card      Card?                 @relation(fields: [cardId], references: [id], onDelete: SetNull)
-  recurring RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       Category              @relation(fields: [categoryId], references: [id])
+  card           Card?                 @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  recurring      RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
   invoicePayment InvoicePayment?
 
   @@index([userId, date])
@@ -163,18 +163,29 @@ model Transaction {
   @@map("transactions")
 }
 
+// Como ajustar a data quando o dia da recorrência cai em fim de semana ou
+// feriado nacional. EXACT = lança no dia cru (comportamento original);
+// PREVIOUS = antecipa para o dia útil anterior (típico de salário);
+// NEXT = posterga para o dia útil seguinte (típico de alguns boletos).
+enum BusinessDayAdjustment {
+  EXACT
+  PREVIOUS
+  NEXT
+}
+
 model RecurringTransaction {
-  id          String          @id @default(cuid())
-  description String
-  amount      Decimal         @db.Decimal(12, 2)
-  type        TransactionType
-  dayOfMonth  Int             @map("day_of_month")
-  active      Boolean         @default(true)
-  userId      String          @map("user_id")
-  categoryId  String          @map("category_id")
-  cardId      String?         @map("card_id")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id                    String                @id @default(cuid())
+  description           String
+  amount                Decimal               @db.Decimal(12, 2)
+  type                  TransactionType
+  dayOfMonth            Int                   @map("day_of_month")
+  businessDayAdjustment BusinessDayAdjustment @default(EXACT) @map("business_day_adjustment")
+  active                Boolean               @default(true)
+  userId                String                @map("user_id")
+  categoryId            String                @map("category_id")
+  cardId                String?               @map("card_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   category     Category      @relation(fields: [categoryId], references: [id])

@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { RecurringRepository } from '../repositories/recurring.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
+import {
+  resolveRecurringDate,
+  resolveRecurringDay,
+  type BusinessDayAdjustment,
+} from '../../../common/utils/business-day';
 
 @Injectable()
 export class RecurringMaterializerService {
@@ -22,52 +27,61 @@ export class RecurringMaterializerService {
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth();
     const today = now.getUTCDate();
-    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-
-    // A recurrence is due today when its dayOfMonth === today, OR when its
-    // dayOfMonth falls beyond this month's length and today is the last day
-    // (e.g. dayOfMonth=31 in February materializes on the 28th/29th).
-    const dueDays = [today];
-    if (today === lastDayOfMonth) {
-      for (let d = lastDayOfMonth + 1; d <= 31; d++) dueDays.push(d);
-    }
 
     const monthStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
     const monthEnd = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 
+    // O dia efetivo de cada recorrência é DERIVADO: o dayOfMonth é clampado ao
+    // fim do mês e, conforme o ajuste de dia útil (EXACT/PREVIOUS/NEXT), pode ser
+    // deslocado para o dia útil vizinho. Por isso não dá para filtrar por
+    // dayOfMonth no banco — trazemos todas as ativas e calculamos o alvo do mês.
+    const recurrences = await this.recurringRepository.findAllActive();
+
     let created = 0;
-    for (const day of dueDays) {
-      const recurrences = await this.recurringRepository.findActiveForDay(day);
+    for (const recurring of recurrences) {
+      try {
+        const adjustment = recurring.businessDayAdjustment as BusinessDayAdjustment;
+        const dueDay = resolveRecurringDay(
+          year,
+          month,
+          recurring.dayOfMonth,
+          adjustment,
+        );
 
-      for (const recurring of recurrences) {
-        try {
-          // Idempotency: skip if already materialized this month.
-          const already = await this.recurringRepository.hasMaterializedBetween(
-            recurring.id,
-            monthStart,
-            monthEnd,
-          );
-          if (already) continue;
+        // Só materializa no dia efetivo (após clamp + ajuste de dia útil).
+        if (dueDay !== today) continue;
 
-          const date = new Date(Date.UTC(year, month, today, 12, 0, 0, 0));
+        // Idempotency: skip if already materialized this month.
+        const already = await this.recurringRepository.hasMaterializedBetween(
+          recurring.id,
+          monthStart,
+          monthEnd,
+        );
+        if (already) continue;
 
-          await this.transactionsRepository.create({
-            amount: recurring.amount.toNumber(),
-            type: recurring.type,
-            description: recurring.description,
-            date: date.toISOString(),
-            source: 'RECURRING',
-            userId: recurring.userId,
-            categoryId: recurring.categoryId,
-            cardId: recurring.cardId ?? undefined,
-            recurringId: recurring.id,
-          });
-          created++;
-        } catch (error) {
-          this.logger.error(
-            `Failed to materialize recurring ${recurring.id}: ${error}`,
-          );
-        }
+        const date = resolveRecurringDate(
+          year,
+          month,
+          recurring.dayOfMonth,
+          adjustment,
+        );
+
+        await this.transactionsRepository.create({
+          amount: recurring.amount.toNumber(),
+          type: recurring.type,
+          description: recurring.description,
+          date: date.toISOString(),
+          source: 'RECURRING',
+          userId: recurring.userId,
+          categoryId: recurring.categoryId,
+          cardId: recurring.cardId ?? undefined,
+          recurringId: recurring.id,
+        });
+        created++;
+      } catch (error) {
+        this.logger.error(
+          `Failed to materialize recurring ${recurring.id}: ${error}`,
+        );
       }
     }
 

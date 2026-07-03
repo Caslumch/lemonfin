@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BusinessDayAdjustment, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const recurringInclude = {
@@ -16,6 +16,7 @@ export class RecurringRepository {
     amount: number;
     type: 'INCOME' | 'EXPENSE';
     dayOfMonth: number;
+    businessDayAdjustment?: BusinessDayAdjustment;
     userId: string;
     categoryId: string;
     cardId?: string;
@@ -26,6 +27,7 @@ export class RecurringRepository {
         amount: new Prisma.Decimal(data.amount),
         type: data.type,
         dayOfMonth: data.dayOfMonth,
+        businessDayAdjustment: data.businessDayAdjustment,
         userId: data.userId,
         categoryId: data.categoryId,
         cardId: data.cardId,
@@ -122,11 +124,14 @@ export class RecurringRepository {
     };
   }
 
-  // All active recurrences that should be materialized on the given day-of-month.
-  // Used by the materialization cron.
-  async findActiveForDay(dayOfMonth: number) {
+  // Todas as recorrências ATIVAS (de qualquer usuário). Usado pelo cron de
+  // materialização, que precisa avaliar o ajuste de dia útil de cada uma para o
+  // mês corrente — não dá para filtrar por dayOfMonth no banco porque o dia
+  // efetivo é derivado (PREVIOUS/NEXT deslocam o dia). O volume é baixo (contas
+  // fixas por família), então trazer todas e filtrar em memória é adequado.
+  async findAllActive() {
     return this.prisma.recurringTransaction.findMany({
-      where: { active: true, dayOfMonth },
+      where: { active: true },
       include: recurringInclude,
     });
   }
@@ -138,6 +143,7 @@ export class RecurringRepository {
       amount?: number;
       type?: 'INCOME' | 'EXPENSE';
       dayOfMonth?: number;
+      businessDayAdjustment?: BusinessDayAdjustment;
       categoryId?: string;
       cardId?: string | null;
       active?: boolean;
@@ -150,6 +156,8 @@ export class RecurringRepository {
       updateData.amount = new Prisma.Decimal(data.amount);
     if (data.type !== undefined) updateData.type = data.type;
     if (data.dayOfMonth !== undefined) updateData.dayOfMonth = data.dayOfMonth;
+    if (data.businessDayAdjustment !== undefined)
+      updateData.businessDayAdjustment = data.businessDayAdjustment;
     if (data.active !== undefined) updateData.active = data.active;
     if (data.categoryId !== undefined)
       updateData.category = { connect: { id: data.categoryId } };
