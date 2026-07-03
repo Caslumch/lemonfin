@@ -6,6 +6,17 @@ interface FetchOptions extends RequestInit {
   token?: string;
 }
 
+// Erro de request com o status HTTP anexado — permite ao chamador distinguir
+// casos como 409 (conflito) de falhas genéricas sem depender do texto.
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function api<T = unknown>(
   path: string,
   { token, headers, ...options }: FetchOptions = {},
@@ -45,7 +56,7 @@ export async function api<T = unknown>(
         window.location.assign("/assinar");
       }
     }
-    throw new Error(body.message || `Erro ${res.status}`);
+    throw new ApiError(res.status, body.message || `Erro ${res.status}`);
   }
 
   if (res.status === 204) return undefined as T;

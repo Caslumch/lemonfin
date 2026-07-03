@@ -234,6 +234,43 @@ async function main() {
     (await countMaterialized(rec6.id)) === 1,
   );
 
+  // --- Cenario 8: "Lançar agora" (materializeOne) + idempotencia ---
+  console.log('\nCENARIO 8 — Lançar agora (materializeOne)');
+  const rec7 = await recurringRepo.create({
+    description: 'Lancar agora teste',
+    amount: 120,
+    type: 'EXPENSE',
+    dayOfMonth: 20,
+    userId: user.id,
+    categoryId: category.id,
+  });
+  recurringIds.push(rec7.id);
+
+  // Lança manualmente com data fixa (agosto/2026 p/ nao colidir com os outros).
+  const aug10 = new Date(Date.UTC(2026, 7, 10, 12, 0, 0)); // mes 7 = agosto
+  const r1 = await materializer.materializeOne(rec7, aug10);
+  check('materializeOne criou a transacao (created=true)', r1.created === true);
+  check(
+    'transacao existe apos lançar agora',
+    (await countMaterialized(rec7.id)) === 1,
+  );
+  const txNow = await prisma.transaction.findFirst({
+    where: { recurringId: rec7.id },
+  });
+  check(
+    'datada no dia do lançamento (10/08 noon UTC)',
+    txNow?.date.toISOString() === '2026-08-10T12:00:00.000Z',
+  );
+
+  // Segunda chamada no mesmo mes NAO duplica (created=false).
+  const aug15 = new Date(Date.UTC(2026, 7, 15, 12, 0, 0));
+  const r2 = await materializer.materializeOne(rec7, aug15);
+  check('2a chamada no mesmo mes: created=false', r2.created === false);
+  check(
+    'nao duplicou (ainda 1 transacao)',
+    (await countMaterialized(rec7.id)) === 1,
+  );
+
   console.log(`\n========================================`);
   console.log(`RESULTADO: ${pass} passou, ${fail} falhou`);
   console.log(`========================================\n`);
