@@ -605,6 +605,11 @@ export class TransactionsRepository {
         type: 'EXPENSE',
         cardId: null,
         recurringId: null,
+        // Pagamento de fatura NÃO é gasto variável: é a quitação de compras já
+        // feitas (no cartão, em meses anteriores). É um evento único e pesado —
+        // se entrasse na base, a previsão o projetaria como taxa diária e
+        // explodiria (ex.: fatura de R$ 7 mil no dia 3 vira ~R$ 65 mil estimados).
+        category: { slug: { not: 'pagamento-fatura' } },
         date: { gte: start, lt: end },
       },
       _sum: { amount: true },
