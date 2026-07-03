@@ -617,6 +617,43 @@ export class TransactionsRepository {
     return agg._sum.amount?.toNumber() ?? 0;
   }
 
+  // Receita e despesa (fora-cartão) JÁ MATERIALIZADAS numa janela — usado pela
+  // previsão para contar como "a receber/a pagar" o que já virou transação mas
+  // está datado no FUTURO do mês (ex.: salário dia 5 lançado quando hoje é dia 3).
+  // Sem isso, essas transações somem do cálculo: caem fora do "saldo hoje" (data
+  // futura) e o loop de recorrências as pula (já materializadas). Mesma régua do
+  // getSummary (income; expense fora-cartão), exclui pagamento-fatura por
+  // coerência com o saldo.
+  async getMaterializedTotals(
+    userIds: string[],
+    start: Date,
+    end: Date,
+  ): Promise<{ income: number; expense: number }> {
+    const [income, expenseNoCard] = await this.prisma.$transaction([
+      this.prisma.transaction.aggregate({
+        where: {
+          userId: { in: userIds },
+          type: 'INCOME',
+          date: { gte: start, lte: end },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          userId: { in: userIds },
+          type: 'EXPENSE',
+          cardId: null,
+          date: { gte: start, lte: end },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+    return {
+      income: income._sum.amount?.toNumber() ?? 0,
+      expense: expenseNoCard._sum.amount?.toNumber() ?? 0,
+    };
+  }
+
   async getSummary(userIds: string[], startDate?: string, endDate?: string) {
     const where: Prisma.TransactionWhereInput = { userId: { in: userIds } };
     const dateRange = dateRangeFilter(startDate, endDate);

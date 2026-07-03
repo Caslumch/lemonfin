@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { TransactionsRepository } from '../repositories/transactions.repository';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
+import {
+  resolveRecurringDay,
+  type BusinessDayAdjustment,
+} from '../../../common/utils/business-day';
 
 export interface PendingRecurrence {
   id: string;
@@ -62,9 +66,15 @@ export class GetForecastUseCase {
     let pendingExpense = 0;
 
     for (const rec of recurrences) {
-      // Dia efetivo neste mês: recorrências com dayOfMonth além do último dia
-      // do mês caem no último dia (mesma regra do materializador).
-      const effectiveDay = Math.min(rec.dayOfMonth, lastDayOfMonth);
+      // Dia efetivo neste mês: clamp ao fim do mês + ajuste de dia útil
+      // (EXACT/PREVIOUS/NEXT), a MESMA régua do materializador. Antes usava o dia
+      // cru, o que dessincronizava a previsão do que o cron de fato lança.
+      const effectiveDay = resolveRecurringDay(
+        year,
+        month,
+        rec.dayOfMonth,
+        rec.businessDayAdjustment as BusinessDayAdjustment,
+      );
 
       // Só conta o que ainda vai cair (hoje inclusive não conta — já passou o
       // momento da materialização das 6h; consideramos pendente a partir de amanhã).
@@ -144,6 +154,27 @@ export class GetForecastUseCase {
     const estimatedVariableExpense = round2(
       avgDailyVariableExpense * daysRemaining,
     );
+
+    // Transações JÁ materializadas mas datadas no FUTURO do mês (ex.: salário do
+    // dia 5 lançado quando hoje é dia 3, ou uma compra avulsa pós-datada). Elas
+    // não entram no "saldo hoje" (summary vai só até now) nem no loop de
+    // recorrências (que pula as já materializadas) — sem isto, some do cálculo.
+    // Janela: início de amanhã → fim do mês. Não há dupla contagem com o loop de
+    // recorrências: aquele conta as NÃO materializadas; esta, as JÁ
+    // materializadas — conjuntos disjuntos. Somamos ao "a receber/a pagar" para
+    // aparecer no breakdown da UI, não só no total.
+    const tomorrow = new Date(year, month, today + 1, 0, 0, 0, 0);
+    const materializedFuture =
+      today < lastDayOfMonth
+        ? await this.transactionsRepository.getMaterializedTotals(
+            userIds,
+            tomorrow,
+            monthEnd,
+          )
+        : { income: 0, expense: 0 };
+
+    pendingIncome = round2(pendingIncome + materializedFuture.income);
+    pendingExpense = round2(pendingExpense + materializedFuture.expense);
 
     const projectedBalance = round2(
       summary.balance +
