@@ -10,8 +10,9 @@ interface CardStackProps {
 
 /**
  * Pilha de cartões: o selecionado fica reto na frente; logo atrás espia UMA
- * lombada — o PRÓXIMO cartão da fila, pintado na cor real da bandeira dele
- * (dica de quem vem a seguir). Clicar na lombada avança a seleção de forma
+ * lombada — o PRÓXIMO cartão da fila, pintado na cor real dele (escolhida ou
+ * derivada da bandeira; dica de quem vem a seguir). Clicar na lombada avança a
+ * seleção de forma
  * cíclica (último → primeiro), trazendo o próximo pra frente e revelando o
  * seguinte atrás. Os dots embaixo também selecionam direto.
  */
@@ -28,7 +29,7 @@ export function CardStack({ cards }: CardStackProps) {
   // O "próximo" da fila, cíclico — é ele que aparece como lombada atrás.
   const nextIndex = (current + 1) % cards.length;
   const next = cards[nextIndex];
-  const nextTheme = themeFor(next.brand);
+  const nextTheme = themeFor(next);
 
   return (
     <div>

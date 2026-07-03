@@ -197,15 +197,18 @@ model RecurringTransaction {
 }
 
 model Card {
-  id         String   @id @default(cuid())
-  name       String
-  brand      String?
-  limit      Decimal? @db.Decimal(12, 2)
-  closingDay Int      @map("closing_day")
-  dueDay     Int?     @map("due_day")
-  userId     String   @map("user_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  name        String
+  brand       String?
+  limit       Decimal? @db.Decimal(12, 2)
+  closingDay  Int      @map("closing_day")
+  dueDay      Int?     @map("due_day")
+  // Cor escolhida pelo usuário (chave de preset, ex.: "azul"). Nulo = sem
+  // escolha → o visual do cartão cai no tema derivado da bandeira (brand).
+  colorPreset String?  @map("color_preset")
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions    Transaction[]

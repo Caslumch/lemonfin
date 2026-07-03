@@ -43,6 +43,7 @@ export default function CartoesPage() {
     limit?: number;
     closingDay: number;
     dueDay?: number;
+    colorPreset?: string | null;
   }) {
     try {
       await fetchApi("/cards", {
@@ -63,6 +64,7 @@ export default function CartoesPage() {
     limit?: number;
     closingDay: number;
     dueDay?: number;
+    colorPreset?: string | null;
   }) {
     if (!editingCard) return;
     try {
