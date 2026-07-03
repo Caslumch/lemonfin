@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { DayPicker } from "react-day-picker";
-import "react-day-picker/style.css";
+// Os estilos-base do react-day-picker são importados globalmente em
+// app/globals.css (ver comentário lá) — não aqui, para o cabeçalho de
+// navegação não colapsar no Next 16.
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
