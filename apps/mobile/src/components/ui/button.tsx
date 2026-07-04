@@ -1,4 +1,5 @@
-import { ActivityIndicator, Platform, Pressable, Text, type ViewStyle } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Pressable, Text, type ViewStyle } from "react-native";
 import { accent, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import { haptic } from "@/lib/haptics";
@@ -14,8 +15,9 @@ interface ButtonProps {
   fullWidth?: boolean;
 }
 
-// Botão do DS. Altura 52, raio lg, largura total por padrão. Estado desabilitado
-// vira cinza SÓLIDO (continua parecendo botão); ativo sólido ganha sombra.
+// Botão do DS. IMPORTANTE: o `style` do Pressable é ESTÁTICO (array), não uma
+// função — o NativeWind/css-interop ignora o style-como-função no Pressable, o
+// que fazia o botão renderizar só o texto (sem caixa/cor).
 export function Button({
   label,
   onPress,
@@ -25,31 +27,22 @@ export function Button({
   fullWidth = true,
 }: ButtonProps) {
   const { palette, isDark } = useTheme();
+  const [pressed, setPressed] = useState(false);
   const inactive = disabled || loading;
   const isOutline = variant === "outline";
 
-  const base: Record<Variant, { bg: string; fg: string; border?: string }> = {
+  const base: Record<Variant, { bg: string; fg: string }> = {
     primary: { bg: accent.primary, fg: "#0D0D0D" },
     secondary: { bg: palette.text, fg: palette.bg },
-    outline: { bg: "transparent", fg: palette.text, border: palette.border },
+    outline: { bg: "transparent", fg: palette.text },
     danger: { bg: accent.danger, fg: "#FFFFFF" },
   };
   const s = base[variant];
 
-  // Desabilitado: cinza sólido que CONTRASTA com o fundo do sheet (o `muted`
-  // ficava quase igual à página e o botão "sumia"). Outline mantém a moldura.
   const disabledBg = isDark ? "#3A3A40" : "#D4D4D8";
   const disabledFg = isDark ? "#8A8A90" : "#8E8E8E";
   const bg = inactive && !isOutline ? disabledBg : s.bg;
   const fg = inactive ? disabledFg : s.fg;
-  const borderColor = isOutline ? palette.border : undefined;
-
-  const solidShadow: ViewStyle =
-    !isOutline && !inactive
-      ? Platform.OS === "ios"
-        ? { shadowColor: s.bg, shadowOpacity: isDark ? 0.35 : 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }
-        : { elevation: 3 }
-      : {};
 
   const boxStyle: ViewStyle = {
     height: 52,
@@ -59,9 +52,19 @@ export function Button({
     paddingHorizontal: 20,
     backgroundColor: bg,
     borderWidth: isOutline ? 1.5 : 0,
-    borderColor,
+    borderColor: isOutline ? palette.border : undefined,
     alignSelf: fullWidth ? "stretch" : "flex-start",
-    ...solidShadow,
+    opacity: pressed && !inactive ? 0.85 : 1,
+    // Sombra (iOS shadow* / Android elevation) só no botão sólido ativo.
+    ...(!isOutline && !inactive
+      ? {
+          shadowColor: bg,
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 3,
+        }
+      : {}),
   };
 
   return (
@@ -70,8 +73,10 @@ export function Button({
         haptic.light();
         onPress();
       }}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
       disabled={inactive}
-      style={({ pressed }) => [boxStyle, pressed && !inactive && { opacity: 0.88 }]}
+      style={boxStyle}
     >
       {loading ? (
         <ActivityIndicator color={fg} />
