@@ -144,6 +144,17 @@ function TransacoesPageInner() {
     invalidateTransactionData(queryClient);
   }
 
+  // Filtros ativos (fora o mês, que está sempre setado): usado para diferenciar
+  // "nenhuma transação neste mês" de "sua busca não encontrou nada".
+  const hasActiveFilters = type !== "ALL" || categoryId !== "" || search !== "";
+
+  function clearFilters() {
+    setType("ALL");
+    setCategoryId("");
+    setSearch("");
+    setPage(1);
+  }
+
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -274,6 +285,9 @@ function TransacoesPageInner() {
           <TransactionList
             transactions={transactions}
             loading={loading}
+            search={search}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={clearFilters}
             onEdit={(tx) => {
               setEditingTx(tx);
               setModalOpen(true);

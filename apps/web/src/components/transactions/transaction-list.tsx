@@ -68,6 +68,11 @@ const validSlugs = new Set<string>([
 interface TransactionListProps {
   transactions: Transaction[];
   loading?: boolean;
+  // Contexto do empty-state: termo buscado e se há filtros ativos, para
+  // diferenciar "mês vazio" de "busca/filtro sem resultado" e oferecer limpar.
+  search?: string;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
 }
@@ -75,6 +80,9 @@ interface TransactionListProps {
 export function TransactionList({
   transactions,
   loading,
+  search,
+  hasActiveFilters,
+  onClearFilters,
   onEdit,
   onDelete,
 }: TransactionListProps) {
@@ -99,11 +107,34 @@ export function TransactionList({
   }
 
   if (transactions.length === 0) {
+    // Diferencia "busca/filtro sem resultado" (com ação de limpar) de um mês que
+    // simplesmente não teve lançamentos.
     return (
       <div className="rounded-[20px] border border-border bg-surface p-12 text-center">
-        <p className="text-fg-muted text-sm">
-          Nenhuma transação encontrada.
-        </p>
+        {hasActiveFilters ? (
+          <>
+            <p className="text-fg text-sm font-medium">
+              {search
+                ? `Nada encontrado para "${search}".`
+                : "Nenhuma transação com esses filtros."}
+            </p>
+            <p className="text-fg-muted text-xs mt-1">
+              Tente outro termo ou ajuste os filtros deste mês.
+            </p>
+            {onClearFilters && (
+              <button
+                onClick={onClearFilters}
+                className="mt-3 text-xs font-semibold text-uva hover:text-uva-hover transition-colors cursor-pointer"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="text-fg-muted text-sm">
+            Nenhuma transação neste mês.
+          </p>
+        )}
       </div>
     );
   }
