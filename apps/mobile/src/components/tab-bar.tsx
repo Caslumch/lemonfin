@@ -1,96 +1,107 @@
-import { Fragment } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { accent, fonts } from "@/theme/tokens";
-import { useTheme } from "@/theme/use-theme";
+import { accent } from "@/theme/tokens";
 
-// Tab bar customizada — Opção B do DS: 4 abas + FAB central (nova transação).
-// Recebe o mínimo de BottomTabBarProps que usamos.
+// Tab bar flutuante estilo Nubank: pill escura flutuando sobre o conteúdo, item
+// ativo num círculo uva, ícones sem label + FAB lima central (nova transação).
 interface Props {
   state: { index: number; routes: { key: string; name: string }[] };
   navigation: { navigate: (name: string) => void };
 }
 
-const META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  index: { label: "Início", icon: "home" },
-  extrato: { label: "Extrato", icon: "receipt" },
-  cartoes: { label: "Cartões", icon: "card" },
-  perfil: { label: "Perfil", icon: "person" },
+const ORDER = ["index", "extrato", "cartoes", "perfil"] as const;
+const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  index: "home",
+  extrato: "receipt",
+  cartoes: "card",
+  perfil: "person",
 };
+const PILL = "#1C1C1E";
 
 export function TabBar({ state, navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { palette } = useTheme();
+  const activeName = state.routes[state.index]?.name;
 
-  const tab = (routeName: string, active: boolean) => {
-    const m = META[routeName];
-    if (!m) return null;
-    const color = active ? palette.text : palette.textTertiary;
+  const tab = (name: string) => {
+    const active = name === activeName;
+    const icon = ICONS[name];
     return (
       <Pressable
-        key={routeName}
-        onPress={() => navigation.navigate(routeName)}
-        style={{ flex: 1, alignItems: "center", gap: 4, paddingVertical: 4 }}
+        key={name}
+        onPress={() => navigation.navigate(name)}
+        style={{ width: 52, height: 48, alignItems: "center", justifyContent: "center" }}
       >
-        <Ionicons
-          name={active ? m.icon : (`${m.icon}-outline` as never)}
-          size={23}
-          color={color}
-        />
-        <Text style={{ fontFamily: active ? fonts.sansSemi : fonts.sansMedium, fontSize: 10, color }}>
-          {m.label}
-        </Text>
+        {active ? (
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: accent.uva,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name={icon} size={22} color="#FFFFFF" />
+          </View>
+        ) : (
+          <Ionicons name={`${icon}-outline` as never} size={24} color="rgba(255,255,255,0.5)" />
+        )}
       </Pressable>
     );
   };
 
   return (
     <View
+      pointerEvents="box-none"
       style={{
-        flexDirection: "row",
-        alignItems: "flex-end",
-        justifyContent: "space-around",
-        backgroundColor: palette.surface,
-        borderTopWidth: 1,
-        borderTopColor: palette.border,
-        paddingTop: 10,
-        paddingHorizontal: 16,
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: "center",
         paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
       }}
     >
-      {state.routes.map((route, i) => {
-        const active = state.index === i;
-        return (
-          <Fragment key={route.key}>
-            {tab(route.name, active)}
-            {i === 1 && (
-              <View style={{ width: 56, alignItems: "center" }}>
-                <Pressable
-                  onPress={() => router.push("/nova")}
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 17,
-                    marginTop: -26,
-                    backgroundColor: accent.primary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    shadowColor: accent.primary,
-                    shadowOpacity: 0.5,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 6 },
-                    elevation: 6,
-                  }}
-                >
-                  <Ionicons name="add" size={28} color="#0D0D0D" />
-                </Pressable>
-              </View>
-            )}
-          </Fragment>
-        );
-      })}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: PILL,
+          borderRadius: 9999,
+          paddingHorizontal: 8,
+          paddingVertical: 8,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+          shadowColor: "#000",
+          shadowOpacity: 0.35,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 14,
+        }}
+      >
+        {tab(ORDER[0])}
+        {tab(ORDER[1])}
+        {/* FAB — nova transação */}
+        <Pressable
+          onPress={() => router.push("/nova")}
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            marginHorizontal: 4,
+            backgroundColor: accent.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="add" size={28} color="#0D0D0D" />
+        </Pressable>
+        {tab(ORDER[2])}
+        {tab(ORDER[3])}
+      </View>
     </View>
   );
 }
