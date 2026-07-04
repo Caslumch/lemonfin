@@ -12,8 +12,10 @@ import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { ReceitaSparkline } from "@/components/charts/receita-sparkline";
 import { MonthlyBarChart } from "@/components/charts/monthly-bar-chart";
+import { CardsPreview } from "@/components/dashboard/cards-preview";
 import { useAuth } from "@/providers/auth-provider";
 import {
+  useCards,
   useForecast,
   useInsights,
   useMonthly,
@@ -65,6 +67,7 @@ export default function HomeScreen() {
   const monthly = useMonthly();
   const forecast = useForecast();
   const insights = useInsights();
+  const cards = useCards();
 
   const income = Number(summary.data?.income ?? 0);
   const expense = Number(summary.data?.expense ?? 0);
@@ -193,6 +196,9 @@ export default function HomeScreen() {
                 <MonthlyBarChart data={months} />
               </Card>
             )}
+
+            {/* Meus Cartões */}
+            {(cards.data?.length ?? 0) > 0 && <CardsPreview cards={cards.data ?? []} />}
 
             {/* Forecast */}
             {forecast.data && <ForecastCard data={forecast.data} />}

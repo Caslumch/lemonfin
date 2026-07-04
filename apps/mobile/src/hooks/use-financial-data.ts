@@ -60,6 +60,7 @@ export interface Card {
   closingDay: number;
   dueDay?: number | null;
   colorPreset?: string | null;
+  currentSpend?: number; // gasto do ciclo aberto (base da barra de uso)
 }
 
 export function useCards() {
