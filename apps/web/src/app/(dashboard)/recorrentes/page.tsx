@@ -8,6 +8,7 @@ import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
 import { MemberFilter } from "@/components/filters/member-filter";
 import {
   RecurringModal,
@@ -246,9 +247,7 @@ function RecorrentesPageInner() {
         )}
 
         {loading ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <p className="text-fg-muted text-sm">Carregando...</p>
-          </div>
+          <ListSkeleton />
         ) : items.length === 0 ? (
           <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <Repeat size={40} className="mx-auto text-fg-muted mb-3" />
@@ -313,7 +312,7 @@ function RecorrentesPageInner() {
                     item.type === "EXPENSE" ? "text-danger" : "text-success"
                   }`}
                 >
-                  {item.type === "EXPENSE" ? "-" : "+"}
+                  {item.type === "EXPENSE" ? "−" : "+"}
                   {formatBRL(item.amount)}
                 </p>
 

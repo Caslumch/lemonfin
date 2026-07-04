@@ -7,6 +7,7 @@ import { Pencil, Trash2, Layers } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { CategoryModal } from "@/components/categories/category-modal";
 import { DeleteCategoryModal } from "@/components/categories/delete-category-modal";
@@ -151,9 +152,7 @@ export default function CategoriasPage() {
 
       <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <p className="text-fg-muted text-sm">Carregando...</p>
-          </div>
+          <ListSkeleton />
         ) : (
           <div className="space-y-8">
             <section>

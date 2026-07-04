@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   ArrowDownRight,
+  Minus,
   TrendingDown,
   Wallet,
   PiggyBank,
@@ -274,15 +275,21 @@ export default function DashboardPage() {
                         <span
                           className={cn(
                             "inline-flex items-center gap-0.5 text-xs font-bold",
-                            incomeVariation >= 0
+                            // 0% é estável (neutro) — não "cresceu". Só verde/seta
+                            // acima quando de fato subiu.
+                            incomeVariation > 0
                               ? "text-success"
-                              : "text-danger",
+                              : incomeVariation < 0
+                                ? "text-danger"
+                                : "text-fg-muted",
                           )}
                         >
-                          {incomeVariation >= 0 ? (
+                          {incomeVariation > 0 ? (
                             <ArrowUpRight size={13} />
-                          ) : (
+                          ) : incomeVariation < 0 ? (
                             <ArrowDownRight size={13} />
+                          ) : (
+                            <Minus size={13} />
                           )}
                           {incomeVariation > 0 ? "+" : ""}
                           {incomeVariation.toFixed(0)}%
@@ -328,38 +335,54 @@ export default function DashboardPage() {
                   </p>
                 ) : (
                   <div className="flex flex-col">
-                    {recent.slice(0, 4).map((tx) => (
-                      <div
-                        key={tx.id}
-                        className="flex items-center gap-3 py-2"
-                      >
-                        <CategoryIconWithBg
-                          slug={tx.category.slug}
-                          icon={tx.category.icon}
-                          colorBg={tx.category.colorBg}
-                          colorText={tx.category.colorText}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-fg">
-                            {tx.description || tx.category.name}
-                          </p>
-                          <p className="text-xs text-fg-muted">
-                            {formatDate(tx.date)} · {tx.category.name}
+                    {recent.slice(0, 4).map((tx) => {
+                      // Compra parcelada agrupada (mesma regra da lista de
+                      // Transações): 1 linha com valor TOTAL, "Nx" e descrição
+                      // sem o sufixo "(n/N)" — em vez de uma parcela solta.
+                      const grouped =
+                        (tx.installmentTotal ?? 0) >= 2 &&
+                        tx.installmentSum != null;
+                      const amount = grouped
+                        ? tx.installmentSum!
+                        : Number(tx.amount);
+                      const desc = (tx.description || tx.category.name).replace(
+                        /\s*\(\d+\/\d+\)\s*$/,
+                        "",
+                      );
+                      return (
+                        <div
+                          key={tx.id}
+                          className="flex items-center gap-3 py-2"
+                        >
+                          <CategoryIconWithBg
+                            slug={tx.category.slug}
+                            icon={tx.category.icon}
+                            colorBg={tx.category.colorBg}
+                            colorText={tx.category.colorText}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-fg">
+                              {desc}
+                              {grouped && ` ${tx.installmentTotal}x`}
+                            </p>
+                            <p className="text-xs text-fg-muted">
+                              {formatDate(tx.date)} · {tx.category.name}
+                            </p>
+                          </div>
+                          <p
+                            className={cn(
+                              "shrink-0 font-[family-name:var(--font-mono)] text-sm font-semibold",
+                              tx.type === "INCOME"
+                                ? "text-success"
+                                : "text-danger",
+                            )}
+                          >
+                            {tx.type === "INCOME" ? "+ " : "− "}
+                            {formatCurrency(amount)}
                           </p>
                         </div>
-                        <p
-                          className={cn(
-                            "shrink-0 font-[family-name:var(--font-mono)] text-sm font-semibold",
-                            tx.type === "INCOME"
-                              ? "text-success"
-                              : "text-fg",
-                          )}
-                        >
-                          {tx.type === "INCOME" ? "+ " : "− "}
-                          {formatCurrency(Number(tx.amount))}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
