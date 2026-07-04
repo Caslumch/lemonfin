@@ -11,13 +11,17 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-// "este mês" quando for o mês corrente, senão "Maio de 2026"
-function monthLabel(month: Date) {
+function isCurrentMonth(month: Date) {
   const now = new Date();
-  if (
+  return (
     month.getFullYear() === now.getFullYear() &&
     month.getMonth() === now.getMonth()
-  ) {
+  );
+}
+
+// "este mês" quando for o mês corrente, senão "Maio de 2026"
+function monthLabel(month: Date) {
+  if (isCurrentMonth(month)) {
     return "este mês";
   }
   const label = month.toLocaleDateString("pt-BR", {
@@ -78,7 +82,9 @@ export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
       color: "text-warning",
       bg: "bg-warning-muted",
       dark: false,
-      sub: "aberta",
+      // "aberta" só faz sentido no mês corrente; num mês passado a fatura desse
+      // ciclo já fechou/foi paga, então mostramos o rótulo do ciclo.
+      sub: isCurrentMonth(month) ? "aberta" : "do ciclo",
     },
     {
       label: "Saldo",

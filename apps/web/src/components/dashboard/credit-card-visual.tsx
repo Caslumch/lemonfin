@@ -220,7 +220,12 @@ export function CreditCardVisual({ card }: CreditCardVisualProps) {
       {limit !== null && limit > 0 && (
         <div className="relative mt-4">
           <div className="mb-1.5 flex items-baseline justify-between">
+            {/* Micro-rótulo: com limite, o valor da fatura fica anônimo acima da
+                barra. "Fatura" deixa claro o que é o número. */}
             <span className="font-[family-name:var(--font-mono)] text-xs text-white/85">
+              <span className="mr-1 font-[family-name:var(--font-body)] text-[10px] uppercase tracking-wide text-white/50">
+                Fatura
+              </span>
               {formatBRL(spent)}
             </span>
             <span className="text-[10px] font-medium text-white/55">
