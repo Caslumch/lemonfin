@@ -20,8 +20,7 @@
       "expo-secure-store",
       "expo-font",
       "expo-local-authentication",
-      "expo-splash-screen",
-      "@react-native-community/datetimepicker"
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true
