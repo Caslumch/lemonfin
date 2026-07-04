@@ -16,7 +16,9 @@ import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon"
 import { ContentHeader } from "@/components/layout/content-header";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useInsights } from "@/hooks/use-resource-queries";
+import { useRouter } from "next/navigation";
 import { logApiError } from "@/lib/log-error";
 import type {
   InsightsData,
@@ -32,9 +34,22 @@ function formatCurrency(value: number) {
 }
 
 export default function InsightsPage() {
+  const router = useRouter();
   const insightsQuery = useInsights();
   const data = insightsQuery.data ?? null;
   const loading = insightsQuery.isPending;
+
+  // Sem dados para comparar: mês atual e anterior zerados (conta nova / sem
+  // histórico). Os insights são um COMPARATIVO — sem dois meses de dados eles
+  // só mostram cards em R$ 0,00. Nesse caso orientamos a registrar.
+  const noData =
+    !loading &&
+    !insightsQuery.error &&
+    !!data &&
+    data.currentMonth.income === 0 &&
+    data.currentMonth.expense === 0 &&
+    data.previousMonth.income === 0 &&
+    data.previousMonth.expense === 0;
 
   useEffect(() => {
     if (insightsQuery.error) logApiError("load:insights", insightsQuery.error);
@@ -57,6 +72,14 @@ export default function InsightsPage() {
           <ErrorState
             onRetry={() => insightsQuery.refetch()}
             retrying={insightsQuery.isFetching}
+          />
+        ) : noData ? (
+          <EmptyState
+            icon={BarChart3}
+            title="Ainda não há dados para comparar"
+            description="Os insights comparam seus meses. Registre algumas transações e volte para ver tendências por categoria."
+            actionLabel="Registrar transação"
+            onAction={() => router.push("/transacoes")}
           />
         ) : (
           <>

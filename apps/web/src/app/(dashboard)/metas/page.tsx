@@ -8,6 +8,7 @@ import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { GoalModal } from "@/components/goals/goal-modal";
 import { DeleteGoalModal } from "@/components/goals/delete-goal-modal";
 import { useApi } from "@/hooks/use-api";
@@ -146,13 +147,13 @@ export default function MetasPage() {
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : goals.length === 0 ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <Target size={40} className="mx-auto text-fg-muted mb-3" />
-            <p className="text-fg-muted text-sm">Nenhuma meta definida.</p>
-            <p className="text-fg-muted text-xs mt-1">
-              Crie metas para controlar seus gastos por categoria.
-            </p>
-          </div>
+          <EmptyState
+            icon={Target}
+            title="Nenhuma meta definida"
+            description="Defina um teto de gasto por categoria e acompanhe quanto já usou no mês."
+            actionLabel="Criar primeira meta"
+            onAction={() => setModalOpen(true)}
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {goals.map((goal) => (

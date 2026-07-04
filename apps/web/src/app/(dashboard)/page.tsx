@@ -471,6 +471,31 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* Sem metas: convite compacto em vez de sumir o bloco — senão o
+                recurso fica invisível para quem nunca criou uma meta. */}
+            {!loading && goals.length === 0 && (
+              <Link
+                href="/metas"
+                className="group flex items-center gap-3 rounded-[20px] border border-dashed border-border bg-surface p-4 shadow-xs transition-colors hover:border-lima animate-fade-in-up"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-lima-muted">
+                  <Target size={16} className="text-lima" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-fg">
+                    Defina metas de gasto
+                  </p>
+                  <p className="text-xs text-fg-muted">
+                    Um teto por categoria pra não estourar o orçamento.
+                  </p>
+                </div>
+                <ArrowRight
+                  size={16}
+                  className="shrink-0 text-fg-muted transition-transform group-hover:translate-x-0.5"
+                />
+              </Link>
+            )}
           </div>
 
           {/* ===== Right column ===== */}

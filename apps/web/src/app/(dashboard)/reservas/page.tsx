@@ -7,6 +7,7 @@ import { PiggyBank, Pencil, Trash2, Check } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ReserveModal } from "@/components/reserves/reserve-modal";
 import { DeleteReserveModal } from "@/components/reserves/delete-reserve-modal";
 import { useApi } from "@/hooks/use-api";
@@ -224,13 +225,14 @@ export default function ReservasPage() {
             <p className="text-fg-muted text-sm">Carregando...</p>
           </div>
         ) : reserves.length === 0 ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <PiggyBank size={40} className="mx-auto text-fg-muted mb-3" />
-            <p className="text-fg-muted text-sm">Nenhuma reserva ainda.</p>
-            <p className="text-fg-muted text-xs mt-1">
-              Crie uma reserva para juntar dinheiro com um objetivo e prazo.
-            </p>
-          </div>
+          <EmptyState
+            icon={PiggyBank}
+            title="Nenhuma reserva ainda"
+            description="Junte dinheiro para um objetivo com valor-alvo, prazo e aportes."
+            actionLabel="Criar primeira reserva"
+            onAction={() => setModalOpen(true)}
+            hint="Você também pode criar e aportar pelo WhatsApp."
+          />
         ) : (
           <div className="space-y-8">
             {active.length > 0 && (
