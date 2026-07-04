@@ -1,0 +1,66 @@
+import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { StackHeader } from "@/components/ui/stack-header";
+import { Card } from "@/components/ui/card";
+import { Txt } from "@/components/ui/text";
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { type Goal, useGoals } from "@/hooks/use-financial-data";
+import { useTheme } from "@/theme/use-theme";
+import { accent, fonts } from "@/theme/tokens";
+import { formatBRL } from "@/lib/format";
+
+function GoalCard({ goal }: { goal: Goal }) {
+  const { palette } = useTheme();
+  const p = goal.progress;
+  const color = p.exceeded ? accent.danger : p.percentage >= 80 ? accent.warning : accent.primary;
+  return (
+    <Card style={{ gap: 10 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+          <Txt style={{ fontSize: 18 }}>{goal.category?.icon ?? "🎯"}</Txt>
+          <Txt variant="bodyMedium" numberOfLines={1}>
+            {goal.category?.name ?? goal.name}
+          </Txt>
+        </View>
+        <Txt style={{ fontFamily: fonts.mono, fontSize: 13 }} color={color}>
+          {Math.round(p.percentage)}%
+        </Txt>
+      </View>
+      <ProgressBar percentage={p.percentage} color={color} />
+      <Txt variant="small" color={palette.textSecondary}>
+        {formatBRL(p.spent)} de {formatBRL(p.limit)}
+      </Txt>
+    </Card>
+  );
+}
+
+export default function MetasScreen() {
+  const { palette } = useTheme();
+  const { data, isLoading, refetch, isRefetching } = useGoals();
+  const goals = data ?? [];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <StackHeader title="Metas" />
+      {isLoading ? (
+        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={accent.primary} />}
+        >
+          <Txt variant="small" color={palette.textSecondary} style={{ marginBottom: 4 }}>
+            Um teto de gasto por categoria pra não estourar o orçamento.
+          </Txt>
+          {goals.length === 0 ? (
+            <Txt variant="small" color={palette.textTertiary}>
+              Nenhuma meta ainda. Crie metas no app web.
+            </Txt>
+          ) : (
+            goals.map((g) => <GoalCard key={g.id} goal={g} />)
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
+}

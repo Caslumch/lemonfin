@@ -231,13 +231,97 @@ export interface SpendingAlert {
   percentOfPrevious: number;
 }
 
+export interface MonthTotals {
+  income: number;
+  expense: number;
+  balance: number;
+}
+
+export interface CategoryComparison {
+  categoryId: string;
+  category: { name: string; slug: string; icon: string | null; colorText: string };
+  currentTotal: number;
+  previousTotal: number;
+  variation: number;
+  trend: "up" | "down" | "stable";
+}
+
 export interface InsightsData {
+  currentMonth: MonthTotals;
+  previousMonth: MonthTotals;
+  overallVariation: number;
   alerts: SpendingAlert[];
+  topGrowing: CategoryComparison[];
+  topShrinking: CategoryComparison[];
 }
 
 export function useInsights() {
   return useQuery({
     queryKey: ["insights"],
     queryFn: () => api<InsightsData>("/transactions/insights"),
+  });
+}
+
+export interface Reserve {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  deadline: string;
+  active: boolean;
+  progress: {
+    remaining: number;
+    percentage: number;
+    monthsRemaining: number;
+    suggestedMonthly: number;
+  };
+}
+
+export function useReserves() {
+  return useQuery({
+    queryKey: ["reserves"],
+    queryFn: () => api<Reserve[]>("/reserves"),
+  });
+}
+
+export interface Recurring {
+  id: string;
+  description: string;
+  amount: number;
+  type: "INCOME" | "EXPENSE";
+  dayOfMonth: number;
+  active: boolean;
+  category: { name: string; slug: string; icon: string | null; colorBg: string; colorText: string };
+  card: { id: string; name: string } | null;
+}
+
+export interface RecurringList {
+  data: Recurring[];
+  meta: {
+    total: number;
+    monthlyExpense: number;
+    monthlyIncome: number;
+  };
+}
+
+export function useRecurring() {
+  return useQuery({
+    queryKey: ["recurring"],
+    queryFn: () => api<RecurringList>("/recurring"),
+  });
+}
+
+export function useToggleRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      api<Recurring>(`/recurring/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+    },
   });
 }
