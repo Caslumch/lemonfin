@@ -133,8 +133,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => {
+    // Mês em UTC (não local): o backend deriva o ciclo em UTC e as transações
+    // são gravadas ao meio-dia UTC. Usar o mês LOCAL abriria o mês anterior nas
+    // primeiras horas do dia 1 no fuso do Brasil (UTC-3).
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   });
   const [sort, setSort] = useState<SortKey>("date");
   const [categoryId, setCategoryId] = useState("");
@@ -198,8 +201,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
 
   function navigateMonth(delta: number) {
     const [y, m] = month.split("-").map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    // UTC para casar com o mês inicial (evita deslocamento de fuso na virada).
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setMonth(
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`,
+    );
   }
 
   // Restante a pagar do ciclo (default do campo de pagamento).
@@ -299,7 +305,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       {showControls && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            {invoice && (
+            {/* O badge reflete o estado da fatura INTEIRA. Com filtro ativo, o
+                total/cycleState vêm do subconjunto filtrado — uma categoria sem
+                compras no ciclo daria total=0 → "Paga" falso. Só mostra sem
+                filtro (a seção "Pagamento da fatura" abaixo já faz o mesmo). */}
+            {invoice && !hasActiveFilters ? (
               <CycleBadge
                 state={invoice.cycleState}
                 paid={invoice.paid}
@@ -307,6 +317,8 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                 dueDate={invoice.dueDate}
                 lastPaidAt={invoice.payments[0]?.paidAt}
               />
+            ) : (
+              <span />
             )}
             <div className="relative w-56">
               <Search
@@ -419,6 +431,8 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                     </p>
                     <p className="text-xs text-fg-muted">
                       {new Date(tx.date).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
                         timeZone: "UTC",
                       })}
                       {isInstallment && (
