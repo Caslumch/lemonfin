@@ -46,3 +46,20 @@ export function useTransactions() {
       api<Paginated<Transaction>>("/transactions?page=1&perPage=25"),
   });
 }
+
+export interface Card {
+  id: string;
+  name: string;
+  brand?: string | null;
+  limit?: string | number | null;
+  closingDay: number;
+  dueDay?: number | null;
+  colorPreset?: string | null;
+}
+
+export function useCards() {
+  return useQuery({
+    queryKey: ["cards"],
+    queryFn: () => api<Card[]>("/cards"),
+  });
+}

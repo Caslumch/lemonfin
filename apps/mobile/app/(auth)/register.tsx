@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
+import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useAuth } from "@/providers/auth-provider";
+import { useTheme } from "@/theme/use-theme";
+import { accent, fonts } from "@/theme/tokens";
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
+  const { palette } = useTheme();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,13 +33,11 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen className="px-6">
-      <View className="flex-1 justify-center gap-6">
-        <Text className="font-heading-bold text-3xl text-dark">
-          Criar conta
-        </Text>
+    <Screen padded bottomInset>
+      <View style={{ flex: 1, justifyContent: "center", gap: 24 }}>
+        <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }}>Criar conta</Txt>
 
-        <View className="gap-4">
+        <View style={{ gap: 16 }}>
           <TextField label="Nome" value={name} onChangeText={setName} placeholder="Seu nome" />
           <TextField
             label="E-mail"
@@ -55,10 +57,14 @@ export default function RegisterScreen() {
           <Button label="Criar conta" onPress={handleSubmit} loading={loading} />
         </View>
 
-        <View className="flex-row justify-center gap-1">
-          <Text className="font-sans text-sm text-gray-500">Já tem conta?</Text>
-          <Link href="/(auth)/login" className="font-sans-medium text-sm text-dark">
-            Entrar
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 5 }}>
+          <Txt variant="small" color={palette.textSecondary}>
+            Já tem conta?
+          </Txt>
+          <Link href="/(auth)/login">
+            <Txt variant="small" color={accent.success} style={{ fontFamily: fonts.sansSemi }}>
+              Entrar
+            </Txt>
           </Link>
         </View>
       </View>

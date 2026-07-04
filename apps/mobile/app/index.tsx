@@ -1,16 +1,24 @@
 import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "@/providers/auth-provider";
-import { colors } from "@/theme/colors";
+import { useTheme } from "@/theme/use-theme";
 
 // Rota raiz: decide o destino conforme o estado de auth hidratado do SecureStore.
 export default function Index() {
   const { status } = useAuth();
+  const { palette } = useTheme();
 
   if (status === "loading") {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator color={colors.dark} />
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: palette.bg,
+        }}
+      >
+        <ActivityIndicator color={palette.text} />
       </View>
     );
   }

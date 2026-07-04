@@ -1,20 +1,28 @@
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "@/theme/use-theme";
 
-// Container base de tela: aplica safe-area no topo e o fundo cinza do design
-// system. Uso: <Screen>...</Screen>.
+// Container base de tela: safe-area no topo + fundo `bg` do tema.
 export function Screen({
   children,
-  className,
+  padded = false,
+  bottomInset = false,
 }: {
   children: React.ReactNode;
-  className?: string;
+  padded?: boolean; // padding horizontal padrão de tela (20px)
+  bottomInset?: boolean; // aplica safe-area inferior (telas sem tab bar)
 }) {
   const insets = useSafeAreaInsets();
+  const { palette } = useTheme();
   return (
     <View
-      className={`flex-1 bg-gray-50 ${className ?? ""}`}
-      style={{ paddingTop: insets.top }}
+      style={{
+        flex: 1,
+        backgroundColor: palette.bg,
+        paddingTop: insets.top,
+        paddingBottom: bottomInset ? insets.bottom : 0,
+        paddingHorizontal: padded ? 20 : 0,
+      }}
     >
       {children}
     </View>

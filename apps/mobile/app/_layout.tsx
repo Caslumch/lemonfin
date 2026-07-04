@@ -11,6 +11,7 @@ import {
 import {
   DMSans_400Regular,
   DMSans_500Medium,
+  DMSans_700Bold,
 } from "@expo-google-fonts/dm-sans";
 import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { useFonts } from "expo-font";
@@ -24,6 +25,7 @@ export default function RootLayout() {
     Outfit_700Bold,
     DMSans_400Regular,
     DMSans_500Medium,
+    DMSans_700Bold,
     JetBrainsMono_500Medium,
   });
 
@@ -37,8 +39,12 @@ export default function RootLayout() {
 
   return (
     <Providers>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      {/* "auto" acompanha o tema (claro/escuro). */}
+      <StatusBar style="auto" />
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Nova transação sobe como modal; chat empilha (slide) sobre a Home. */}
+        <Stack.Screen name="nova" options={{ presentation: "modal" }} />
+      </Stack>
     </Providers>
   );
 }

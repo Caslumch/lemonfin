@@ -1,16 +1,37 @@
-import { Text, TextInput, View, type TextInputProps } from "react-native";
+import { TextInput, View, type TextInputProps } from "react-native";
+import { fonts, radii } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
+import { Txt } from "./text";
 
 interface TextFieldProps extends TextInputProps {
   label: string;
 }
 
-export function TextField({ label, ...props }: TextFieldProps) {
+// Input do DS: altura 48+ (alvo de toque), base 16px (evita zoom do iOS),
+// cores do tema. Label em small/textSecondary.
+export function TextField({ label, style, ...props }: TextFieldProps) {
+  const { palette } = useTheme();
   return (
-    <View className="gap-1.5">
-      <Text className="font-sans-medium text-sm text-gray-500">{label}</Text>
+    <View style={{ gap: 6 }}>
+      <Txt variant="small" color={palette.textSecondary}>
+        {label}
+      </Txt>
       <TextInput
-        className="h-12 rounded-2xl border border-gray-200 bg-white px-4 font-sans text-base text-dark"
-        placeholderTextColor="#9E9E9E"
+        placeholderTextColor={palette.textTertiary}
+        style={[
+          {
+            height: 50,
+            borderRadius: radii.md,
+            borderWidth: 1,
+            borderColor: palette.border,
+            backgroundColor: palette.surface,
+            paddingHorizontal: 16,
+            fontFamily: fonts.sans,
+            fontSize: 16,
+            color: palette.text,
+          },
+          style,
+        ]}
         {...props}
       />
     </View>
