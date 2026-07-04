@@ -5,9 +5,10 @@ import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { LemonLogo } from "@/components/ui/lemon-logo";
 import { useAuth } from "@/providers/auth-provider";
 import { useTheme } from "@/theme/use-theme";
-import { accent, fonts, radii } from "@/theme/tokens";
+import { accent, fonts } from "@/theme/tokens";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -40,20 +41,7 @@ export default function LoginScreen() {
     <Screen padded bottomInset>
       <View style={{ flex: 1, justifyContent: "center", gap: 24 }}>
         <View style={{ gap: 12 }}>
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: radii.lg,
-              backgroundColor: accent.primary,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }} color="#0D0D0D">
-              $
-            </Txt>
-          </View>
+          <LemonLogo size={56} />
           <View>
             <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }}>LemonFin</Txt>
             <Txt variant="body" color={palette.textSecondary}>

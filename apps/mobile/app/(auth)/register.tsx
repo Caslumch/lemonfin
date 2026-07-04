@@ -5,6 +5,7 @@ import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { LemonLogo } from "@/components/ui/lemon-logo";
 import { useAuth } from "@/providers/auth-provider";
 import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
@@ -35,7 +36,10 @@ export default function RegisterScreen() {
   return (
     <Screen padded bottomInset>
       <View style={{ flex: 1, justifyContent: "center", gap: 24 }}>
-        <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }}>Criar conta</Txt>
+        <View style={{ gap: 12 }}>
+          <LemonLogo size={48} />
+          <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }}>Criar conta</Txt>
+        </View>
 
         <View style={{ gap: 16 }}>
           <TextField label="Nome" value={name} onChangeText={setName} placeholder="Seu nome" />
