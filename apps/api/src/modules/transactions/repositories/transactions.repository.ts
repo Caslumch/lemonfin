@@ -3,6 +3,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { todayNoonUtcBR } from '../../../common/utils/transaction-date';
 
+// Categoria de sistema para a quitação de fatura de cartão. NÃO é gasto de
+// consumo (as compras já foram lançadas no cartão), então é excluída das somas
+// de "gasto" e dos breakdowns de categoria — só conta como saída de caixa.
+const PAGAMENTO_FATURA_SLUG = 'pagamento-fatura';
+
 interface FindManyOptions {
   userIds: string[];
   type?: 'INCOME' | 'EXPENSE';
@@ -512,7 +517,14 @@ export class TransactionsRepository {
     );
 
     const transactions = await this.prisma.transaction.findMany({
-      where: { userId: { in: userIds }, date: { gte: since } },
+      // Pagamento de fatura fora: não é gasto de consumo, e contá-lo faria o mês
+      // da quitação virar um pico (as compras já aparecem no mês em que foram
+      // feitas — dupla contagem). Ver getSummary/auditoria.
+      where: {
+        userId: { in: userIds },
+        date: { gte: since },
+        NOT: { category: { slug: PAGAMENTO_FATURA_SLUG } },
+      },
       select: { amount: true, type: true, date: true, cardId: true },
     });
 
@@ -564,6 +576,10 @@ export class TransactionsRepository {
     const where: Prisma.TransactionWhereInput = {
       userId: { in: userIds },
       type: 'EXPENSE',
+      // Pagamento de fatura não é categoria de consumo (as compras já foram
+      // categorizadas quando lançadas no cartão) — fora do breakdown por
+      // categoria, senão polui Insights com a maior "categoria" sendo a fatura.
+      NOT: { category: { slug: PAGAMENTO_FATURA_SLUG } },
     };
     const dateRange = dateRangeFilter(startDate, endDate);
     if (dateRange) where.date = dateRange;
@@ -609,7 +625,7 @@ export class TransactionsRepository {
         // feitas (no cartão, em meses anteriores). É um evento único e pesado —
         // se entrasse na base, a previsão o projetaria como taxa diária e
         // explodiria (ex.: fatura de R$ 7 mil no dia 3 vira ~R$ 65 mil estimados).
-        category: { slug: { not: 'pagamento-fatura' } },
+        category: { slug: { not: PAGAMENTO_FATURA_SLUG } },
         date: { gte: start, lt: end },
       },
       _sum: { amount: true },
@@ -659,15 +675,37 @@ export class TransactionsRepository {
     const dateRange = dateRangeFilter(startDate, endDate);
     if (dateRange) where.date = dateRange;
 
-    const [income, expenseNoCard, expenseCard] = await this.prisma.$transaction(
-      [
+    // O gasto fora-cartão é separado em DOIS baldes:
+    //  - consumo (expense): pix/débito do dia a dia → é "gasto" de verdade.
+    //  - pagamento de fatura (invoicePayment): quitação de compras já feitas no
+    //    cartão em meses anteriores. NÃO é gasto novo — as compras já foram
+    //    contabilizadas quando lançadas. Contá-lo como gasto gera dupla contagem
+    //    e infla dashboard/insights/whatsapp (ver auditoria). É SAÍDA de caixa,
+    //    então entra no balance, mas não no "expense" de consumo.
+    const [income, expenseConsumo, invoicePay, expenseCard] =
+      await this.prisma.$transaction([
         this.prisma.transaction.aggregate({
           where: { ...where, type: 'INCOME' },
           _sum: { amount: true },
           _count: true,
         }),
         this.prisma.transaction.aggregate({
-          where: { ...where, type: 'EXPENSE', cardId: null },
+          where: {
+            ...where,
+            type: 'EXPENSE',
+            cardId: null,
+            category: { slug: { not: PAGAMENTO_FATURA_SLUG } },
+          },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.prisma.transaction.aggregate({
+          where: {
+            ...where,
+            type: 'EXPENSE',
+            cardId: null,
+            category: { slug: PAGAMENTO_FATURA_SLUG },
+          },
           _sum: { amount: true },
           _count: true,
         }),
@@ -676,27 +714,32 @@ export class TransactionsRepository {
           _sum: { amount: true },
           _count: true,
         }),
-      ],
-    );
+      ]);
 
     const totalIncome = income._sum.amount?.toNumber() ?? 0;
-    const totalExpenseNoCard = expenseNoCard._sum.amount?.toNumber() ?? 0;
+    const totalExpense = expenseConsumo._sum.amount?.toNumber() ?? 0;
+    const totalInvoicePayment = invoicePay._sum.amount?.toNumber() ?? 0;
     const totalCardExpense = expenseCard._sum.amount?.toNumber() ?? 0;
 
     return {
       income: totalIncome,
-      // "Saídas" = só o que sai do bolso agora (pix/débito, fora cartão). O gasto
-      // no cartão NÃO entra aqui — vira fatura (cardExpense), paga depois.
-      expense: totalExpenseNoCard,
+      // "Saídas/Gastos" de CONSUMO (pix/débito fora cartão), sem pagamento de
+      // fatura. O gasto no cartão NÃO entra aqui — vira fatura (cardExpense).
+      expense: totalExpense,
+      // Pagamento de fatura no range: saída de caixa (entra no balance), mas
+      // não é gasto de consumo. Exposto à parte para quem quiser somar.
+      invoicePayment: totalInvoicePayment,
       // Gasto no cartão DENTRO do range recebido (mês civil). O endpoint de
       // summary sobrescreve isto pelo total do CICLO de fatura (ver
       // GetSummaryUseCase). Mantido para compatibilidade de outros chamadores.
       cardExpense: totalCardExpense,
-      // Saldo = receita − saídas do bolso. Fatura do cartão fica de fora até ser
-      // paga (aí vira uma despesa fora-cartão na data do pagamento).
-      balance: totalIncome - totalExpenseNoCard,
+      // Saldo = receita − consumo − pagamento de fatura. É fluxo de CAIXA: o
+      // pagamento de fatura É uma saída real (mesmo não sendo consumo novo). O
+      // gasto no cartão em si fica de fora até virar fatura paga.
+      balance: totalIncome - totalExpense - totalInvoicePayment,
       incomeCount: income._count,
-      expenseCount: expenseNoCard._count,
+      // Contagem de "saídas" segue o mesmo balde de consumo do expense.
+      expenseCount: expenseConsumo._count,
     };
   }
 

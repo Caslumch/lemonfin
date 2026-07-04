@@ -55,7 +55,12 @@ export class GetBudgetUseCase {
       monthStart.toISOString(),
       upTo.toISOString(),
     );
-    const spent = summary.expense;
+    // Gasto do orçamento = consumo fora-cartão + gasto no cartão (mês civil). O
+    // cartão É gasto do mês para fins de orçamento (padrão de mercado: Mobills/
+    // Organizze); ignorá-lo esconderia a maior parte do consumo de quem usa
+    // cartão. `expense` já exclui pagamento de fatura (não é gasto novo), então
+    // não há dupla contagem com as compras do cartão.
+    const spent = summary.expense + summary.cardExpense;
 
     const amount = budget ? budget.amount.toNumber() : null;
 
