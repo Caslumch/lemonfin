@@ -178,7 +178,11 @@ export function RecurringModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setType("INCOME")}
+                  onClick={() => {
+                    setType("INCOME");
+                    // Receita não vai em cartão — limpa a seleção ao trocar.
+                    setCardId("");
+                  }}
                   className={`rounded-md border-[1.5px] px-3.5 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
                     type === "INCOME"
                       ? "border-success bg-success-muted text-success"
@@ -257,25 +261,29 @@ export function RecurringModal({
               </p>
             </div>
 
-            <div className="w-full">
-              <label
-                htmlFor="card"
-                className="block text-sm font-medium text-fg mb-1.5"
-              >
-                Cartão{" "}
-                <span className="text-fg-muted font-normal">(opcional)</span>
-              </label>
-              <Select
-                id="card"
-                value={cardId}
-                onChange={setCardId}
-                size="md"
-                options={[
-                  { value: "", label: "Nenhum" },
-                  ...cards.map((c) => ({ value: c.id, label: c.name })),
-                ]}
-              />
-            </div>
+            {/* Cartão só faz sentido para DESPESA (receita não é lançada em
+                cartão). Esconde no tipo Receita. */}
+            {type === "EXPENSE" && (
+              <div className="w-full">
+                <label
+                  htmlFor="card"
+                  className="block text-sm font-medium text-fg mb-1.5"
+                >
+                  Cartão{" "}
+                  <span className="text-fg-muted font-normal">(opcional)</span>
+                </label>
+                <Select
+                  id="card"
+                  value={cardId}
+                  onChange={setCardId}
+                  size="md"
+                  options={[
+                    { value: "", label: "Nenhum" },
+                    ...cards.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
+              </div>
+            )}
 
             {error && (
               <p className="text-sm text-danger text-center">{error}</p>

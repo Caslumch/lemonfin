@@ -51,6 +51,10 @@ export function GoalModal({
     ? categories
     : categories.filter((c) => !usedCategoryIds.includes(c.id));
 
+  // Todas as categorias já têm meta: não há o que criar. O select ficaria vazio
+  // sem explicação — avisamos e desabilitamos o envio.
+  const noCategoriesLeft = !isEditing && availableCategories.length === 0;
+
   useEffect(() => {
     if (goal) {
       setName(goal.name);
@@ -124,19 +128,26 @@ export function GoalModal({
               required
             />
 
-            <Select
-              id="category"
-              label="Categoria"
-              value={categoryId}
-              onChange={setCategoryId}
-              disabled={isEditing}
-              size="md"
-              placeholder="Selecione..."
-              options={availableCategories.map((c) => ({
-                value: c.id,
-                label: `${c.icon} ${c.name}`,
-              }))}
-            />
+            {noCategoriesLeft ? (
+              <div className="rounded-md border-[1.5px] border-border bg-subtle/50 px-3.5 py-3 text-sm text-fg-muted">
+                Todas as categorias já têm meta. Edite uma existente ou crie uma
+                nova categoria primeiro.
+              </div>
+            ) : (
+              <Select
+                id="category"
+                label="Categoria"
+                value={categoryId}
+                onChange={setCategoryId}
+                disabled={isEditing}
+                size="md"
+                placeholder="Selecione..."
+                options={availableCategories.map((c) => ({
+                  value: c.id,
+                  label: `${c.icon} ${c.name}`,
+                }))}
+              />
+            )}
 
             <Input
               id="amount"
@@ -176,7 +187,11 @@ export function GoalModal({
               >
                 Cancelar
               </Button>
-              <Button type="submit" className="flex-1" disabled={loading}>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={loading || noCategoriesLeft}
+              >
                 {loading
                   ? "Salvando..."
                   : isEditing

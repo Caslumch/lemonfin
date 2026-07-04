@@ -94,6 +94,26 @@ export class CategoriesRepository {
     return new Set(cats.map((c) => c.slug));
   }
 
+  // Já existe uma categoria com este NOME (case-insensitive) visível ao usuário
+  // (própria ou de sistema)? Evita duas "Pet" idênticas — o slug se desambigua
+  // com sufixo, mas o nome exibido ficava repetido. `exceptId` ignora a própria
+  // categoria ao renomear.
+  async nameTaken(
+    userId: string,
+    name: string,
+    exceptId?: string,
+  ): Promise<boolean> {
+    const existing = await this.prisma.category.findFirst({
+      where: {
+        OR: [{ userId: null }, { userId }],
+        name: { equals: name.trim(), mode: 'insensitive' },
+        ...(exceptId && { id: { not: exceptId } }),
+      },
+      select: { id: true },
+    });
+    return existing !== null;
+  }
+
   // Categoria pertencente ao escopo da família (exclui as de sistema, que têm
   // userId null e não entram no filtro). Usada para autorizar edição/exclusão.
   async findOwned(id: string, userIds: string[]): Promise<Category | null> {
