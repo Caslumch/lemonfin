@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
 import { StackHeader } from "@/components/ui/stack-header";
 import { SkeletonList } from "@/components/ui/skeleton";
+import { AddButton } from "@/components/ui/add-button";
+import { RecurringFormSheet } from "@/components/forms/recurring-form-sheet";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import {
@@ -13,7 +16,7 @@ import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
 import { formatBRL } from "@/lib/format";
 
-function Row({ item, first }: { item: Recurring; first?: boolean }) {
+function Row({ item, first, onEdit }: { item: Recurring; first?: boolean; onEdit: () => void }) {
   const { palette } = useTheme();
   const toggle = useToggleRecurring();
   const materialize = useMaterializeRecurring();
@@ -35,7 +38,7 @@ function Row({ item, first }: { item: Recurring; first?: boolean }) {
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderTopColor: palette.border }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, opacity: item.active ? 1 : 0.5 }}>
+      <Pressable onPress={onEdit} style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, opacity: item.active ? 1 : 0.5 }}>
         <Txt style={{ fontSize: 17 }}>{item.category?.icon ?? "🔁"}</Txt>
         <View style={{ flex: 1 }}>
           <Txt variant="bodyMedium" numberOfLines={1}>
@@ -53,7 +56,7 @@ function Row({ item, first }: { item: Recurring; first?: boolean }) {
             </Pressable>
           </View>
         </View>
-      </View>
+      </Pressable>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
         <Txt style={{ fontFamily: fonts.mono, fontSize: 14 }} color={isIncome ? accent.success : palette.text}>
           {isIncome ? "+ " : "- "}
@@ -76,10 +79,11 @@ export default function RecorrentesScreen() {
   const items = data?.data ?? [];
   const monthlyExpense = data?.meta?.monthlyExpense ?? 0;
   const monthlyIncome = data?.meta?.monthlyIncome ?? 0;
+  const [editing, setEditing] = useState<Recurring | "new" | null>(null);
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
-      <StackHeader title="Recorrentes" />
+      <StackHeader title="Recorrentes" right={<AddButton onPress={() => setEditing("new")} />} />
       {isLoading ? (
         <View style={{ padding: 20, paddingTop: 4 }}>
           <SkeletonList />
@@ -107,17 +111,18 @@ export default function RecorrentesScreen() {
 
           {items.length === 0 ? (
             <Txt variant="small" color={palette.textTertiary}>
-              Nenhuma recorrente. Crie despesas/receitas fixas no app web.
+              Nenhuma recorrente. Toque em + para criar.
             </Txt>
           ) : (
             <Card>
               {items.map((it, i) => (
-                <Row key={it.id} item={it} first={i === 0} />
+                <Row key={it.id} item={it} first={i === 0} onEdit={() => setEditing(it)} />
               ))}
             </Card>
           )}
         </ScrollView>
       )}
+      <RecurringFormSheet editing={editing} onClose={() => setEditing(null)} />
     </View>
   );
 }

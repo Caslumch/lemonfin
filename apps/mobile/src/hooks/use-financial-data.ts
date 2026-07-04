@@ -295,6 +295,7 @@ export interface Recurring {
   type: "INCOME" | "EXPENSE";
   dayOfMonth: number;
   active: boolean;
+  categoryId: string;
   category: { name: string; slug: string; icon: string | null; colorBg: string; colorText: string };
   card: { id: string; name: string } | null;
 }
@@ -417,5 +418,135 @@ export function useChangePassword() {
         method: "POST",
         body: JSON.stringify(input),
       }),
+  });
+}
+
+// --- CRUD: metas, reservas, recorrentes, categorias -------------------------
+
+function useInvalidator(keys: string[]) {
+  const queryClient = useQueryClient();
+  return () => {
+    haptic.success();
+    keys.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+  };
+}
+
+export interface GoalInput {
+  name: string;
+  amount: number;
+  period?: "MONTHLY" | "WEEKLY";
+  categoryId: string;
+}
+export function useCreateGoal() {
+  const invalidate = useInvalidator(["goals", "summary"]);
+  return useMutation({
+    mutationFn: (input: GoalInput) => api<Goal>("/goals", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useUpdateGoal() {
+  const invalidate = useInvalidator(["goals", "summary"]);
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<GoalInput> }) =>
+      api<Goal>(`/goals/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useDeleteGoal() {
+  const invalidate = useInvalidator(["goals", "summary"]);
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/goals/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+export interface ReserveInput {
+  name: string;
+  targetAmount: number;
+  deadline: string; // ISO
+}
+export function useCreateReserve() {
+  const invalidate = useInvalidator(["reserves"]);
+  return useMutation({
+    mutationFn: (input: ReserveInput) => api<Reserve>("/reserves", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useUpdateReserve() {
+  const invalidate = useInvalidator(["reserves"]);
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<ReserveInput> }) =>
+      api<Reserve>(`/reserves/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useDeleteReserve() {
+  const invalidate = useInvalidator(["reserves"]);
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/reserves/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+export interface RecurringInput {
+  description: string;
+  amount: number;
+  type: "INCOME" | "EXPENSE";
+  dayOfMonth: number;
+  categoryId: string;
+  cardId?: string;
+}
+export function useCreateRecurring() {
+  const invalidate = useInvalidator(["recurring", "summary"]);
+  return useMutation({
+    mutationFn: (input: RecurringInput) => api<Recurring>("/recurring", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useUpdateRecurring() {
+  const invalidate = useInvalidator(["recurring", "summary"]);
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<RecurringInput> }) =>
+      api<Recurring>(`/recurring/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useDeleteRecurring() {
+  const invalidate = useInvalidator(["recurring", "summary"]);
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/recurring/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+export const CATEGORY_COLOR_PRESETS = [
+  "laranja", "azul", "roxo", "vermelho", "verde", "ciano", "amarelo", "indigo", "teal", "cinza",
+] as const;
+export type CategoryColorPreset = (typeof CATEGORY_COLOR_PRESETS)[number];
+export interface CategoryInput {
+  name: string;
+  icon: string;
+  colorPreset: CategoryColorPreset;
+}
+export function useCreateCategory() {
+  const invalidate = useInvalidator(["categories"]);
+  return useMutation({
+    mutationFn: (input: CategoryInput) => api<Category>("/categories", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useUpdateCategory() {
+  const invalidate = useInvalidator(["categories"]);
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<CategoryInput> }) =>
+      api<Category>(`/categories/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useDeleteCategory() {
+  const invalidate = useInvalidator(["categories"]);
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/categories/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
   });
 }
