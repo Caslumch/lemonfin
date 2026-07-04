@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { TransactionsRepository } from '../repositories/transactions.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 
+// Variação mínima em reais para uma categoria virar destaque/alerta. Abaixo
+// disso, o percentual (ex.: +887% por R$ 33) é ruído — não representa mudança
+// relevante no bolso e afoga os movimentos que pesam de verdade.
+const MIN_VARIATION_BRL = 50;
+
 export interface CategoryComparison {
   categoryId: string;
   category: {
@@ -135,10 +140,14 @@ export class GetInsightsUseCase {
         trend,
       });
 
-      // Alert if spending is >= 80% of previous month with days remaining
+      // Alerta: gasto >= 80% do mês anterior, com dias restantes. Exige também
+      // um DELTA mínimo em reais (ver MIN_DELTA) — sem isso, uma categoria de
+      // trocados dispara alerta de "987%" por R$ 33 de variação, afogando os
+      // movimentos que de fato pesam no bolso.
       if (previousTotal > 0 && currentTotal > 0 && daysRemaining > 0) {
         const percentOfPrevious = (currentTotal / previousTotal) * 100;
-        if (percentOfPrevious >= 80) {
+        const delta = Math.abs(currentTotal - previousTotal);
+        if (percentOfPrevious >= 80 && delta >= MIN_VARIATION_BRL) {
           alerts.push({
             categoryId: catId,
             category,
@@ -151,20 +160,30 @@ export class GetInsightsUseCase {
       }
     }
 
-    // Sort alerts by percentage (highest first)
+    // Alertas ordenados pelo percentual (maior primeiro).
     alerts.sort((a, b) => b.percentOfPrevious - a.percentOfPrevious);
 
-    // Sort comparisons by absolute variation
+    // Comparativo ordenado pela variação ABSOLUTA EM REAIS, não pelo percentual.
+    // O que importa pro usuário é quanto mudou no bolso: "compras −R$ 2.186"
+    // deve vir na frente de "outros +887% (R$ 33)". Ordenar por % joga o barulho
+    // de bases minúsculas pro topo e esconde o movimento real.
     categoryComparisons.sort(
-      (a, b) => Math.abs(b.variation) - Math.abs(a.variation),
+      (a, b) =>
+        Math.abs(b.currentTotal - b.previousTotal) -
+        Math.abs(a.currentTotal - a.previousTotal),
     );
 
+    // "Mais cresceram / diminuíram" exigem variação relevante em reais — sem o
+    // piso, "outros +887%" (R$ 33) roubaria o lugar de "compras −R$ 2.186".
+    const isRelevant = (c: CategoryComparison) =>
+      Math.abs(c.currentTotal - c.previousTotal) >= MIN_VARIATION_BRL;
+
     const topGrowing = categoryComparisons
-      .filter((c) => c.trend === 'up')
+      .filter((c) => c.trend === 'up' && isRelevant(c))
       .slice(0, 3);
 
     const topShrinking = categoryComparisons
-      .filter((c) => c.trend === 'down')
+      .filter((c) => c.trend === 'down' && isRelevant(c))
       .slice(0, 3);
 
     // Despesa do mês para os insights = gasto TOTAL (fora-cartão + cartão). O
