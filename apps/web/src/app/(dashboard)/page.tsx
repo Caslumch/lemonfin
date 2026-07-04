@@ -190,7 +190,7 @@ export default function DashboardPage() {
                     <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[12px] bg-white/10">
                       <Wallet size={16} className="text-on-dark" />
                     </div>
-                    <p className="text-xs text-on-dark-muted">Saldo total</p>
+                    <p className="text-xs text-on-dark-muted">Saldo do mês</p>
                     <p className="mt-1 font-[family-name:var(--font-display)] text-xl font-bold tracking-tight">
                       {formatCurrency(summary?.balance ?? 0)}
                     </p>
