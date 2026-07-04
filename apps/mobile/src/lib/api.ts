@@ -3,7 +3,8 @@
 // em vez do NextAuth, e o 401 dispara o logout via callback (não há window).
 import { getToken, triggerUnauthorized } from "./token-store";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
 
 export class ApiError extends Error {
   status: number;
