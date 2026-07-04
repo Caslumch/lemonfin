@@ -8,6 +8,7 @@ import { CategoryIconWithBg } from "@/components/ui/category-icon";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
+import { ErrorState } from "@/components/ui/error-state";
 import { useCategories } from "@/hooks/use-transactions-data";
 import { invalidateTransactionData } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
@@ -124,6 +125,9 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const queryClient = useQueryClient();
   const { data: categories } = useCategories();
   const [invoice, setInvoice] = useState<CardInvoice | null>(null);
+  // Distingue "falha ao carregar" de "fatura vazia" — sem isto o erro mostrava
+  // "Nenhuma transação neste período", como se o cartão não tivesse compras.
+  const [errored, setErrored] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
@@ -153,6 +157,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
+    setErrored(false);
     try {
       const { orderBy, order } = SORT_PARAMS[sort];
       const params = new URLSearchParams();
@@ -172,6 +177,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     } catch (error) {
       logApiError("load:invoice", error);
       setInvoice(null);
+      setErrored(true);
     } finally {
       setLoading(false);
     }
@@ -364,7 +370,13 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       )}
 
       {/* Transactions */}
-      {loading ? (
+      {errored ? (
+        <ErrorState
+          onRetry={fetchInvoice}
+          retrying={loading}
+          description="Não foi possível carregar esta fatura. Verifique sua conexão e tente de novo."
+        />
+      ) : loading ? (
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">Carregando...</p>
         </div>
