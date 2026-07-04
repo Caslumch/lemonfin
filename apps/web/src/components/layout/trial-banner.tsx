@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock, X } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
-
-interface Profile {
-  trialEndsAt: string | null;
-}
+import type { BillingStatus } from "@/lib/billing";
 
 // Só avisa nos últimos N dias do trial (decisão: "só quando estiver acabando").
 const WARN_WITHIN_DAYS = 3;
@@ -19,22 +16,27 @@ function daysUntil(date: Date, now: Date): number {
 
 /**
  * Aviso do trial de 7 dias. Pós-trial é SOFT: este banner só informa, nunca
- * bloqueia. Aparece apenas quando o trial está nos últimos WARN_WITHIN_DAYS dias
- * ou já expirou — fora disso, fica invisível.
+ * bloqueia. Aparece apenas quando o trial próprio está acabando (últimos
+ * WARN_WITHIN_DAYS dias) ou expirou.
+ *
+ * Fonte: /billing/status (NÃO /users/me). O status é a régua real de acesso —
+ * ler só `trialEndsAt` mostrava "seu teste terminou" para quem já é ASSINANTE
+ * (o trialEndsAt antigo não é limpo ao virar ACTIVE) e para membros cobertos
+ * pela família. Só exibimos quando o acesso é trial PRÓPRIO (self).
  */
 export function TrialBanner() {
   const { fetchApi, token } = useApi();
-  const [endsAt, setEndsAt] = useState<Date | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (!token) return;
     let active = true;
-    fetchApi<Profile>("/users/me")
-      .then((p) => {
+    fetchApi<BillingStatus>("/billing/status")
+      .then((b) => {
         if (!active) return;
-        setEndsAt(p.trialEndsAt ? new Date(p.trialEndsAt) : null);
+        setBilling(b);
         setLoaded(true);
       })
       .catch(() => {
@@ -45,9 +47,19 @@ export function TrialBanner() {
     };
   }, [fetchApi, token]);
 
-  if (!loaded || !endsAt || dismissed) return null;
+  if (!loaded || !billing || dismissed) return null;
 
-  const days = daysUntil(endsAt, new Date());
+  // Só trial PRÓPRIO em andamento. Assinante pago (ACTIVE), coberto pela família
+  // (accessSource !== 'self') ou sem trialEndsAt → nada de banner.
+  if (
+    billing.subscriptionStatus !== "TRIALING" ||
+    billing.accessSource !== "self" ||
+    !billing.trialEndsAt
+  ) {
+    return null;
+  }
+
+  const days = daysUntil(new Date(billing.trialEndsAt), new Date());
   const expired = days <= 0;
 
   // Durante a maior parte do trial (mais de WARN_WITHIN_DAYS dias), não mostra.

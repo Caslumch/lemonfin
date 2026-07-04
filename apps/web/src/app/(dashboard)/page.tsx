@@ -131,7 +131,11 @@ export default function DashboardPage() {
 
   const userName = session?.user?.name ?? "Você";
   const firstName = session?.user?.name?.trim().split(" ")[0] ?? "";
-  const savings = Math.max(0, (summary?.income ?? 0) - (summary?.expense ?? 0));
+  // "Economia" = sobra de caixa do mês = o próprio saldo (receita − consumo −
+  // pagamento de fatura). Usar `balance` (não income − expense) evita que a
+  // Economia apareça MAIOR que o "Saldo do mês" ao lado: após o #111, `expense`
+  // é só consumo (sem cartão/fatura), então income − expense inflava a sobra.
+  const savings = Math.max(0, summary?.balance ?? 0);
 
   // Receita variation (income, month over month)
   const incomeVariation = calcVariation(
