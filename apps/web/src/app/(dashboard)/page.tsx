@@ -202,11 +202,16 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Gastos do mês */}
+              {/* Gastos do mês = tudo que gastei no mês civil: consumo
+                  (pix/débito) + o que passei no cartão. NÃO inclui pagamento de
+                  fatura (isso é quitar compra antiga, não gasto novo). Mesma
+                  definição do gráfico, do orçamento e dos insights. */}
               <StatChip
                 loading={loading}
                 label="Gastos do mês"
-                value={formatCurrency(summary?.expense ?? 0)}
+                value={formatCurrency(
+                  (summary?.expense ?? 0) + (summary?.cardExpense ?? 0),
+                )}
                 icon={TrendingDown}
                 iconBg="bg-uva-muted"
                 iconColor="text-uva"

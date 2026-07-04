@@ -38,8 +38,15 @@ export interface Transaction {
 
 export interface TransactionSummary {
   income: number;
+  // Consumo fora-cartão (pix/débito), SEM pagamento de fatura.
   expense: number;
+  // Gasto no cartão dentro do mês civil (compõe "Gastos do mês" = expense + cardExpense).
   cardExpense: number;
+  // Fatura ABERTA (ciclo de fechamento) somada de todos os cartões — o card
+  // "Fatura cartão". Só presente no endpoint /transactions/summary (GetSummaryUseCase).
+  cardInvoice?: number;
+  // Pagamento de fatura no período: saída de caixa, não é gasto de consumo.
+  invoicePayment: number;
   balance: number;
   incomeCount: number;
   expenseCount: number;

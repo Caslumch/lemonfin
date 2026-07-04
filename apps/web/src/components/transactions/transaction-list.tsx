@@ -114,6 +114,12 @@ export function TransactionList({
         const slug = tx.category.slug;
         const isValidSlug = validSlugs.has(slug);
 
+        // Pagamento de fatura NÃO é gasto de consumo — é quitação de compras já
+        // feitas no cartão. Renderiza como uma transferência (cor neutra, sem o
+        // vermelho/"-" de despesa) para não parecer um gasto novo e não brigar
+        // com o card "Saídas" (que o trata à parte).
+        const isInvoicePayment = slug === "pagamento-fatura";
+
         // Linha de compra parcelada agrupada: mostra "Nx", valor TOTAL da compra
         // e o valor de cada parcela no subtexto. À vista segue normal.
         const grouped = isGroupedInstallment(tx);
@@ -176,10 +182,14 @@ export function TransactionList({
             <p
               className={cn(
                 "font-[family-name:var(--font-mono)] text-sm font-medium shrink-0",
-                tx.type === "INCOME" ? "text-success" : "text-danger",
+                isInvoicePayment
+                  ? "text-fg-muted"
+                  : tx.type === "INCOME"
+                    ? "text-success"
+                    : "text-danger",
               )}
             >
-              {tx.type === "INCOME" ? "+" : "-"}{" "}
+              {isInvoicePayment ? "" : tx.type === "INCOME" ? "+" : "-"}{" "}
               {formatCurrency(displayAmount)}
             </p>
 

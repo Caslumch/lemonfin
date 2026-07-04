@@ -131,6 +131,7 @@ function MonthComparisonCards({
       variation: data.overallVariation,
       invertColor: true,
       icon: BarChart3,
+      hint: null as string | null,
     },
     {
       label: "Receita este mês",
@@ -139,6 +140,7 @@ function MonthComparisonCards({
       variation: incomeVariation,
       invertColor: false,
       icon: Target,
+      hint: null,
     },
     {
       label: "Saldo este mês",
@@ -152,6 +154,10 @@ function MonthComparisonCards({
           : 0,
       invertColor: false,
       icon: TrendingUp,
+      // Saldo é CAIXA (o que sobrou), não "Receita − Gastos": o gasto no cartão
+      // só sai do caixa quando a fatura é paga. Sem essa nota, os 3 cards
+      // parecem não fechar.
+      hint: "sobra em caixa (fatura do cartão só entra quando paga)",
     },
   ];
 
@@ -185,6 +191,11 @@ function MonthComparisonCards({
                 />
               )}
             </div>
+            {item.hint && (
+              <p className="mt-2 text-[11px] leading-snug text-fg-muted/70">
+                {item.hint}
+              </p>
+            )}
           </div>
         );
       })}
