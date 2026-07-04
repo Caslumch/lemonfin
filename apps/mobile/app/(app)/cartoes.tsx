@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,7 +9,7 @@ import { CreditCardVisual } from "@/components/dashboard/credit-card-visual";
 import { CardFormSheet } from "@/components/forms/card-form-sheet";
 import { type Card, useCards } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
-import { accent } from "@/theme/tokens";
+import { accent, fonts } from "@/theme/tokens";
 
 export default function CartoesScreen() {
   const { palette } = useTheme();
@@ -47,9 +48,21 @@ export default function CartoesScreen() {
             </Txt>
           ) : (
             cards.map((c) => (
-              <Pressable key={c.id} onPress={() => setEditing(c)}>
-                <CreditCardVisual card={c} />
-              </Pressable>
+              <View key={c.id} style={{ gap: 8 }}>
+                <Pressable onPress={() => router.push({ pathname: "/fatura", params: { id: c.id, name: c.name } })}>
+                  <CreditCardVisual card={c} />
+                </Pressable>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4 }}>
+                  <Pressable onPress={() => router.push({ pathname: "/fatura", params: { id: c.id, name: c.name } })} hitSlop={6}>
+                    <Txt variant="small" color={accent.uva} style={{ fontFamily: fonts.sansSemi }}>
+                      Ver fatura →
+                    </Txt>
+                  </Pressable>
+                  <Pressable onPress={() => setEditing(c)} hitSlop={6}>
+                    <Txt variant="small" color={palette.textSecondary}>Editar</Txt>
+                  </Pressable>
+                </View>
+              </View>
             ))
           )}
         </ScrollView>

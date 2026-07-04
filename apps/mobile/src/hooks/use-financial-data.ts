@@ -581,3 +581,63 @@ export function useDeleteCard() {
     onSuccess: invalidate,
   });
 }
+
+// --- Fatura do cartão -------------------------------------------------------
+
+export interface InvoicePayment {
+  id: string;
+  amount: number;
+  paidAt: string;
+}
+export interface CardInvoice {
+  card?: Card;
+  month: string; // ciclo YYYY-MM
+  transactions: Transaction[];
+  total: number;
+  cycleState: "future" | "open" | "closed" | "partial" | "paid";
+  closeDate: string;
+  dueDate: string | null;
+  paid: number;
+  paymentStatus: "open" | "partial" | "paid";
+  payments: InvoicePayment[];
+}
+
+export function useCardInvoice(cardId: string, month?: string) {
+  return useQuery({
+    queryKey: ["card-invoice", cardId, month ?? "current"],
+    queryFn: () =>
+      api<CardInvoice>(`/cards/${cardId}/invoice${month ? `?month=${month}` : ""}`),
+    enabled: !!cardId,
+  });
+}
+
+function useInvoiceInvalidate() {
+  const queryClient = useQueryClient();
+  return () => {
+    haptic.success();
+    ["card-invoice", "cards", "summary", "transactions"].forEach((k) =>
+      queryClient.invalidateQueries({ queryKey: [k] }),
+    );
+  };
+}
+
+export function usePayInvoice() {
+  const invalidate = useInvoiceInvalidate();
+  return useMutation({
+    mutationFn: ({ cardId, cycle, amount }: { cardId: string; cycle: string; amount: number }) =>
+      api(`/cards/${cardId}/invoice/pay`, {
+        method: "POST",
+        body: JSON.stringify({ cycle, amount }),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUndoInvoicePayment() {
+  const invalidate = useInvoiceInvalidate();
+  return useMutation({
+    mutationFn: (paymentId: string) =>
+      api<void>(`/cards/invoice-payments/${paymentId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
