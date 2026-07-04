@@ -76,6 +76,7 @@ export interface Category {
   icon?: string | null;
   colorBg?: string | null;
   colorText?: string | null;
+  editable?: boolean; // true = categoria do usuário (não é do sistema)
 }
 
 export function useCategories() {
@@ -323,5 +324,93 @@ export function useToggleRecurring() {
       queryClient.invalidateQueries({ queryKey: ["recurring"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
     },
+  });
+}
+
+export function useMaterializeRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<Transaction>(`/recurring/${id}/materialize`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly"] });
+    },
+  });
+}
+
+export function useContributeReserve() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, amount }: { id: string; amount: number }) =>
+      api<Reserve>(`/reserves/${id}/contribute`, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+    },
+  });
+}
+
+// --- Configurações ----------------------------------------------------------
+
+export interface Me {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  emailVerifiedAt?: string | null;
+  twoFactorEnabled?: boolean;
+  subscriptionStatus?: string;
+  trialEndsAt?: string | null;
+}
+
+export function useMe() {
+  return useQuery({ queryKey: ["me"], queryFn: () => api<Me>("/users/me") });
+}
+
+export interface BillingStatus {
+  status?: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  hasPremiumAccess?: boolean;
+  coveredByFamily?: boolean;
+}
+
+export function useBillingStatus() {
+  return useQuery({ queryKey: ["billing-status"], queryFn: () => api<BillingStatus>("/billing/status") });
+}
+
+export interface FamilyMember {
+  id: string;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  user: { name: string; email: string };
+}
+export interface Family {
+  id: string;
+  name: string;
+  code: string;
+  members: FamilyMember[];
+}
+
+export function useFamily() {
+  return useQuery({
+    queryKey: ["family"],
+    queryFn: () => api<Family | null>("/families/me"),
+    retry: false,
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string }) =>
+      api<void>("/users/me/change-password", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   });
 }

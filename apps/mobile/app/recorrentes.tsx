@@ -1,9 +1,10 @@
-import { ActivityIndicator, RefreshControl, ScrollView, Switch, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
 import { StackHeader } from "@/components/ui/stack-header";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import {
   type Recurring,
+  useMaterializeRecurring,
   useRecurring,
   useToggleRecurring,
 } from "@/hooks/use-financial-data";
@@ -14,7 +15,23 @@ import { formatBRL } from "@/lib/format";
 function Row({ item, first }: { item: Recurring; first?: boolean }) {
   const { palette } = useTheme();
   const toggle = useToggleRecurring();
+  const materialize = useMaterializeRecurring();
   const isIncome = item.type === "INCOME";
+
+  function launch() {
+    Alert.alert("Lançar agora", `Lançar "${item.description}" como transação deste mês?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Lançar",
+        onPress: () =>
+          materialize.mutate(item.id, {
+            onSuccess: () => Alert.alert("Pronto", "Recorrente lançada."),
+            onError: (e) => Alert.alert("Não foi possível", (e as Error).message),
+          }),
+      },
+    ]);
+  }
+
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderTopColor: palette.border }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, opacity: item.active ? 1 : 0.5 }}>
@@ -23,10 +40,17 @@ function Row({ item, first }: { item: Recurring; first?: boolean }) {
           <Txt variant="bodyMedium" numberOfLines={1}>
             {item.description}
           </Txt>
-          <Txt variant="small" color={palette.textTertiary}>
-            dia {item.dayOfMonth}
-            {item.card ? ` • ${item.card.name}` : ""}
-          </Txt>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Txt variant="small" color={palette.textTertiary}>
+              dia {item.dayOfMonth}
+              {item.card ? ` • ${item.card.name}` : ""}
+            </Txt>
+            <Pressable onPress={launch} hitSlop={6} disabled={materialize.isPending}>
+              <Txt variant="small" color={accent.uva} style={{ fontFamily: fonts.sansSemi }}>
+                Lançar agora
+              </Txt>
+            </Pressable>
+          </View>
         </View>
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>

@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
 import { StackHeader } from "@/components/ui/stack-header";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { ReserveContributeSheet } from "@/components/reserve-contribute-sheet";
 import { type Reserve, useReserves } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
 import { formatBRL, formatDateBR } from "@/lib/format";
 
-function ReserveCard({ reserve }: { reserve: Reserve }) {
+function ReserveCard({ reserve, onGuardar }: { reserve: Reserve; onGuardar?: () => void }) {
   const { palette } = useTheme();
   const done = reserve.progress.percentage >= 100;
   const color = done ? accent.success : accent.primary;
@@ -36,6 +39,9 @@ function ReserveCard({ reserve }: { reserve: Reserve }) {
           Guarde {formatBRL(reserve.progress.suggestedMonthly)}/mês para chegar lá.
         </Txt>
       )}
+      {!done && onGuardar && (
+        <Button label="Guardar" variant="outline" fullWidth onPress={onGuardar} />
+      )}
     </Card>
   );
 }
@@ -46,6 +52,7 @@ export default function ReservasScreen() {
   const reserves = data ?? [];
   const active = reserves.filter((r) => r.active);
   const done = reserves.filter((r) => !r.active);
+  const [contributing, setContributing] = useState<Reserve | null>(null);
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
@@ -64,7 +71,9 @@ export default function ReservasScreen() {
             </Txt>
           ) : (
             <>
-              {active.map((r) => <ReserveCard key={r.id} reserve={r} />)}
+              {active.map((r) => (
+                <ReserveCard key={r.id} reserve={r} onGuardar={() => setContributing(r)} />
+              ))}
               {done.length > 0 && (
                 <>
                   <Txt variant="caption" color={palette.textTertiary} style={{ marginTop: 8 }}>
@@ -77,6 +86,7 @@ export default function ReservasScreen() {
           )}
         </ScrollView>
       )}
+      <ReserveContributeSheet reserve={contributing} onClose={() => setContributing(null)} />
     </View>
   );
 }

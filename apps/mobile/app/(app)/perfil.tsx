@@ -18,6 +18,8 @@ const MENU: { label: string; icon: keyof typeof Ionicons.glyphMap; href: string;
   { label: "Reservas", icon: "wallet-outline", href: "/reservas", tint: accent.uva },
   { label: "Recorrentes", icon: "repeat-outline", href: "/recorrentes", tint: accent.uva },
   { label: "Insights", icon: "bulb-outline", href: "/insights", tint: accent.warning },
+  { label: "Categorias", icon: "pricetags-outline", href: "/categorias", tint: accent.success },
+  { label: "Configurações", icon: "settings-outline", href: "/configuracoes", tint: accent.primary },
 ];
 
 function MenuRow({
