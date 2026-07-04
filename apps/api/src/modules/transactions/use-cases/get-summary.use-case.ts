@@ -19,16 +19,19 @@ export class GetSummaryUseCase {
       endDate,
     );
 
-    // "Fatura cartão" deve refletir o CICLO DE FECHAMENTO de cada cartão (o
-    // mesmo número da tela /cartoes), não o gasto no mês civil. Recalcula aqui
-    // somando a fatura aberta de todos os cartões do usuário/família.
+    // "Fatura cartão" reflete o CICLO DE FECHAMENTO de cada cartão (o mesmo
+    // número da tela /cartoes) — é a fatura ABERTA. Isso é DIFERENTE de
+    // `cardExpense` (gasto no cartão dentro do mês civil, vindo do getSummary):
+    // a fatura mistura ciclos que atravessam a virada do mês. Expomos os DOIS:
+    //  - cardInvoice: fatura aberta (ciclo) → card "Fatura cartão".
+    //  - cardExpense (do summary): gasto no cartão no mês → compõe "Gastos do mês".
     const cards = await this.cardsRepository.findMany(userIds);
     const spendByCard = await this.cardsRepository.getCurrentCycleSpendByCard(
       cards.map((c) => ({ id: c.id, closingDay: c.closingDay })),
       userIds,
     );
-    const cardExpense = Object.values(spendByCard).reduce((s, v) => s + v, 0);
+    const cardInvoice = Object.values(spendByCard).reduce((s, v) => s + v, 0);
 
-    return { ...summary, cardExpense };
+    return { ...summary, cardInvoice };
   }
 }

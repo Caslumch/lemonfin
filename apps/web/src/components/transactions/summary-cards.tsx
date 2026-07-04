@@ -34,33 +34,51 @@ interface SummaryCardsProps {
 }
 
 export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
+  const income = summary?.income ?? 0;
+  const expense = summary?.expense ?? 0;
+  const invoicePayment = summary?.invoicePayment ?? 0;
+  // "Saídas" = tudo que saiu do CAIXA no período: consumo (pix/débito) + o
+  // pagamento de fatura. Assim Entradas − Saídas = Saldo fecha (antes o
+  // pagamento de fatura sumia e a conta não batia). O gasto no cartão não entra
+  // aqui — vira a fatura (card ao lado), paga depois.
+  const outflow = expense + invoicePayment;
+  const outflowCount = summary?.expenseCount ?? 0;
+
   const cards = [
     {
       label: "Entradas",
-      value: summary?.income ?? 0,
+      value: income,
       count: summary?.incomeCount ?? 0,
       icon: TrendingUp,
       color: "text-success",
       bg: "bg-success-muted",
       dark: false,
+      // subtítulo: nº de lançamentos
+      sub: null as string | null,
     },
     {
       label: "Saídas",
-      value: summary?.expense ?? 0,
-      count: summary?.expenseCount ?? 0,
+      value: outflow,
+      count: outflowCount,
       icon: TrendingDown,
       color: "text-danger",
       bg: "bg-danger-muted",
       dark: false,
+      // Quando houve pagamento de fatura, explica que ele está incluído.
+      sub:
+        invoicePayment > 0
+          ? `inclui ${formatCurrency(invoicePayment)} de fatura`
+          : null,
     },
     {
       label: "Fatura cartão",
-      value: summary?.cardExpense ?? 0,
+      value: summary?.cardInvoice ?? 0,
       count: 0,
       icon: CreditCard,
       color: "text-warning",
       bg: "bg-warning-muted",
       dark: false,
+      sub: "aberta",
     },
     {
       label: "Saldo",
@@ -70,6 +88,7 @@ export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
       color: "text-on-dark",
       bg: "bg-white/10",
       dark: true,
+      sub: null,
     },
   ];
 
@@ -131,8 +150,8 @@ export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
                 >
                   {card.label === "Saldo"
                     ? monthLabel(month)
-                    : card.label === "Fatura cartão"
-                      ? "aberta"
+                    : card.sub
+                      ? card.sub
                       : `${card.count} ${card.count === 1 ? "transação" : "transações"}`}
                 </p>
               </>
