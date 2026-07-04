@@ -144,3 +144,99 @@ export function useDeleteTransaction() {
     onSuccess: invalidate,
   });
 }
+
+// --- Dashboard (paridade com o web) -----------------------------------------
+
+export interface MonthlyBreakdown {
+  month: string; // 'YYYY-MM'
+  income: number;
+  expense: number;
+  cardExpense: number;
+  balance: number;
+}
+
+export function useMonthly(months = 6) {
+  return useQuery({
+    queryKey: ["monthly", months],
+    queryFn: () => api<MonthlyBreakdown[]>(`/transactions/monthly?months=${months}`),
+  });
+}
+
+export interface PendingRecurrence {
+  id: string;
+  description: string;
+  amount: number;
+  type: "INCOME" | "EXPENSE";
+  dayOfMonth: number;
+  category: { name: string; slug: string; icon: string | null } | null;
+}
+
+export interface Forecast {
+  currentBalance: number;
+  projectedBalance: number;
+  pendingIncome: number;
+  pendingExpense: number;
+  estimatedVariableExpense: number;
+  avgDailyVariableExpense: number;
+  daysRemaining: number;
+  pending: PendingRecurrence[];
+}
+
+export function useForecast() {
+  return useQuery({
+    queryKey: ["forecast"],
+    queryFn: () => api<Forecast>("/transactions/forecast"),
+  });
+}
+
+export interface BudgetStatus {
+  month: string;
+  amount: number | null;
+  spent: number;
+  remaining: number;
+  percentage: number;
+  daysRemaining: number;
+  exceeded: boolean;
+  projectedSpend: number;
+  pace: "under" | "on_track" | "over";
+}
+
+export function useBudget() {
+  return useQuery({
+    queryKey: ["budget"],
+    queryFn: () => api<BudgetStatus>("/budgets"),
+  });
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  amount: number;
+  categoryId: string;
+  category: { name: string; slug: string; icon: string | null; colorBg: string; colorText: string };
+  progress: { spent: number; limit: number; percentage: number; remaining: number; exceeded: boolean };
+}
+
+export function useGoals() {
+  return useQuery({
+    queryKey: ["goals"],
+    queryFn: () => api<Goal[]>("/goals"),
+  });
+}
+
+export interface SpendingAlert {
+  categoryId: string;
+  category: { name: string; slug: string; icon: string | null; colorText: string } | null;
+  percentOfPrevious: number;
+}
+
+export interface InsightsData {
+  alerts: SpendingAlert[];
+}
+
+export function useInsights() {
+  return useQuery({
+    queryKey: ["insights"],
+    queryFn: () => api<InsightsData>("/transactions/insights"),
+  });
+}

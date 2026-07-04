@@ -23,6 +23,7 @@ export function TransactionRow({
 }) {
   const { palette, scheme } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
+  const swipeable = !!(onEdit || onDelete);
   const isIncome = tx.type === "INCOME";
   const amount = Number(tx.amount);
   const cat = categoryColors(scheme, tx.category?.colorBg, tx.category?.colorText);
@@ -34,7 +35,7 @@ export function TransactionRow({
         alignItems: "center",
         justifyContent: "space-between",
         paddingVertical: 12,
-        backgroundColor: palette.bg,
+        backgroundColor: swipeable ? palette.bg : "transparent",
         borderTopWidth: showDivider ? 1 : 0,
         borderTopColor: palette.border,
       }}

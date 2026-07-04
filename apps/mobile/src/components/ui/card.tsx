@@ -1,4 +1,4 @@
-import { View, type ViewProps } from "react-native";
+import { Platform, View, type ViewProps } from "react-native";
 import { radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -7,11 +7,11 @@ interface CardProps extends ViewProps {
   radius?: keyof typeof radii;
 }
 
-// Card do DS: superfície do tema, raio lg (default), borda no tema escuro
-// (elevação = mudança de superfície, não sombra).
+// Card do app (alinhado ao web): superfície + borda fina + raio 20 + sombra
+// sutil no claro (elevação por superfície no escuro).
 export function Card({
-  padding = 16,
-  radius = "lg",
+  padding = 20,
+  radius = "card",
   style,
   children,
   ...props
@@ -24,8 +24,12 @@ export function Card({
           backgroundColor: palette.surface,
           borderRadius: radii[radius],
           padding,
-          borderWidth: isDark ? 1 : 0,
+          borderWidth: 1,
           borderColor: palette.border,
+          ...(!isDark && Platform.OS === "ios"
+            ? { shadowColor: "#0D0D0D", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }
+            : {}),
+          ...(!isDark && Platform.OS === "android" ? { elevation: 1 } : {}),
         },
         style,
       ]}
