@@ -16,10 +16,16 @@ import { CreateReserveUseCase } from '../use-cases/create-reserve.use-case';
 import { ListReservesUseCase } from '../use-cases/list-reserves.use-case';
 import { UpdateReserveUseCase } from '../use-cases/update-reserve.use-case';
 import { DeleteReserveUseCase } from '../use-cases/delete-reserve.use-case';
-import { createReserveSchema, updateReserveSchema } from '../dtos/reserve.dto';
+import { ContributeReserveUseCase } from '../use-cases/contribute-reserve.use-case';
+import {
+  createReserveSchema,
+  updateReserveSchema,
+  contributeReserveSchema,
+} from '../dtos/reserve.dto';
 import type {
   CreateReserveInput,
   UpdateReserveInput,
+  ContributeReserveInput,
 } from '../dtos/reserve.dto';
 
 @Controller('reserves')
@@ -30,6 +36,7 @@ export class ReservesController {
     private readonly listReserves: ListReservesUseCase,
     private readonly updateReserve: UpdateReserveUseCase,
     private readonly deleteReserve: DeleteReserveUseCase,
+    private readonly contributeReserve: ContributeReserveUseCase,
   ) {}
 
   @Post()
@@ -59,5 +66,17 @@ export class ReservesController {
   @Delete(':id')
   remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.deleteReserve.execute(id, user.id);
+  }
+
+  // Aporte: guarda um valor na reserva. Gera uma despesa na categoria "reservas"
+  // (igual ao fluxo do WhatsApp) e incrementa o acumulado.
+  @Post(':id/contribute')
+  contribute(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(contributeReserveSchema))
+    body: ContributeReserveInput,
+  ) {
+    return this.contributeReserve.execute(id, user.id, body.amount);
   }
 }

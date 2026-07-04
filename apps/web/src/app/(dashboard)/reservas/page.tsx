@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PiggyBank, Pencil, Trash2, Check } from "lucide-react";
+import { PiggyBank, Pencil, Trash2, Check, Plus } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -11,9 +11,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ListSkeleton } from "@/components/ui/list-skeleton";
 import { ReserveModal } from "@/components/reserves/reserve-modal";
 import { DeleteReserveModal } from "@/components/reserves/delete-reserve-modal";
+import { ContributeModal } from "@/components/reserves/contribute-modal";
 import { useApi } from "@/hooks/use-api";
 import { useReserves } from "@/hooks/use-resource-queries";
-import { invalidateReserves } from "@/lib/query-keys";
+import {
+  invalidateReserves,
+  invalidateTransactionData,
+} from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Reserve } from "@/types/reserve";
 
@@ -52,10 +56,13 @@ function ReserveCard({
   reserve,
   onEdit,
   onDelete,
+  onContribute,
 }: {
   reserve: Reserve;
   onEdit: () => void;
   onDelete: () => void;
+  // Ausente nas reservas concluídas (não faz sentido guardar mais).
+  onContribute?: () => void;
 }) {
   const done = !reserve.active || reserve.progress.percentage >= 100;
 
@@ -130,6 +137,16 @@ function ReserveCard({
           {reserve.progress.monthsRemaining === 1 ? "mês" : "meses"})
         </p>
       )}
+
+      {!done && onContribute && (
+        <button
+          onClick={onContribute}
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-md bg-lima px-3.5 py-2 text-sm font-semibold text-lima-text transition-colors hover:bg-lima-hover cursor-pointer"
+        >
+          <Plus size={16} />
+          Guardar
+        </button>
+      )}
     </div>
   );
 }
@@ -149,6 +166,25 @@ export default function ReservasPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Reserve | null>(null);
   const [deleting, setDeleting] = useState<Reserve | null>(null);
+  const [contributing, setContributing] = useState<Reserve | null>(null);
+
+  async function handleContribute(amount: number) {
+    if (!contributing) return;
+    try {
+      await fetchApi(`/reserves/${contributing.id}/contribute`, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      });
+      toast.success(`Guardado em ${contributing.name}`);
+      // O aporte vira despesa (categoria reservas) + atualiza a reserva —
+      // invalida as duas frentes para refletir na hora.
+      invalidateReserves(queryClient);
+      invalidateTransactionData(queryClient);
+    } catch {
+      toast.error("Erro ao guardar na reserva");
+      throw new Error("contribute failed");
+    }
+  }
 
   async function handleCreate(data: {
     name: string;
@@ -245,6 +281,7 @@ export default function ReservasPage() {
                       setModalOpen(true);
                     }}
                     onDelete={() => setDeleting(reserve)}
+                    onContribute={() => setContributing(reserve)}
                   />
                 ))}
               </div>
@@ -289,6 +326,12 @@ export default function ReservasPage() {
         onClose={() => setDeleting(null)}
         onConfirm={handleDelete}
         reserveName={deleting?.name}
+      />
+
+      <ContributeModal
+        reserve={contributing}
+        onClose={() => setContributing(null)}
+        onSubmit={handleContribute}
       />
     </>
   );

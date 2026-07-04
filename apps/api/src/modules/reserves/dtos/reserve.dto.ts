@@ -30,3 +30,10 @@ export const updateReserveSchema = z.object({
 });
 
 export type UpdateReserveInput = z.infer<typeof updateReserveSchema>;
+
+// Aporte: valor a guardar na reserva.
+export const contributeReserveSchema = z.object({
+  amount: z.number().positive('Valor deve ser positivo'),
+});
+
+export type ContributeReserveInput = z.infer<typeof contributeReserveSchema>;
