@@ -30,6 +30,10 @@ const CARD_COLOR_PRESETS: Record<string, CardTheme> = {
   indigo: { gradient: ["#1E2140", "#0C0E22"], accent: "#A3AEE3", chip: ["#CCD2E9", "#9FA6C6"] },
 };
 
+export const CARD_PRESET_KEYS = [
+  "grafite", "azul", "roxo", "verde", "vinho", "teal", "ambar", "indigo",
+] as const;
+
 export function themeFor(card?: { brand?: string | null; colorPreset?: string | null }): CardTheme {
   if (!card) return BRAND_THEMES.default;
   if (card.colorPreset) {

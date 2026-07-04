@@ -550,3 +550,34 @@ export function useDeleteCategory() {
     onSuccess: invalidate,
   });
 }
+
+export interface CardInput {
+  name: string;
+  brand?: string;
+  limit?: number;
+  closingDay: number;
+  dueDay?: number;
+  colorPreset?: string | null;
+}
+export function useCreateCard() {
+  const invalidate = useInvalidator(["cards", "summary"]);
+  return useMutation({
+    mutationFn: (input: CardInput) => api<Card>("/cards", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useUpdateCard() {
+  const invalidate = useInvalidator(["cards", "summary"]);
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<CardInput> }) =>
+      api<Card>(`/cards/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+export function useDeleteCard() {
+  const invalidate = useInvalidator(["cards", "summary"]);
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/cards/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
