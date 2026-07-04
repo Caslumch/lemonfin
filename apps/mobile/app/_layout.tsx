@@ -44,8 +44,12 @@ export default function RootLayout() {
         {/* "auto" acompanha o tema (claro/escuro). */}
         <StatusBar style="auto" />
         <Stack screenOptions={{ headerShown: false }}>
-          {/* Nova transação sobe como modal; chat empilha (slide) sobre a Home. */}
-          <Stack.Screen name="nova" options={{ presentation: "modal" }} />
+          {/* Nova transação = bottom sheet (gorhom) sobre a tela atual, com
+              backdrop. Chat empilha (slide) sobre a Home. */}
+          <Stack.Screen
+            name="nova"
+            options={{ presentation: "transparentModal", animation: "none" }}
+          />
         </Stack>
       </Providers>
     </GestureHandlerRootView>

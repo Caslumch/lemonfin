@@ -16,6 +16,7 @@
     "@expo-google-fonts/jetbrains-mono": "^0.2.3",
     "@expo-google-fonts/outfit": "^0.2.3",
     "@expo/metro-runtime": "~6.1.2",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@lemonfin/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
     "expo": "~54.0.35",
