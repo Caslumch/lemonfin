@@ -1,6 +1,7 @@
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackHeader } from "@/components/ui/stack-header";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
@@ -75,7 +76,9 @@ export default function InsightsScreen() {
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <StackHeader title="Insights" />
       {isLoading || !data ? (
-        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+        <View style={{ padding: 20, paddingTop: 4 }}>
+          <SkeletonList />
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12, paddingBottom: 40 }}

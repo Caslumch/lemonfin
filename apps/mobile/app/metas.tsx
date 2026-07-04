@@ -1,5 +1,6 @@
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { StackHeader } from "@/components/ui/stack-header";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -42,7 +43,9 @@ export default function MetasScreen() {
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <StackHeader title="Metas" />
       {isLoading ? (
-        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+        <View style={{ padding: 20, paddingTop: 4 }}>
+          <SkeletonList />
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12, paddingBottom: 40 }}

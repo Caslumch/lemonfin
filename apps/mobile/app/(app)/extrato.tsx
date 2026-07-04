@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, RefreshControl, View } from "react-native";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { type ConfirmConfig, ConfirmSheet } from "@/components/confirm-sheet";
 import { TransactionRow } from "@/components/transaction-row";
+import { haptic } from "@/lib/haptics";
 import {
   type Transaction,
   useDeleteTransaction,
@@ -20,6 +23,7 @@ export default function ExtratoScreen() {
   const { data, isLoading, refetch, isRefetching } = useTransactions();
   const del = useDeleteTransaction();
   const [filter, setFilter] = useState<Filter>("all");
+  const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
   const rows = useMemo(() => {
     const all = data?.data ?? [];
@@ -40,21 +44,17 @@ export default function ExtratoScreen() {
   }
 
   function handleDelete(tx: Transaction) {
-    Alert.alert(
-      "Excluir transação",
-      `Excluir "${tx.description || tx.category?.name || "transação"}"? Esta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: () =>
-            del.mutate(tx.id, {
-              onError: (e) => Alert.alert("Erro", (e as Error).message),
-            }),
-        },
-      ],
-    );
+    haptic.warning();
+    setConfirm({
+      title: "Excluir transação",
+      message: `Excluir "${tx.description || tx.category?.name || "transação"}"? Esta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: () =>
+        del.mutate(tx.id, {
+          onError: (e) => Alert.alert("Erro", (e as Error).message),
+        }),
+    });
   }
 
   return (
@@ -73,7 +73,7 @@ export default function ExtratoScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+        <SkeletonList rows={6} />
       ) : (
         <FlatList
           data={rows}
@@ -102,6 +102,7 @@ export default function ExtratoScreen() {
           }
         />
       )}
+      <ConfirmSheet config={confirm} onClose={() => setConfirm(null)} />
     </Screen>
   );
 }

@@ -1,6 +1,7 @@
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CreditCardVisual } from "@/components/dashboard/credit-card-visual";
 import { useCards } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
@@ -21,7 +22,10 @@ export default function CartoesScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+        <View style={{ gap: 16 }}>
+          <Skeleton width="100%" height={180} radius={18} />
+          <Skeleton width="100%" height={180} radius={18} />
+        </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}

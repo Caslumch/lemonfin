@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { accent } from "@/theme/tokens";
+import { haptic } from "@/lib/haptics";
 
 // Tab bar flutuante estilo Nubank: pill escura flutuando sobre o conteúdo, item
 // ativo num círculo uva, ícones sem label + FAB lima central (nova transação).
@@ -30,7 +31,10 @@ export function TabBar({ state, navigation }: Props) {
     return (
       <Pressable
         key={name}
-        onPress={() => navigation.navigate(name)}
+        onPress={() => {
+          haptic.light();
+          navigation.navigate(name);
+        }}
         style={{ width: 52, height: 48, alignItems: "center", justifyContent: "center" }}
       >
         {active ? (
@@ -86,7 +90,10 @@ export function TabBar({ state, navigation }: Props) {
         {tab(ORDER[1])}
         {/* FAB — nova transação */}
         <Pressable
-          onPress={() => router.push("/nova")}
+          onPress={() => {
+            haptic.medium();
+            router.push("/nova");
+          }}
           style={{
             width: 52,
             height: 52,

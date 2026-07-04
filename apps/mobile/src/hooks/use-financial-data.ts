@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { haptic } from "@/lib/haptics";
 
 // Tipos derivados do contrato da API (GetSummaryUseCase / ListTransactionsUseCase).
 // TODO(#05): migrar estes shapes para @lemonfin/shared e reusar no web também.
@@ -104,6 +105,7 @@ export function useCreateTransaction() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
+      haptic.success();
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cards"] });
@@ -114,6 +116,7 @@ export function useCreateTransaction() {
 function useTransactionInvalidate() {
   const queryClient = useQueryClient();
   return () => {
+    haptic.success();
     queryClient.invalidateQueries({ queryKey: ["summary"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["cards"] });
@@ -333,6 +336,7 @@ export function useMaterializeRecurring() {
     mutationFn: (id: string) =>
       api<Transaction>(`/recurring/${id}/materialize`, { method: "POST" }),
     onSuccess: () => {
+      haptic.success();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["monthly"] });
@@ -349,6 +353,7 @@ export function useContributeReserve() {
         body: JSON.stringify({ amount }),
       }),
     onSuccess: () => {
+      haptic.success();
       queryClient.invalidateQueries({ queryKey: ["reserves"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });

@@ -1,5 +1,6 @@
-import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { StackHeader } from "@/components/ui/stack-header";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { Txt } from "@/components/ui/text";
 import { type Category, useCategories } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
@@ -52,7 +53,9 @@ export default function CategoriasScreen() {
     <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <StackHeader title="Categorias" />
       {isLoading ? (
-        <ActivityIndicator color={palette.text} style={{ marginTop: 32 }} />
+        <View style={{ padding: 20, paddingTop: 4 }}>
+          <SkeletonList />
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 20, paddingBottom: 40 }}

@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Card } from "@/components/ui/card";
+import { Skeleton, SkeletonCard, SkeletonRow } from "@/components/ui/skeleton";
 import { BalanceCard } from "@/components/balance-card";
 import { LimaoInput } from "@/components/limao-input";
 import { TransactionRow } from "@/components/transaction-row";
@@ -132,8 +133,18 @@ export default function HomeScreen() {
         </View>
 
         {summary.isLoading ? (
-          <View style={{ paddingVertical: 40, alignItems: "center" }}>
-            <ActivityIndicator color={palette.text} />
+          <View style={{ gap: 16 }}>
+            <Skeleton width="100%" height={132} radius={24} />
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <SkeletonCard height={36} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <SkeletonCard height={36} />
+              </View>
+            </View>
+            <Skeleton width="100%" height={58} radius={16} />
+            <SkeletonCard height={120} />
           </View>
         ) : (
           <>
