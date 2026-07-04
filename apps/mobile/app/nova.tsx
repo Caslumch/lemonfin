@@ -1,17 +1,17 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomSheet, {
   BottomSheetBackdrop,
+  BottomSheetTextInput,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { NumericKeypad } from "@/components/ui/numeric-keypad";
 import {
   useCategories,
   useCreateTransaction,
@@ -23,13 +23,13 @@ import { formatBRL } from "@/lib/format";
 
 type TxType = "EXPENSE" | "INCOME";
 
-// Nova/editar transação num bottom sheet (gorhom) com teclado numérico custom.
-// Sem params → cria (POST); com `id` → edita (PATCH). Ambos invalidam caches.
+// Nova/editar transação num bottom sheet (gorhom). Valor pelo teclado NATIVO
+// (number-pad), operando em centavos. Sem params → cria (POST); com `id` →
+// edita (PATCH). Ambos invalidam caches.
 export default function NovaScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["92%"], []);
 
   const params = useLocalSearchParams<{
     id?: string;
@@ -48,7 +48,7 @@ export default function NovaScreen() {
   const [raw, setRaw] = useState(params.cents ?? "");
   const [type, setType] = useState<TxType>(params.type === "INCOME" ? "INCOME" : "EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(params.categoryId || null);
-  // Descrição preservada no modo edição (não editável neste sheet keypad-first).
+  // Descrição preservada no modo edição (não editável neste sheet).
   const description = params.description ?? "";
 
   const cents = Number(raw || "0");
@@ -74,8 +74,11 @@ export default function NovaScreen() {
       <BottomSheet
         ref={sheetRef}
         index={0}
-        snapPoints={snapPoints}
+        enableDynamicSizing
         enablePanDownToClose
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         onClose={() => router.back()}
         backgroundStyle={{ backgroundColor: palette.bg }}
         handleIndicatorStyle={{ backgroundColor: palette.border, width: 40 }}
@@ -84,10 +87,10 @@ export default function NovaScreen() {
         )}
       >
         <BottomSheetView
-          style={{ flex: 1, paddingHorizontal: 20, paddingBottom: insets.bottom + 8 }}
+          style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: insets.bottom + 20, gap: 8 }}
         >
           {/* Header */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <Txt variant="title">{isEdit ? "Editar" : "Nova transação"}</Txt>
             <Pressable onPress={close} hitSlop={10}>
               <Ionicons name="close" size={26} color={palette.textSecondary} />
@@ -103,15 +106,22 @@ export default function NovaScreen() {
             ]}
           />
 
-          {/* Valor */}
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 80 }}>
-            <Txt
-              style={{ fontFamily: fonts.outfit, fontSize: 46 }}
-              color={amount > 0 ? palette.text : palette.textTertiary}
-            >
-              {formatBRL(amount)}
-            </Txt>
-          </View>
+          {/* Valor — teclado nativo (number-pad). value formatado é rederivado
+              de `raw` a cada tecla, então append e ⌫ funcionam corretamente. */}
+          <BottomSheetTextInput
+            value={formatBRL(amount)}
+            onChangeText={(t) => setRaw(t.replace(/\D/g, "").slice(0, 9))}
+            keyboardType="number-pad"
+            autoFocus
+            selectionColor={palette.text}
+            style={{
+              fontFamily: fonts.outfit,
+              fontSize: 46,
+              textAlign: "center",
+              paddingVertical: 20,
+              color: amount > 0 ? palette.text : palette.textTertiary,
+            }}
+          />
 
           {/* Categoria */}
           <Txt variant="caption" color={palette.textTertiary} style={{ marginBottom: 8 }}>
@@ -121,7 +131,7 @@ export default function NovaScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-            style={{ marginBottom: 12, maxHeight: 48 }}
+            style={{ marginBottom: 16, maxHeight: 48 }}
           >
             {(categories.data ?? []).map((c) => (
               <Chip
@@ -133,9 +143,6 @@ export default function NovaScreen() {
             ))}
           </ScrollView>
 
-          {/* Teclado + salvar */}
-          <NumericKeypad value={raw} onChange={setRaw} />
-          <View style={{ height: 8 }} />
           <Button
             label={isEdit ? "Salvar alterações" : type === "EXPENSE" ? "Salvar saída" : "Salvar entrada"}
             onPress={handleSave}
