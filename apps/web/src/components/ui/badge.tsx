@@ -28,7 +28,20 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-export type BadgeProps = CategoryBadgeProps | StatusBadgeProps;
+// Badge com cor arbitrária (hex) — para categorias do usuário, que não têm um
+// slug fixo no tema. As cores vêm do backend (colorBg/colorText da categoria),
+// evitando que toda categoria custom caia no cinza de "outros".
+interface ColorBadgeProps {
+  colorBg: string;
+  colorText: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+export type BadgeProps =
+  | CategoryBadgeProps
+  | StatusBadgeProps
+  | ColorBadgeProps;
 
 const categoryStyles: Record<CategorySlug, string> = {
   alimentacao: "bg-cat-alimentacao text-cat-alimentacao-text",
@@ -53,19 +66,32 @@ function isCategoryBadge(props: BadgeProps): props is CategoryBadgeProps {
   return "category" in props;
 }
 
+function isColorBadge(props: BadgeProps): props is ColorBadgeProps {
+  return "colorBg" in props;
+}
+
+const baseClass =
+  "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold";
+
 export function Badge(props: BadgeProps) {
+  // Cor arbitrária (categoria do usuário): estilo inline com as cores do backend.
+  if (isColorBadge(props)) {
+    return (
+      <span
+        className={cn(baseClass, props.className)}
+        style={{ backgroundColor: props.colorBg, color: props.colorText }}
+      >
+        {props.children}
+      </span>
+    );
+  }
+
   const style = isCategoryBadge(props)
     ? categoryStyles[props.category]
     : statusStyles[props.status];
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold",
-        style,
-        props.className
-      )}
-    >
+    <span className={cn(baseClass, style, props.className)}>
       {props.children}
     </span>
   );

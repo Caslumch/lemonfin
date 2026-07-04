@@ -9,6 +9,7 @@ import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
 import { GoalModal } from "@/components/goals/goal-modal";
 import { DeleteGoalModal } from "@/components/goals/delete-goal-modal";
 import { useApi } from "@/hooks/use-api";
@@ -143,9 +144,7 @@ export default function MetasPage() {
 
       <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <p className="text-fg-muted text-sm">Carregando...</p>
-          </div>
+          <ListSkeleton />
         ) : goals.length === 0 ? (
           <EmptyState
             icon={Target}

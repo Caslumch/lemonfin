@@ -167,10 +167,18 @@ export function TransactionList({
             className="rounded-[20px] border border-border bg-surface px-4 py-3.5 flex items-center gap-4 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 animate-fade-in-up"
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            {/* Category badge */}
+            {/* Category badge: slug conhecido usa o tema; categoria do usuário
+                usa a cor real dela (backend), não o cinza genérico de "outros". */}
             <div className="shrink-0">
               {isValidSlug ? (
                 <Badge category={slug as CategorySlug}>
+                  {tx.category.name}
+                </Badge>
+              ) : tx.category.colorBg && tx.category.colorText ? (
+                <Badge
+                  colorBg={tx.category.colorBg}
+                  colorText={tx.category.colorText}
+                >
                   {tx.category.name}
                 </Badge>
               ) : (
@@ -220,7 +228,7 @@ export function TransactionList({
                     : "text-danger",
               )}
             >
-              {isInvoicePayment ? "" : tx.type === "INCOME" ? "+" : "-"}{" "}
+              {isInvoicePayment ? "" : tx.type === "INCOME" ? "+" : "−"}{" "}
               {formatCurrency(displayAmount)}
             </p>
 

@@ -7,6 +7,7 @@ import { CreditCard, Pencil, Trash2 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { ListSkeleton } from "@/components/ui/list-skeleton";
 import { CardModal } from "@/components/cards/card-modal";
 import { DeleteCardModal } from "@/components/cards/delete-card-modal";
 import { InvoiceView } from "@/components/cards/invoice-view";
@@ -130,9 +131,7 @@ export default function CartoesPage() {
 
       <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
-            <p className="text-fg-muted text-sm">Carregando...</p>
-          </div>
+          <ListSkeleton />
         ) : cards.length === 0 ? (
           <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <CreditCard size={40} className="mx-auto text-fg-muted mb-3" />
