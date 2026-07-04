@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import BottomSheet, {
@@ -10,8 +10,8 @@ import { Txt } from "./text";
 import { Button } from "./button";
 import { useTheme } from "@/theme/use-theme";
 
-// Wrapper de formulário em bottom sheet (criar/editar). Fica montado; abre com
-// `open`. Header com título + fechar, conteúdo scrollável, salvar e excluir.
+// Wrapper de formulário em bottom sheet (criar/editar). Header fixo + campos
+// roláveis + RODAPÉ FIXO com os botões (salvar/excluir sempre visíveis).
 export function FormSheet({
   open,
   onClose,
@@ -38,6 +38,7 @@ export function FormSheet({
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ["90%"], []);
 
   useEffect(() => {
     if (open) sheetRef.current?.expand();
@@ -48,7 +49,7 @@ export function FormSheet({
     <BottomSheet
       ref={sheetRef}
       index={-1}
-      enableDynamicSizing
+      snapPoints={snapPoints}
       enablePanDownToClose
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
@@ -60,26 +61,43 @@ export function FormSheet({
         <BottomSheetBackdrop {...p} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" />
       )}
     >
-      <BottomSheetScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: insets.bottom + 20, gap: 14 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+      <View style={{ flex: 1 }}>
+        {/* Header fixo */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 2, paddingBottom: 12 }}>
           <Txt variant="title">{title}</Txt>
           <Pressable onPress={() => sheetRef.current?.close()} hitSlop={10}>
             <Ionicons name="close" size={26} color={palette.textSecondary} />
           </Pressable>
         </View>
 
-        {children}
+        {/* Campos roláveis */}
+        <BottomSheetScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16, gap: 14 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </BottomSheetScrollView>
 
-        <View style={{ gap: 8, marginTop: 4 }}>
+        {/* Rodapé fixo com os botões */}
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 12,
+            gap: 8,
+            borderTopWidth: 1,
+            borderTopColor: palette.border,
+            backgroundColor: palette.bg,
+          }}
+        >
           <Button label={submitLabel} onPress={onSubmit} loading={submitLoading} disabled={submitDisabled} />
           {onDelete && (
             <Button label="Excluir" variant="danger" onPress={onDelete} loading={deleteLoading} />
           )}
         </View>
-      </BottomSheetScrollView>
+      </View>
     </BottomSheet>
   );
 }
