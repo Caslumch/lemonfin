@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { ErrorState } from "@/components/ui/error-state";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { BudgetCard } from "@/components/dashboard/budget-card";
@@ -142,6 +143,26 @@ export default function DashboardPage() {
     currentMonthData?.income ?? 0,
     prevMonthData?.income ?? 0,
   );
+
+  // Erro de carregamento (sem nenhum dado): não pintar os cards como R$ 0,00 —
+  // isso é indistinguível de conta nova e faz o usuário achar que perdeu dados.
+  if (error && !data) {
+    return (
+      <div className="px-5 pb-8 pt-6 md:px-8 md:pt-8">
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="text-fg-secondary hover:text-fg cursor-pointer md:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu size={24} />
+          </button>
+          <Avatar name={userName} size="lg" />
+        </div>
+        <ErrorState onRetry={() => refetch()} retrying={isFetching} />
+      </div>
+    );
+  }
 
   return (
     <>

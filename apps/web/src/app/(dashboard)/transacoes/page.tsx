@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { SummaryCards } from "@/components/transactions/summary-cards";
 import { TransactionList } from "@/components/transactions/transaction-list";
+import { ErrorState } from "@/components/ui/error-state";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { DeleteModal } from "@/components/transactions/delete-modal";
 import { FiltersBar, type SortValue } from "@/components/transactions/filters-bar";
@@ -265,16 +266,21 @@ function TransacoesPageInner() {
           <MemberFilter />
         </div>
 
-        {/* Transaction list */}
-        <TransactionList
-          transactions={transactions}
-          loading={loading}
-          onEdit={(tx) => {
-            setEditingTx(tx);
-            setModalOpen(true);
-          }}
-          onDelete={setDeletingTx}
-        />
+        {/* Transaction list — em erro (sem dados) mostra o estado de erro em vez
+            da lista vazia, que seria indistinguível de "sem transações". */}
+        {listQuery.error && !listQuery.data ? (
+          <ErrorState onRetry={refresh} retrying={listQuery.isFetching} />
+        ) : (
+          <TransactionList
+            transactions={transactions}
+            loading={loading}
+            onEdit={(tx) => {
+              setEditingTx(tx);
+              setModalOpen(true);
+            }}
+            onDelete={setDeletingTx}
+          />
+        )}
 
         {/* Pagination */}
         {meta.totalPages > 1 && (

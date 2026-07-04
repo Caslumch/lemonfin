@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { ErrorState } from "@/components/ui/error-state";
 import { useInsights } from "@/hooks/use-resource-queries";
 import { logApiError } from "@/lib/log-error";
 import type {
@@ -52,8 +53,15 @@ export default function InsightsPage() {
       />
 
       <div className="px-5 pb-8 pt-2 md:px-8 space-y-6">
-        {/* Month comparison header */}
-        <MonthComparisonCards data={data} loading={loading} />
+        {insightsQuery.error && !data ? (
+          <ErrorState
+            onRetry={() => insightsQuery.refetch()}
+            retrying={insightsQuery.isFetching}
+          />
+        ) : (
+          <>
+            {/* Month comparison header */}
+            <MonthComparisonCards data={data} loading={loading} />
 
         {/* Alerts section */}
         {!loading && data && data.alerts.length > 0 && (
@@ -80,11 +88,13 @@ export default function InsightsPage() {
           />
         </div>
 
-        {/* Full comparison table */}
-        <ComparisonTable
-          items={data?.categoryComparisons ?? []}
-          loading={loading}
-        />
+            {/* Full comparison table */}
+            <ComparisonTable
+              items={data?.categoryComparisons ?? []}
+              loading={loading}
+            />
+          </>
+        )}
       </div>
     </>
   );
