@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, type ViewStyle } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, type ViewStyle } from "react-native";
 import { accent, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import { haptic } from "@/lib/haptics";
@@ -14,8 +14,8 @@ interface ButtonProps {
   fullWidth?: boolean;
 }
 
-// Botão do DS. Altura 52 (alvo de toque), raio lg, largura total por padrão
-// (ação principal de tela). 4 variantes: primary/secondary/outline/danger.
+// Botão do DS. Altura 52, raio lg, largura total por padrão. Estado desabilitado
+// vira cinza SÓLIDO (continua parecendo botão); ativo sólido ganha sombra.
 export function Button({
   label,
   onPress,
@@ -24,16 +24,29 @@ export function Button({
   disabled = false,
   fullWidth = true,
 }: ButtonProps) {
-  const { palette } = useTheme();
+  const { palette, isDark } = useTheme();
   const inactive = disabled || loading;
+  const isOutline = variant === "outline";
 
-  const styles: Record<Variant, { bg: string; fg: string; border?: string }> = {
+  const base: Record<Variant, { bg: string; fg: string; border?: string }> = {
     primary: { bg: accent.primary, fg: "#0D0D0D" },
     secondary: { bg: palette.text, fg: palette.bg },
     outline: { bg: "transparent", fg: palette.text, border: palette.border },
     danger: { bg: accent.danger, fg: "#FFFFFF" },
   };
-  const s = styles[variant];
+  const s = base[variant];
+
+  // Desabilitado: cinza sólido (não é lima apagado). Outline mantém a moldura.
+  const bg = inactive && !isOutline ? palette.muted : s.bg;
+  const fg = inactive ? palette.textTertiary : s.fg;
+  const borderColor = isOutline ? (inactive ? palette.border : palette.border) : undefined;
+
+  const solidShadow: ViewStyle =
+    !isOutline && !inactive
+      ? Platform.OS === "ios"
+        ? { shadowColor: s.bg, shadowOpacity: isDark ? 0.35 : 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }
+        : { elevation: 3 }
+      : {};
 
   const boxStyle: ViewStyle = {
     height: 52,
@@ -41,11 +54,11 @@ export function Button({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
-    backgroundColor: s.bg,
-    borderWidth: s.border ? 1.5 : 0,
-    borderColor: s.border,
-    opacity: inactive ? 0.5 : 1,
+    backgroundColor: bg,
+    borderWidth: isOutline ? 1.5 : 0,
+    borderColor,
     alignSelf: fullWidth ? "stretch" : "flex-start",
+    ...solidShadow,
   };
 
   return (
@@ -55,14 +68,12 @@ export function Button({
         onPress();
       }}
       disabled={inactive}
-      style={({ pressed }) => [boxStyle, pressed && !inactive && { opacity: 0.85 }]}
+      style={({ pressed }) => [boxStyle, pressed && !inactive && { opacity: 0.88 }]}
     >
       {loading ? (
-        <ActivityIndicator color={s.fg} />
+        <ActivityIndicator color={fg} />
       ) : (
-        <Text style={{ fontFamily: fonts.outfitSemi, fontSize: 16, color: s.fg }}>
-          {label}
-        </Text>
+        <Text style={{ fontFamily: fonts.outfitSemi, fontSize: 16, color: fg }}>{label}</Text>
       )}
     </Pressable>
   );
