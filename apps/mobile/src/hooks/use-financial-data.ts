@@ -28,6 +28,7 @@ export interface Transaction {
   type: "INCOME" | "EXPENSE";
   description?: string | null;
   date: string;
+  categoryId?: string;
   category?: TransactionCategory | null;
 }
 
@@ -105,5 +106,41 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cards"] });
     },
+  });
+}
+
+function useTransactionInvalidate() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ["summary"] });
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["cards"] });
+  };
+}
+
+export function useUpdateTransaction() {
+  const invalidate = useTransactionInvalidate();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Partial<CreateTransactionInput>;
+    }) =>
+      api<Transaction>(`/transactions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTransaction() {
+  const invalidate = useTransactionInvalidate();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<void>(`/transactions/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate,
   });
 }

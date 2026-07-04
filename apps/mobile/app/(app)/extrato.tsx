@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, RefreshControl, View } from "react-native";
+import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TransactionRow } from "@/components/transaction-row";
-import { useTransactions } from "@/hooks/use-financial-data";
+import {
+  type Transaction,
+  useDeleteTransaction,
+  useTransactions,
+} from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent } from "@/theme/tokens";
 
@@ -13,12 +18,44 @@ type Filter = "all" | "INCOME" | "EXPENSE";
 export default function ExtratoScreen() {
   const { palette } = useTheme();
   const { data, isLoading, refetch, isRefetching } = useTransactions();
+  const del = useDeleteTransaction();
   const [filter, setFilter] = useState<Filter>("all");
 
   const rows = useMemo(() => {
     const all = data?.data ?? [];
     return filter === "all" ? all : all.filter((t) => t.type === filter);
   }, [data, filter]);
+
+  function handleEdit(tx: Transaction) {
+    router.push({
+      pathname: "/nova",
+      params: {
+        id: tx.id,
+        cents: String(Math.round(Number(tx.amount) * 100)),
+        type: tx.type,
+        categoryId: tx.categoryId ?? "",
+        description: tx.description ?? "",
+      },
+    });
+  }
+
+  function handleDelete(tx: Transaction) {
+    Alert.alert(
+      "Excluir transação",
+      `Excluir "${tx.description || tx.category?.name || "transação"}"? Esta ação não pode ser desfeita.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () =>
+            del.mutate(tx.id, {
+              onError: (e) => Alert.alert("Erro", (e as Error).message),
+            }),
+        },
+      ],
+    );
+  }
 
   return (
     <Screen padded>
@@ -42,7 +79,12 @@ export default function ExtratoScreen() {
           data={rows}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
-            <TransactionRow tx={item} showDivider={index > 0} />
+            <TransactionRow
+              tx={item}
+              showDivider={index > 0}
+              onEdit={() => handleEdit(item)}
+              onDelete={() => handleDelete(item)}
+            />
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}

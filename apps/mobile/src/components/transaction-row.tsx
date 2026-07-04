@@ -1,32 +1,40 @@
-import { View } from "react-native";
-import { accent, fonts, radii } from "@/theme/tokens";
-import { categoryColors } from "@/theme/tokens";
+import { useRef } from "react";
+import { Pressable, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
+import { Ionicons } from "@expo/vector-icons";
+import { accent, categoryColors, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import { type Transaction } from "@/hooks/use-financial-data";
 import { formatBRL, formatDateBR } from "@/lib/format";
 import { Txt } from "./ui/text";
 
-// Linha de transação do DS: ícone da categoria + nome + metadata + valor.
-// (Swipe para editar/excluir entra no próximo incremento com gesture-handler.)
+// Linha de transação do DS. Quando recebe onEdit/onDelete, habilita swipe para
+// a esquerda revelando as ações (Swipeable legado, sem reanimated).
 export function TransactionRow({
   tx,
   showDivider = true,
+  onEdit,
+  onDelete,
 }: {
   tx: Transaction;
   showDivider?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { palette, scheme } = useTheme();
+  const swipeRef = useRef<Swipeable>(null);
   const isIncome = tx.type === "INCOME";
   const amount = Number(tx.amount);
   const cat = categoryColors(scheme, tx.category?.colorBg, tx.category?.colorText);
 
-  return (
+  const content = (
     <View
       style={{
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingVertical: 12,
+        backgroundColor: palette.bg,
         borderTopWidth: showDivider ? 1 : 0,
         borderTopColor: palette.border,
       }}
@@ -63,5 +71,39 @@ export function TransactionRow({
         {formatBRL(Math.abs(amount))}
       </Txt>
     </View>
+  );
+
+  if (!onEdit && !onDelete) return content;
+
+  const action = (
+    icon: keyof typeof Ionicons.glyphMap,
+    bg: string,
+    fg: string,
+    onPress: () => void,
+  ) => (
+    <Pressable
+      onPress={() => {
+        swipeRef.current?.close();
+        onPress();
+      }}
+      style={{ width: 72, alignItems: "center", justifyContent: "center", backgroundColor: bg }}
+    >
+      <Ionicons name={icon} size={22} color={fg} />
+    </Pressable>
+  );
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootRight={false}
+      renderRightActions={() => (
+        <View style={{ flexDirection: "row" }}>
+          {onEdit && action("create-outline", palette.surfaceElevated, palette.text, onEdit)}
+          {onDelete && action("trash-outline", accent.danger, "#FFFFFF", onDelete)}
+        </View>
+      )}
+    >
+      {content}
+    </Swipeable>
   );
 }

@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   useCategories,
   useCreateTransaction,
+  useUpdateTransaction,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { fonts } from "@/theme/tokens";
@@ -26,33 +27,48 @@ import { formatBRL } from "@/lib/format";
 
 type TxType = "EXPENSE" | "INCOME";
 
-// Nova transação — form real (create loop). Registra via POST /transactions e
-// invalida os caches, então aparece na hora na Home/Extrato.
+// Nova transação (FAB) e edição (swipe no Extrato) compartilham este form.
+// Sem params → cria (POST); com `id` → edita (PATCH). Ambos invalidam os
+// caches, refletindo na hora na Home/Extrato.
 export default function NovaScreen() {
   const { palette } = useTheme();
+  const params = useLocalSearchParams<{
+    id?: string;
+    cents?: string;
+    type?: string;
+    categoryId?: string;
+    description?: string;
+  }>();
+  const isEdit = !!params.id;
+
   const categories = useCategories();
   const create = useCreateTransaction();
+  const update = useUpdateTransaction();
+  const pending = create.isPending || update.isPending;
 
   const amountRef = useRef<TextInput>(null);
-  const [raw, setRaw] = useState("");
-  const [type, setType] = useState<TxType>("EXPENSE");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [description, setDescription] = useState("");
+  const [raw, setRaw] = useState(params.cents ?? "");
+  const [type, setType] = useState<TxType>(params.type === "INCOME" ? "INCOME" : "EXPENSE");
+  const [categoryId, setCategoryId] = useState<string | null>(params.categoryId || null);
+  const [description, setDescription] = useState(params.description ?? "");
 
   const cents = Number(raw || "0");
   const amount = cents / 100;
-  const canSave = amount > 0 && !!categoryId && !create.isPending;
+  const canSave = amount > 0 && !!categoryId && !pending;
 
   function handleSave() {
     if (!canSave || !categoryId) return;
-    create.mutate(
-      { amount, type, categoryId, description: description.trim() || undefined },
-      {
-        onSuccess: () => router.back(),
-        onError: (err) =>
-          Alert.alert("Não foi possível salvar", (err as Error).message),
-      },
-    );
+    const onDone = {
+      onSuccess: () => router.back(),
+      onError: (err: unknown) =>
+        Alert.alert("Não foi possível salvar", (err as Error).message),
+    };
+    const input = { amount, type, categoryId, description: description.trim() || undefined };
+    if (isEdit && params.id) {
+      update.mutate({ id: params.id, input }, onDone);
+    } else {
+      create.mutate(input, onDone);
+    }
   }
 
   return (
@@ -63,7 +79,7 @@ export default function NovaScreen() {
       </View>
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <Txt variant="title">Nova transação</Txt>
+        <Txt variant="title">{isEdit ? "Editar transação" : "Nova transação"}</Txt>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <Ionicons name="close" size={26} color={palette.textSecondary} />
         </Pressable>
@@ -74,7 +90,6 @@ export default function NovaScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {/* Toggle tipo */}
           <SegmentedControl<TxType>
             value={type}
             onChange={setType}
@@ -100,7 +115,7 @@ export default function NovaScreen() {
               value={raw}
               onChangeText={(t) => setRaw(t.replace(/\D/g, "").slice(0, 9))}
               keyboardType="number-pad"
-              autoFocus
+              autoFocus={!isEdit}
               style={{ position: "absolute", opacity: 0, height: 1, width: 1 }}
             />
           </Pressable>
@@ -141,9 +156,9 @@ export default function NovaScreen() {
       </KeyboardAvoidingView>
 
       <Button
-        label={type === "EXPENSE" ? "Salvar saída" : "Salvar entrada"}
+        label={isEdit ? "Salvar alterações" : type === "EXPENSE" ? "Salvar saída" : "Salvar entrada"}
         onPress={handleSave}
-        loading={create.isPending}
+        loading={pending}
         disabled={!canSave}
       />
     </Screen>

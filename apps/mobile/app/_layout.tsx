@@ -15,6 +15,7 @@ import {
 } from "@expo-google-fonts/dm-sans";
 import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { useFonts } from "expo-font";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Providers } from "@/providers/providers";
 
 SplashScreen.preventAutoHideAsync();
@@ -38,13 +39,15 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <Providers>
-      {/* "auto" acompanha o tema (claro/escuro). */}
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* Nova transação sobe como modal; chat empilha (slide) sobre a Home. */}
-        <Stack.Screen name="nova" options={{ presentation: "modal" }} />
-      </Stack>
-    </Providers>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Providers>
+        {/* "auto" acompanha o tema (claro/escuro). */}
+        <StatusBar style="auto" />
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* Nova transação sobe como modal; chat empilha (slide) sobre a Home. */}
+          <Stack.Screen name="nova" options={{ presentation: "modal" }} />
+        </Stack>
+      </Providers>
+    </GestureHandlerRootView>
   );
 }
