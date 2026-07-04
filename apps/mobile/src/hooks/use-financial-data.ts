@@ -1,4 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 // Tipos derivados do contrato da API (GetSummaryUseCase / ListTransactionsUseCase).
@@ -61,5 +65,45 @@ export function useCards() {
   return useQuery({
     queryKey: ["cards"],
     queryFn: () => api<Card[]>("/cards"),
+  });
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  icon?: string | null;
+  colorBg?: string | null;
+  colorText?: string | null;
+}
+
+export function useCategories() {
+  return useQuery({
+    queryKey: ["categories"],
+    queryFn: () => api<Category[]>("/categories"),
+  });
+}
+
+export interface CreateTransactionInput {
+  amount: number;
+  type: "INCOME" | "EXPENSE";
+  categoryId: string;
+  description?: string;
+}
+
+// Cria uma transação e invalida os caches que dependem dela — o novo lançamento
+// aparece na hora na Home/Extrato/Cartões (mesmo comportamento do web).
+export function useCreateTransaction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateTransactionInput) =>
+      api<Transaction>("/transactions", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cards"] });
+    },
   });
 }
