@@ -34,6 +34,15 @@ function formatBRL(value: number) {
   }).format(value);
 }
 
+// "todo dia X". Para dias que não existem em todo mês (29–31), o materializer
+// lança no ÚLTIMO dia do mês (ex.: dia 31 em fevereiro → 28) — o rótulo deixa
+// isso explícito em vez de prometer um "dia 31" que nem sempre acontece.
+function dayLabel(dayOfMonth: number) {
+  return dayOfMonth >= 29
+    ? `todo dia ${dayOfMonth} (ou último do mês)`
+    : `todo dia ${dayOfMonth}`;
+}
+
 export default function RecorrentesPage() {
   // useMemberFilter lê a URL (useSearchParams) — precisa de um boundary Suspense.
   return (
@@ -88,7 +97,13 @@ function RecorrentesPageInner() {
     setMaterializingId(item.id);
     try {
       await fetchApi(`/recurring/${item.id}/materialize`, { method: "POST" });
-      toast.success("Lançado em Transações");
+      // Recorrente no cartão vira lançamento na FATURA daquele cartão, não uma
+      // saída de caixa imediata — deixa claro no aviso.
+      toast.success(
+        item.card
+          ? `Lançado na fatura do ${item.card.name}`
+          : "Lançado em Transações",
+      );
       invalidateTransactionData(queryClient);
       invalidateRecurring(queryClient);
     } catch (err) {
@@ -217,6 +232,9 @@ function RecorrentesPageInner() {
               <p className="text-2xl font-bold text-danger font-[family-name:var(--font-mono)]">
                 {formatBRL(monthlyExpense)}
               </p>
+              <p className="text-[11px] text-fg-muted mt-1">
+                Total previsto — inclui contas no cartão
+              </p>
             </div>
             <div className="rounded-[20px] border border-border bg-surface shadow-xs p-5">
               <p className="text-xs text-fg-muted mb-1">Receitas fixas / mês</p>
@@ -263,7 +281,7 @@ function RecorrentesPageInner() {
                     {item.description}
                   </p>
                   <p className="text-xs text-fg-muted flex items-center gap-1.5">
-                    {item.category?.name} · todo dia {item.dayOfMonth}
+                    {item.category?.name} · {dayLabel(item.dayOfMonth)}
                     {item.businessDayAdjustment === "PREVIOUS" && (
                       <span
                         className="text-lima"

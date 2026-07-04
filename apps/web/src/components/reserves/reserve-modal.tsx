@@ -8,10 +8,22 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Reserve } from "@/types/reserve";
 
+// Hoje em "YYYY-MM-DD" (local), para comparar com o prazo e bloquear datas
+// passadas no calendário.
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
 const reserveSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   targetAmount: z.number().positive("Valor deve ser positivo"),
-  deadline: z.string().min(1, "Prazo é obrigatório"),
+  deadline: z
+    .string()
+    .min(1, "Prazo é obrigatório")
+    .refine((d) => d >= todayISO(), "O prazo não pode ser no passado"),
 });
 
 interface ReserveModalProps {
@@ -132,6 +144,7 @@ export function ReserveModal({
               label="Até quando"
               value={deadline}
               onChange={setDeadline}
+              minDate={new Date(new Date().setHours(0, 0, 0, 0))}
             />
 
             {error && (

@@ -20,6 +20,9 @@ export interface DatePickerProps {
   error?: string;
   placeholder?: string;
   className?: string;
+  // Data mínima selecionável (inclusive) — dias antes ficam desabilitados no
+  // calendário. Ex.: prazo de reserva não pode ser no passado.
+  minDate?: Date;
 }
 
 // Converte "YYYY-MM-DD" <-> Date ancorado ao MEIO-DIA local. Usar meio-dia evita
@@ -60,6 +63,7 @@ export function DatePicker({
   error,
   placeholder = "Selecione a data",
   className,
+  minDate,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   // Posição do popover em coordenadas de VIEWPORT (position: fixed). O popover é
@@ -190,6 +194,7 @@ export function DatePicker({
                 locale={ptBR}
                 defaultMonth={selected}
                 selected={selected}
+                disabled={minDate ? { before: minDate } : undefined}
                 onSelect={(d) => {
                   if (d) {
                     onChange(toValue(d));
