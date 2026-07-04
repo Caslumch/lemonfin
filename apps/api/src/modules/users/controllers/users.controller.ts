@@ -19,6 +19,7 @@ import { ChangePasswordUseCase } from '../use-cases/change-password.use-case';
 import { SetupTwoFactorUseCase } from '../use-cases/setup-2fa.use-case';
 import { EnableTwoFactorUseCase } from '../use-cases/enable-2fa.use-case';
 import { DisableTwoFactorUseCase } from '../use-cases/disable-2fa.use-case';
+import { DeleteAccountUseCase } from '../use-cases/delete-account.use-case';
 import { onboardingSchema } from '../dtos/onboarding.dto';
 import type { OnboardingInput } from '../dtos/onboarding.dto';
 import { changePasswordSchema } from '../dtos/change-password.dto';
@@ -31,6 +32,8 @@ import type {
   EnableTwoFactorInput,
   DisableTwoFactorInput,
 } from '../dtos/two-factor.dto';
+import { deleteAccountSchema } from '../dtos/delete-account.dto';
+import type { DeleteAccountInput } from '../dtos/delete-account.dto';
 
 // Gestão de conta (perfil, senha, 2FA, onboarding) continua acessível mesmo
 // sem assinatura — não são features premium e o usuário pode precisar delas.
@@ -45,6 +48,7 @@ export class UsersController {
     private readonly setupTwoFactor: SetupTwoFactorUseCase,
     private readonly enableTwoFactor: EnableTwoFactorUseCase,
     private readonly disableTwoFactor: DisableTwoFactorUseCase,
+    private readonly deleteAccount: DeleteAccountUseCase,
   ) {}
 
   @Get('me')
@@ -103,6 +107,15 @@ export class UsersController {
     body: ChangePasswordInput,
   ) {
     return this.changePassword.execute(user.id, body);
+  }
+
+  // Exclusão de conta (LGPD). Re-autentica por senha e apaga tudo.
+  @Post('me/delete')
+  async deleteAccountHandler(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(deleteAccountSchema)) body: DeleteAccountInput,
+  ) {
+    return this.deleteAccount.execute(user.id, body.password);
   }
 
   @Post('me/2fa/setup')

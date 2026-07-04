@@ -421,6 +421,17 @@ export function useChangePassword() {
   });
 }
 
+// Exclusão de conta (LGPD). Re-autentica por senha; o backend apaga tudo.
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: (password: string) =>
+      api<void>("/users/me/delete", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      }),
+  });
+}
+
 // --- CRUD: metas, reservas, recorrentes, categorias -------------------------
 
 function useInvalidator(keys: string[]) {

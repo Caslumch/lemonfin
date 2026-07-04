@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { DeleteAccountSheet } from "@/components/delete-account-sheet";
 import {
   type BillingStatus,
   useBillingStatus,
@@ -53,6 +54,7 @@ export default function ConfiguracoesScreen() {
 
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   function submitPassword() {
     if (!current || next.length < 8) {
@@ -143,7 +145,19 @@ export default function ConfiguracoesScreen() {
             <Button label="Salvar nova senha" onPress={submitPassword} loading={changePassword.isPending} disabled={!current || next.length < 8} />
           </Card>
         </View>
+
+        {/* Zona de perigo — exclusão de conta (LGPD) */}
+        <View>
+          <SectionLabel>Zona de perigo</SectionLabel>
+          <Card style={{ gap: 12 }}>
+            <Txt variant="small" color={palette.textSecondary}>
+              Excluir sua conta apaga permanentemente todos os seus dados.
+            </Txt>
+            <Button label="Excluir conta" variant="danger" onPress={() => setDeleting(true)} />
+          </Card>
+        </View>
       </ScrollView>
+      <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} />
     </View>
   );
 }
