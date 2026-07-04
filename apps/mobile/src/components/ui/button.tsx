@@ -36,10 +36,13 @@ export function Button({
   };
   const s = base[variant];
 
-  // Desabilitado: cinza sólido (não é lima apagado). Outline mantém a moldura.
-  const bg = inactive && !isOutline ? palette.muted : s.bg;
-  const fg = inactive ? palette.textTertiary : s.fg;
-  const borderColor = isOutline ? (inactive ? palette.border : palette.border) : undefined;
+  // Desabilitado: cinza sólido que CONTRASTA com o fundo do sheet (o `muted`
+  // ficava quase igual à página e o botão "sumia"). Outline mantém a moldura.
+  const disabledBg = isDark ? "#3A3A40" : "#D4D4D8";
+  const disabledFg = isDark ? "#8A8A90" : "#8E8E8E";
+  const bg = inactive && !isOutline ? disabledBg : s.bg;
+  const fg = inactive ? disabledFg : s.fg;
+  const borderColor = isOutline ? palette.border : undefined;
 
   const solidShadow: ViewStyle =
     !isOutline && !inactive
