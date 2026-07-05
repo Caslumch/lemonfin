@@ -4,6 +4,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { accent, categoryColors, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
+import { categoryIonicon } from "@/lib/category-icon";
 import { type Transaction } from "@/hooks/use-financial-data";
 import { formatBRL, formatDateBR } from "@/lib/format";
 import { Txt } from "./ui/text";
@@ -51,9 +52,11 @@ export function TransactionRow({
             justifyContent: "center",
           }}
         >
-          <Txt style={{ fontSize: 18 }} color={cat.fg}>
-            {tx.category?.icon ?? "💸"}
-          </Txt>
+          <Ionicons
+            name={categoryIonicon(tx.category?.name, tx.category?.icon)}
+            size={20}
+            color={cat.fg}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Txt style={{ fontFamily: fonts.sansSemi, fontSize: 15 }} numberOfLines={1}>

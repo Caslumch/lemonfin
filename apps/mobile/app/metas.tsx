@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StackHeader } from "@/components/ui/stack-header";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { AddButton } from "@/components/ui/add-button";
@@ -10,6 +11,7 @@ import { GoalFormSheet } from "@/components/forms/goal-form-sheet";
 import { type Goal, useGoals } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
+import { categoryIonicon } from "@/lib/category-icon";
 import { formatBRL } from "@/lib/format";
 
 function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
@@ -21,7 +23,7 @@ function GoalCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
       <Card style={{ gap: 10 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-            <Txt style={{ fontSize: 18 }}>{goal.category?.icon ?? "🎯"}</Txt>
+            <Ionicons name={categoryIonicon(goal.category?.name, goal.category?.icon)} size={18} color={palette.textSecondary} />
             <Txt variant="bodyMedium" numberOfLines={1}>
               {goal.category?.name ?? goal.name}
             </Txt>

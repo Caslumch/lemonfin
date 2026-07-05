@@ -28,7 +28,7 @@ export function CategoryPicker({
         cats.map((c) => (
           <Chip
             key={c.id}
-            label={`${c.icon ?? ""} ${c.name}`.trim()}
+            label={c.name}
             active={value === c.id}
             onPress={() => onChange(c.id)}
           />

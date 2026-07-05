@@ -136,7 +136,7 @@ export default function NovaScreen() {
             {(categories.data ?? []).map((c) => (
               <Chip
                 key={c.id}
-                label={`${c.icon ?? ""} ${c.name}`.trim()}
+                label={c.name}
                 active={categoryId === c.id}
                 onPress={() => setCategoryId(c.id)}
               />

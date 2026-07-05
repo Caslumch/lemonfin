@@ -13,6 +13,7 @@ import {
   useUpdateCategory,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
+import { categoryIonicon } from "@/lib/category-icon";
 
 const PRESETS: Record<CategoryColorPreset, { bg: string; fg: string }> = {
   laranja: { bg: "#FFF3E0", fg: "#E65100" },
@@ -61,7 +62,7 @@ export function CategoryFormSheet({
     }
   }, [editing]);
 
-  const valid = name.trim().length > 0 && icon.trim().length > 0;
+  const valid = name.trim().length > 0;
 
   function submit() {
     const input = { name: name.trim(), icon: icon.trim(), colorPreset: preset };
@@ -87,7 +88,15 @@ export function CategoryFormSheet({
       deleteLoading={del.isPending}
     >
       <SheetField label="Nome" value={name} onChangeText={setName} placeholder="Ex: Pets" />
-      <SheetField label="Emoji" value={icon} onChangeText={setIcon} placeholder="🐶" maxLength={4} />
+      {/* Preview do ícone (derivado do nome) na cor escolhida. */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: PRESETS[preset].bg, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name={categoryIonicon(name, icon)} size={20} color={PRESETS[preset].fg} />
+        </View>
+        <Txt variant="small" color={palette.textTertiary} style={{ flex: 1 }}>
+          O ícone é escolhido automaticamente pelo nome.
+        </Txt>
+      </View>
       <Txt variant="small" color={palette.textSecondary}>Cor</Txt>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {CATEGORY_COLOR_PRESETS.map((p) => {

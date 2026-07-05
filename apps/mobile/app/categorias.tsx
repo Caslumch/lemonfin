@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StackHeader } from "@/components/ui/stack-header";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { AddButton } from "@/components/ui/add-button";
@@ -8,6 +9,7 @@ import { CategoryFormSheet } from "@/components/forms/category-form-sheet";
 import { type Category, useCategories } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent, categoryColors, fonts, radii } from "@/theme/tokens";
+import { categoryIonicon } from "@/lib/category-icon";
 
 function CategoryPill({ cat, onPress }: { cat: Category; onPress?: () => void }) {
   const { scheme } = useTheme();
@@ -26,7 +28,7 @@ function CategoryPill({ cat, onPress }: { cat: Category; onPress?: () => void })
         paddingHorizontal: 12,
       }}
     >
-      <Txt style={{ fontSize: 16 }} color={c.fg}>{cat.icon ?? "•"}</Txt>
+      <Ionicons name={categoryIonicon(cat.name, cat.icon)} size={15} color={c.fg} />
       <Txt style={{ fontFamily: fonts.sansMedium, fontSize: 14 }} color={c.fg} numberOfLines={1}>
         {cat.name}
       </Txt>

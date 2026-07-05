@@ -8,6 +8,7 @@ import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { type CategoryComparison, useInsights } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
+import { categoryIonicon } from "@/lib/category-icon";
 import { formatBRL } from "@/lib/format";
 
 function variation(cur: number, prev: number): number {
@@ -53,7 +54,7 @@ function TrendList({ title, items, positive }: { title: string; items: CategoryC
       {items.slice(0, 5).map((c) => (
         <View key={c.categoryId} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-            <Txt style={{ fontSize: 15 }}>{c.category?.icon ?? "•"}</Txt>
+            <Ionicons name={categoryIonicon(c.category?.name, c.category?.icon)} size={15} color={palette.textSecondary} />
             <Txt variant="small" numberOfLines={1}>{c.category?.name}</Txt>
           </View>
           <Txt style={{ fontFamily: fonts.mono, fontSize: 13 }} color={positive ? accent.danger : accent.success}>

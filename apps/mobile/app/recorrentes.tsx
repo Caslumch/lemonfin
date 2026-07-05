@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StackHeader } from "@/components/ui/stack-header";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { AddButton } from "@/components/ui/add-button";
@@ -13,14 +14,16 @@ import {
   useToggleRecurring,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
-import { accent, fonts } from "@/theme/tokens";
+import { accent, categoryColors, fonts, radii } from "@/theme/tokens";
+import { categoryIonicon } from "@/lib/category-icon";
 import { formatBRL } from "@/lib/format";
 
 function Row({ item, first, onEdit }: { item: Recurring; first?: boolean; onEdit: () => void }) {
-  const { palette } = useTheme();
+  const { palette, scheme } = useTheme();
   const toggle = useToggleRecurring();
   const materialize = useMaterializeRecurring();
   const isIncome = item.type === "INCOME";
+  const cat = categoryColors(scheme, undefined, item.category?.colorText);
 
   function launch() {
     Alert.alert("Lançar agora", `Lançar "${item.description}" como transação deste mês?`, [
@@ -37,9 +40,11 @@ function Row({ item, first, onEdit }: { item: Recurring; first?: boolean; onEdit
   }
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderTopColor: palette.border }}>
-      <Pressable onPress={onEdit} style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, opacity: item.active ? 1 : 0.5 }}>
-        <Txt style={{ fontSize: 17 }}>{item.category?.icon ?? "🔁"}</Txt>
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderTopColor: palette.border }}>
+      <Pressable onPress={onEdit} style={{ flexDirection: "row", alignItems: "center", gap: 11, flex: 1, opacity: item.active ? 1 : 0.5 }}>
+        <View style={{ width: 40, height: 40, borderRadius: radii.md, backgroundColor: cat.bg, alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name={categoryIonicon(item.category?.name, item.category?.icon)} size={19} color={cat.fg} />
+        </View>
         <View style={{ flex: 1 }}>
           <Txt variant="bodyMedium" numberOfLines={1}>
             {item.description}
@@ -57,8 +62,8 @@ function Row({ item, first, onEdit }: { item: Recurring; first?: boolean; onEdit
           </View>
         </View>
       </Pressable>
-      <View style={{ alignItems: "flex-end", gap: 4 }}>
-        <Txt style={{ fontFamily: fonts.mono, fontSize: 14 }} color={isIncome ? accent.success : palette.text}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 8 }}>
+        <Txt style={{ fontFamily: fonts.mono, fontSize: 13 }} color={isIncome ? accent.success : palette.text}>
           {isIncome ? "+ " : "- "}
           {formatBRL(item.amount)}
         </Txt>
@@ -67,6 +72,7 @@ function Row({ item, first, onEdit }: { item: Recurring; first?: boolean; onEdit
           onValueChange={(v) => toggle.mutate({ id: item.id, active: v })}
           trackColor={{ true: accent.primary, false: palette.muted }}
           thumbColor="#FFFFFF"
+          style={{ transform: [{ scale: 0.85 }] }}
         />
       </View>
     </View>

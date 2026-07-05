@@ -4,6 +4,7 @@ import { Txt } from "@/components/ui/text";
 import { type SpendingAlert } from "@/hooks/use-financial-data";
 import { accent, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
+import { categoryIonicon } from "@/lib/category-icon";
 
 // "Alertas de gastos" — card tinta de aviso. Cada linha: categoria + % vs mês
 // anterior (danger se ≥100, warning caso contrário).
@@ -34,7 +35,7 @@ export function AlertsCard({ alerts }: { alerts: SpendingAlert[] }) {
         return (
           <View key={a.categoryId} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-              <Txt style={{ fontSize: 15 }}>{a.category?.icon ?? "⚠️"}</Txt>
+              <Ionicons name={categoryIonicon(a.category?.name, a.category?.icon)} size={15} color={palette.textSecondary} />
               <Txt variant="small" color={palette.text} numberOfLines={1}>
                 {a.category?.name ?? "Outros"}
               </Txt>
