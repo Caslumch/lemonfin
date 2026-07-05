@@ -60,17 +60,41 @@ Isso evita o gatilho de In-App Purchase da Apple. Ver issues **#10/#11** e o
 
 ## Ainda falta (próximas fatias)
 
-- Verificação TOTP (2FA) — hoje o login sinaliza, mas não abre a tela.
-- Registro manual de transação (form Zod), edição, filtros.
-- Gráficos (Victory Native), chat IA (SSE), reservas/metas/cartões.
+- Verificação TOTP (2FA) no login (hoje sinaliza, mas não abre a tela).
 - Push notifications (migrar os alertas do `alerts.service`).
 - Face ID unlock (`expo-local-authentication`), câmera de comprovante.
-- Exclusão de conta in-app (issue **#07**), telas de privacidade/termos (**#08**).
 - `packages/shared` como fonte dos tipos (issue **#05**).
+
+## Publicação (EAS Build)
+
+O Expo Go é só pra dev — pra ter o app instalável de verdade (TestFlight/Play
+interno → lojas) usa-se o **EAS Build** (compila na nuvem, sem precisar de
+Xcode local).
+
+Já configurado neste repo:
+- `app.json`: ícone (`assets/icon.png`), adaptive icon (Android), splash
+  (`assets/splash-icon.png`, fundo `#0D0D0D`), bundle id `ai.adalink.lemonfin`.
+- `eas.json`: perfis `development` / `preview` (APK interno) / `production`.
+
+Pré-requisitos (feitos por você, são interativos): conta **Expo**, conta
+**Apple Developer** (US$ 99/ano, iOS) e/ou **Google Play** (US$ 25, Android).
+
+Passos:
+```bash
+npm i -g eas-cli
+eas login                 # sua conta Expo
+pnpm --filter mobile exec eas init          # cria o projeto EAS (preenche extra.eas.projectId)
+pnpm --filter mobile exec eas build -p ios --profile preview     # binário interno p/ testar
+pnpm --filter mobile exec eas build -p android --profile preview
+# produção + envio pras lojas:
+pnpm --filter mobile exec eas build -p ios --profile production
+pnpm --filter mobile exec eas submit -p ios
+```
+Obs.: os ícones/splash só aparecem no **build EAS**, não no Expo Go (que usa o
+ícone do próprio Expo Go).
 
 ## Notas de monorepo
 
 - `metro.config.js` está configurado para o workspace (watchFolders + nodeModulesPaths).
 - O `.npmrc` da raiz usa `shamefully-hoist=true`, o que evita a maioria dos
   problemas de resolução do Metro com pnpm.
-- Sem assets custom de ícone/splash ainda — o Expo usa os defaults até adicioná-los.

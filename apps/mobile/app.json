@@ -5,22 +5,35 @@
     "scheme": "lemonfin",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ai.adalink.lemonfin"
     },
     "android": {
       "package": "ai.adalink.lemonfin",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0D0D"
+      }
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-font",
       "expo-local-authentication",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0D0D0D"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
