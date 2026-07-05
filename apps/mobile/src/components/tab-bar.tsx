@@ -2,8 +2,10 @@ import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAtomValue } from "jotai";
 import { accent } from "@/theme/tokens";
 import { haptic } from "@/lib/haptics";
+import { openSheetCountAtom } from "@/state/ui";
 
 // Tab bar flutuante estilo Nubank: pill escura flutuando sobre o conteúdo, item
 // ativo num círculo uva, ícones sem label + FAB lima central (nova transação).
@@ -24,6 +26,10 @@ const PILL = "#1C1C1E";
 export function TabBar({ state, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const activeName = state.routes[state.index]?.name;
+  const openSheets = useAtomValue(openSheetCountAtom);
+
+  // Esconde a barra enquanto um sheet está aberto (senão cobre os botões dele).
+  if (openSheets > 0) return null;
 
   const tab = (name: string) => {
     const active = name === activeName;

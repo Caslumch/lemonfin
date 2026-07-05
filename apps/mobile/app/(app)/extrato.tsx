@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, RefreshControl, View } from "react-native";
 import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
@@ -11,7 +11,7 @@ import { haptic } from "@/lib/haptics";
 import {
   type Transaction,
   useDeleteTransaction,
-  useTransactions,
+  useInfiniteTransactions,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
 import { accent } from "@/theme/tokens";
@@ -20,13 +20,21 @@ type Filter = "all" | "INCOME" | "EXPENSE";
 
 export default function ExtratoScreen() {
   const { palette } = useTheme();
-  const { data, isLoading, refetch, isRefetching } = useTransactions();
+  const {
+    data,
+    isLoading,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteTransactions();
   const del = useDeleteTransaction();
   const [filter, setFilter] = useState<Filter>("all");
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
   const rows = useMemo(() => {
-    const all = data?.data ?? [];
+    const all = data?.pages.flatMap((p) => p.data) ?? [];
     return filter === "all" ? all : all.filter((t) => t.type === filter);
   }, [data, filter]);
 
@@ -88,12 +96,21 @@ export default function ExtratoScreen() {
           )}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
               tintColor={accent.primary}
             />
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator style={{ marginVertical: 20 }} color={accent.primary} />
+            ) : null
           }
           ListEmptyComponent={
             <Txt variant="small" color={palette.textTertiary} style={{ marginTop: 24 }}>

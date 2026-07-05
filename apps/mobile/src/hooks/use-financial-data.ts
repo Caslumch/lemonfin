@@ -1,4 +1,5 @@
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -45,11 +46,24 @@ export function useSummary() {
   });
 }
 
+// Primeira página (usada no preview do dashboard).
 export function useTransactions() {
   return useQuery({
     queryKey: ["transactions", { page: 1 }],
     queryFn: () =>
       api<Paginated<Transaction>>("/transactions?page=1&perPage=25"),
+  });
+}
+
+// Extrato completo com scroll infinito.
+export function useInfiniteTransactions() {
+  return useInfiniteQuery({
+    queryKey: ["transactions", "infinite"],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      api<Paginated<Transaction>>(`/transactions?page=${pageParam}&perPage=25`),
+    getNextPageParam: (last) =>
+      last.meta.page < last.meta.totalPages ? last.meta.page + 1 : undefined,
   });
 }
 
@@ -616,8 +630,12 @@ export interface CardInvoice {
 export function useCardInvoice(cardId: string, month?: string) {
   return useQuery({
     queryKey: ["card-invoice", cardId, month ?? "current"],
+    // perPage=100 (máx da API) traz o ciclo inteiro — uma fatura raramente passa
+    // disso, e evita paginação numa lista já delimitada pelo ciclo.
     queryFn: () =>
-      api<CardInvoice>(`/cards/${cardId}/invoice${month ? `?month=${month}` : ""}`),
+      api<CardInvoice>(
+        `/cards/${cardId}/invoice?perPage=100${month ? `&month=${month}` : ""}`,
+      ),
     enabled: !!cardId,
   });
 }

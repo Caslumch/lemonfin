@@ -68,9 +68,15 @@ export function InvoicePaySheet({
       )}
     >
       <BottomSheetView style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: insets.bottom + 20, gap: 12 }}>
-        <Txt variant="title">Pagar fatura</Txt>
-        <AmountInput raw={raw} onChange={setRaw} autoFocus />
-        <Button label="Pagar" onPress={submit} loading={pay.isPending} disabled={amount <= 0 || pay.isPending} />
+        {/* Só monta o conteúdo quando aberto — senão o autoFocus abriria o
+            teclado ao entrar na tela (o sheet fica montado, fechado). */}
+        {config && (
+          <>
+            <Txt variant="title">Pagar fatura</Txt>
+            <AmountInput raw={raw} onChange={setRaw} autoFocus />
+            <Button label="Pagar" onPress={submit} loading={pay.isPending} disabled={amount <= 0 || pay.isPending} />
+          </>
+        )}
       </BottomSheetView>
     </BottomSheet>
   );

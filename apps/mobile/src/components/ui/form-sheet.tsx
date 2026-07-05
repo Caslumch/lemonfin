@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Txt } from "./text";
 import { Button } from "./button";
 import { useTheme } from "@/theme/use-theme";
+import { useSheetPresence } from "@/hooks/use-sheet-presence";
 
 // Wrapper de formulário em bottom sheet (criar/editar). Header fixo + campos
 // roláveis + RODAPÉ FIXO com os botões (salvar/excluir sempre visíveis).
@@ -39,6 +40,7 @@ export function FormSheet({
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["90%"], []);
+  useSheetPresence(open);
 
   useEffect(() => {
     if (open) sheetRef.current?.expand();

@@ -67,24 +67,30 @@ export function ReserveContributeSheet({
       )}
     >
       <BottomSheetView style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: insets.bottom + 20, gap: 12 }}>
-        <Txt variant="title">Guardar</Txt>
-        <Txt variant="small" color={palette.textSecondary}>
-          {reserve?.name}
-        </Txt>
-        <BottomSheetTextInput
-          value={formatBRL(amount)}
-          onChangeText={(t) => setRaw(t.replace(/\D/g, "").slice(0, 9))}
-          keyboardType="number-pad"
-          autoFocus
-          style={{
-            fontFamily: fonts.outfit,
-            fontSize: 44,
-            textAlign: "center",
-            paddingVertical: 16,
-            color: amount > 0 ? palette.text : palette.textTertiary,
-          }}
-        />
-        <Button label="Guardar" onPress={save} loading={contribute.isPending} disabled={amount <= 0 || contribute.isPending} />
+        {/* Só monta o conteúdo quando aberto — senão o autoFocus abriria o
+            teclado ao entrar na tela (o sheet fica montado, fechado). */}
+        {reserve && (
+          <>
+            <Txt variant="title">Guardar</Txt>
+            <Txt variant="small" color={palette.textSecondary}>
+              {reserve.name}
+            </Txt>
+            <BottomSheetTextInput
+              value={formatBRL(amount)}
+              onChangeText={(t) => setRaw(t.replace(/\D/g, "").slice(0, 9))}
+              keyboardType="number-pad"
+              autoFocus
+              style={{
+                fontFamily: fonts.outfit,
+                fontSize: 44,
+                textAlign: "center",
+                paddingVertical: 16,
+                color: amount > 0 ? palette.text : palette.textTertiary,
+              }}
+            />
+            <Button label="Guardar" onPress={save} loading={contribute.isPending} disabled={amount <= 0 || contribute.isPending} />
+          </>
+        )}
       </BottomSheetView>
     </BottomSheet>
   );
