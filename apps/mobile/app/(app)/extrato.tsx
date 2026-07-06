@@ -47,6 +47,8 @@ export default function ExtratoScreen() {
         type: tx.type,
         categoryId: tx.categoryId ?? "",
         description: tx.description ?? "",
+        cardId: tx.cardId ?? "",
+        date: tx.date,
       },
     });
   }

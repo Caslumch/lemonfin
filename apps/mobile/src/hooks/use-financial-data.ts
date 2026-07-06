@@ -32,6 +32,9 @@ export interface Transaction {
   date: string;
   categoryId?: string;
   category?: TransactionCategory | null;
+  cardId?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
 }
 
 interface Paginated<T> {
@@ -102,10 +105,13 @@ export function useCategories() {
 }
 
 export interface CreateTransactionInput {
-  amount: number;
+  amount: number; // parcelado (installments>=2): valor TOTAL da compra
   type: "INCOME" | "EXPENSE";
   categoryId: string;
   description?: string;
+  date?: string; // ISO datetime
+  cardId?: string | null; // null (no update) limpa o cartão
+  installments?: number; // >= 2 cria N parcelas mensais
 }
 
 // Cria uma transação e invalida os caches que dependem dela — o novo lançamento
