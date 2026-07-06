@@ -5,7 +5,7 @@ import { Txt } from "@/components/ui/text";
 import { type Card } from "@/hooks/use-financial-data";
 import { accent, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-import { CardStack } from "./card-stack";
+import { CardCarousel } from "./card-carousel";
 
 // Container escuro "Meus Cartões" da Home (espelha o web): título + botão "+" em
 // uva + pilha de cartões + "Ver todos".
@@ -51,7 +51,7 @@ export function CardsPreview({ cards }: { cards: Card[] }) {
           </Txt>
         </Pressable>
       ) : (
-        <CardStack cards={cards} />
+        <CardCarousel cards={cards} />
       )}
 
       {cards.length > 1 && (
