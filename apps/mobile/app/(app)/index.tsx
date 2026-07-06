@@ -190,6 +190,9 @@ export default function HomeScreen() {
               )}
             </Card>
 
+            {/* Meus Cartões */}
+            {(cards.data?.length ?? 0) > 0 && <CardsPreview cards={cards.data ?? []} />}
+
             {/* Receita + sparkline */}
             {months.length >= 2 && (
               <Card>
@@ -229,9 +232,6 @@ export default function HomeScreen() {
                 <MonthlyBarChart data={months} />
               </Card>
             )}
-
-            {/* Meus Cartões */}
-            {(cards.data?.length ?? 0) > 0 && <CardsPreview cards={cards.data ?? []} />}
 
             {/* Forecast */}
             {forecast.data && <ForecastCard data={forecast.data} />}
