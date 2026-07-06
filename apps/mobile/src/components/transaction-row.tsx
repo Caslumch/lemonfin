@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
-import { accent, categoryColors, fonts, radii } from "@/theme/tokens";
+import { accent, fonts, radii } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 import { categoryIonicon } from "@/lib/category-icon";
 import { type Transaction } from "@/hooks/use-financial-data";
@@ -22,12 +22,11 @@ export function TransactionRow({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
-  const { palette, scheme } = useTheme();
+  const { palette } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
   const swipeable = !!(onEdit || onDelete);
   const isIncome = tx.type === "INCOME";
   const amount = Number(tx.amount);
-  const cat = categoryColors(scheme, tx.category?.colorBg, tx.category?.colorText);
 
   const content = (
     <View
@@ -47,7 +46,7 @@ export function TransactionRow({
             width: 44,
             height: 44,
             borderRadius: radii.md,
-            backgroundColor: cat.bg,
+            backgroundColor: palette.muted,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -55,7 +54,7 @@ export function TransactionRow({
           <Ionicons
             name={categoryIonicon(tx.category?.name, tx.category?.icon)}
             size={20}
-            color={cat.fg}
+            color={palette.text}
           />
         </View>
         <View style={{ flex: 1 }}>

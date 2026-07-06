@@ -3,20 +3,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Txt } from "@/components/ui/text";
 import { useTheme } from "@/theme/use-theme";
-import { accent } from "@/theme/tokens";
 import { haptic } from "@/lib/haptics";
 
-type Action = { label: string; icon: keyof typeof Ionicons.glyphMap; href: string; tint: string };
+type Action = { label: string; icon: keyof typeof Ionicons.glyphMap; href: string };
 
 // Atalhos rápidos da Home (estilo Nubank): dá acesso na primeira tela às seções
-// que antes só ficavam no Perfil. Rola horizontal e sangra até a borda.
+// que antes só ficavam no Perfil. Rola horizontal e sangra até a borda. Ícones
+// neutros (monocromáticos), sem cores por item.
 const ACTIONS: Action[] = [
-  { label: "Metas", icon: "flag-outline", href: "/metas", tint: accent.primary },
-  { label: "Reservas", icon: "wallet-outline", href: "/reservas", tint: accent.uva },
-  { label: "Recorrentes", icon: "repeat-outline", href: "/recorrentes", tint: accent.uva },
-  { label: "Insights", icon: "bulb-outline", href: "/insights", tint: accent.warning },
-  { label: "Categorias", icon: "pricetags-outline", href: "/categorias", tint: accent.success },
-  { label: "Ajustes", icon: "settings-outline", href: "/configuracoes", tint: accent.primary },
+  { label: "Metas", icon: "flag-outline", href: "/metas" },
+  { label: "Reservas", icon: "wallet-outline", href: "/reservas" },
+  { label: "Recorrentes", icon: "repeat-outline", href: "/recorrentes" },
+  { label: "Insights", icon: "bulb-outline", href: "/insights" },
+  { label: "Categorias", icon: "pricetags-outline", href: "/categorias" },
+  { label: "Ajustes", icon: "settings-outline", href: "/configuracoes" },
 ];
 
 export function QuickActions() {
@@ -42,12 +42,12 @@ export function QuickActions() {
               width: 56,
               height: 56,
               borderRadius: 28,
-              backgroundColor: `${a.tint}20`,
+              backgroundColor: palette.muted,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Ionicons name={a.icon} size={24} color={a.tint} />
+            <Ionicons name={a.icon} size={24} color={palette.text} />
           </View>
           <Txt
             numberOfLines={1}
