@@ -172,6 +172,24 @@ export default function HomeScreen() {
 
             <LimaoInput />
 
+            {/* Últimas transações */}
+            <Card>
+              <SectionHeader
+                title="Últimas transações"
+                action="Ver todas"
+                onAction={() => router.navigate("/extrato")}
+              />
+              {recent.length === 0 ? (
+                <Txt variant="small" color={palette.textTertiary}>
+                  Nenhuma transação ainda. Mande um gasto no WhatsApp para começar.
+                </Txt>
+              ) : (
+                recent.map((tx, i) => (
+                  <TransactionRow key={tx.id} tx={tx} showDivider={i > 0} />
+                ))
+              )}
+            </Card>
+
             {/* Receita + sparkline */}
             {months.length >= 2 && (
               <Card>
@@ -220,24 +238,6 @@ export default function HomeScreen() {
 
             {/* Alertas */}
             {alerts.length > 0 && <AlertsCard alerts={alerts} />}
-
-            {/* Recentes */}
-            <Card>
-              <SectionHeader
-                title="Transações"
-                action="Ver todas"
-                onAction={() => router.navigate("/extrato")}
-              />
-              {recent.length === 0 ? (
-                <Txt variant="small" color={palette.textTertiary}>
-                  Nenhuma transação ainda. Mande um gasto no WhatsApp para começar.
-                </Txt>
-              ) : (
-                recent.map((tx, i) => (
-                  <TransactionRow key={tx.id} tx={tx} showDivider={i > 0} />
-                ))
-              )}
-            </Card>
           </>
         )}
       </ScrollView>
