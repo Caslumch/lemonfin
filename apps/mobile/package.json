@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "expo start",
     "start": "expo start",
+    "fresh": "rm -rf .expo node_modules/.cache && expo start -c",
+    "clean": "rm -rf .expo node_modules/.cache",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "tsc --noEmit",
