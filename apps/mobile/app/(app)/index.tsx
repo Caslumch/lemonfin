@@ -14,6 +14,7 @@ import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { ReceitaSparkline } from "@/components/charts/receita-sparkline";
 import { MonthlyBarChart } from "@/components/charts/monthly-bar-chart";
 import { CardsPreview } from "@/components/dashboard/cards-preview";
+import { QuickActions } from "@/components/dashboard/quick-actions";
 import { useAuth } from "@/providers/auth-provider";
 import {
   useCards,
@@ -165,6 +166,9 @@ export default function HomeScreen() {
                 tone="lima"
               />
             </View>
+
+            {/* Atalhos rápidos (Metas, Reservas, Recorrentes…) */}
+            <QuickActions />
 
             <LimaoInput />
 
