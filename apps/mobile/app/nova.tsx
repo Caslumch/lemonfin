@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -197,18 +197,18 @@ export default function NovaScreen() {
             {/* Categoria */}
             <View style={{ gap: 8 }}>
               <Txt variant="caption" color={palette.textTertiary}>Categoria</Txt>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
                 {(categories.data ?? []).map((c) => (
                   <Chip key={c.id} label={c.name} active={categoryId === c.id} onPress={() => setCategoryId(c.id)} />
                 ))}
-              </View>
+              </ScrollView>
             </View>
 
             {/* Cartão (só saída) */}
             {isExpense && (
               <View style={{ gap: 8 }}>
                 <Txt variant="caption" color={palette.textTertiary}>Cartão</Txt>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
                   <Chip
                     label="Sem cartão"
                     active={!cardId}
@@ -220,7 +220,7 @@ export default function NovaScreen() {
                   {cardList.map((c) => (
                     <Chip key={c.id} label={c.name} active={cardId === c.id} onPress={() => setCardId(c.id)} />
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
@@ -228,7 +228,7 @@ export default function NovaScreen() {
             {showInstallments && (
               <View style={{ gap: 8 }}>
                 <Txt variant="caption" color={palette.textTertiary}>Parcelas</Txt>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
                   {INSTALLMENT_OPTIONS.map((n) => (
                     <Chip
                       key={n}
@@ -237,7 +237,7 @@ export default function NovaScreen() {
                       onPress={() => setInstallments(n)}
                     />
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
