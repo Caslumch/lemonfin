@@ -31,7 +31,7 @@ const COLS: { h: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-const TAGS = ["IA no WhatsApp", "Open Finance", "LGPD"];
+const TAGS = ["IA no WhatsApp", "Criptografia"];
 
 export function Footer() {
   return (

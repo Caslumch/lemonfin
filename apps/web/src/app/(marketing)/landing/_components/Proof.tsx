@@ -2,7 +2,7 @@ const STATS = [
   { k: "Categorização", v: "Automática", d: "A IA classifica cada gasto sozinha" },
   { k: "Resposta", v: "Em segundos", d: "Consulte tudo pelo WhatsApp" },
   { k: "Idioma", v: "100% PT-BR", d: "Entende o jeito que você fala" },
-  { k: "Segurança", v: "Ponta a ponta", d: "Seus dados protegidos pela LGPD" },
+  { k: "Segurança", v: "Criptografados", d: "Em trânsito e em repouso" },
 ];
 
 export function Proof() {
