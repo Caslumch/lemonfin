@@ -16,7 +16,10 @@ import { ReceiptExtractionService } from './receipt-extraction.service';
 import { WmodeClientService } from './wmode-client.service';
 import { phoneCandidates } from './phone-candidates';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
-import { CreateInstallmentsUseCase } from '../../transactions/use-cases/create-installments.use-case';
+import {
+  CreateInstallmentsUseCase,
+  buildInstallmentSchedule,
+} from '../../transactions/use-cases/create-installments.use-case';
 import { PayInvoiceUseCase } from '../../cards/use-cases/pay-invoice.use-case';
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
@@ -28,6 +31,7 @@ import {
   ConversationRepository,
   PendingConfirmation,
   HistoryEntry,
+  LastAction,
 } from '../repositories/conversation.repository';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { BillingConfigService } from '../../../common/billing/billing-config.service';
@@ -263,7 +267,7 @@ export class WhatsappService {
         await this.handleCancel(from, user.id, phoneKey);
         break;
       case 'correction':
-        await this.handleCorrection(from, user.id, result);
+        await this.handleCorrection(from, user.id, result, phoneKey);
         break;
       case 'correction_card':
         await this.handleCorrectionCard(
@@ -1540,6 +1544,18 @@ export class WhatsappService {
         lastAction.transactionIds,
         userIds,
       );
+
+      // Aporte de reserva: além de apagar a despesa, reverte o savedAmount —
+      // senão a reserva mostraria dinheiro guardado sem lastro em caixa. Só
+      // reverte se a despesa foi de fato removida (count > 0), pra não
+      // decrementar duas vezes num "cancela" repetido.
+      if (lastAction.kind === 'reserve-contribution' && count > 0) {
+        await this.reservesRepository.removeContribution(
+          lastAction.reserveId,
+          lastAction.amount,
+        );
+      }
+
       if (phoneKey) await this.conversation.clearLastAction(phoneKey);
 
       if (count > 0) {
@@ -1595,7 +1611,31 @@ export class WhatsappService {
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'correction' }>,
+    phoneKey?: string,
   ) {
+    // Se a última ação foi um parcelamento, "o total era X" corrige o GRUPO
+    // inteiro (não só a última parcela): redivide o novo total nas N parcelas,
+    // mantendo o resíduo de arredondamento na última — senão soma(parcelas) ≠
+    // total e o grupo fica internamente inconsistente.
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    if (
+      lastAction?.kind === 'installment' &&
+      lastAction.transactionIds.length > 0
+    ) {
+      const handled = await this.correctInstallmentGroup(
+        from,
+        userId,
+        lastAction,
+        result.newAmount,
+        phoneKey,
+      );
+      if (handled) return;
+      // Se o grupo já não existe (parcelas apagadas), cai no fallback abaixo.
+    }
+
     const last = await this.transactionsRepository.findLastByUser(userId);
 
     if (!last) {
@@ -1633,6 +1673,77 @@ export class WhatsappService {
     this.logger.log(
       `Transaction ${last.id} corrected: ${oldAmount} → ${result.newAmount} by user ${userId}`,
     );
+  }
+
+  // Corrige o TOTAL de um parcelamento: redivide newTotal nas N parcelas do
+  // grupo (mesma régua de create-installments — resíduo na última) e atualiza
+  // cada parcela. Retorna false se o grupo já não existe (cai no fallback de
+  // transação avulsa). Mantém soma(parcelas) == newTotal.
+  private async correctInstallmentGroup(
+    from: string,
+    userId: string,
+    lastAction: Extract<LastAction, { kind: 'installment' }>,
+    newTotal: number,
+    phoneKey?: string,
+  ): Promise<boolean> {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const rows = await this.transactionsRepository.findManyByIds(
+      lastAction.transactionIds,
+      userIds,
+    );
+    if (rows.length === 0) return false;
+
+    // Ordena por nº da parcela (o resíduo vai na última). Parcelas sem número
+    // caem para o fim de forma estável.
+    const ordered = [...rows].sort(
+      (a, b) => (a.installmentNumber ?? 0) - (b.installmentNumber ?? 0),
+    );
+
+    const oldTotal = ordered.reduce((sum, r) => sum + Number(r.amount), 0);
+    const { amounts, perInstallment } = buildInstallmentSchedule({
+      amount: newTotal,
+      installments: ordered.length,
+    });
+
+    for (let i = 0; i < ordered.length; i++) {
+      await this.transactionsRepository.update(ordered[i].id, {
+        amount: amounts[i],
+      });
+    }
+
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Descrição-base sem o sufixo "(i/N)" das parcelas, para o rótulo.
+    const first = ordered[0];
+    const baseDescription = (first.description ?? '').replace(
+      /\s*\(\d+\/\d+\)\s*$/,
+      '',
+    );
+
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content:
+        `Corrigido ✏️\n\n` +
+        `Ajustei o parcelamento de *${baseDescription || first.category.name}*: ` +
+        `de ~${fmt(oldTotal)}~ pra *${fmt(newTotal)}* ` +
+        `(${ordered.length}x de ${fmt(perInstallment)}). ` +
+        `Já bateu tudo no painel ✨`,
+    });
+
+    // Atualiza o rótulo da última ação para refletir o novo valor (o grupo
+    // segue "cancelável"; ids e grupo não mudam).
+    if (phoneKey) {
+      await this.conversation.setLastAction(phoneKey, {
+        ...lastAction,
+        label: `${baseDescription || first.category.name} (${ordered.length}x de ${fmt(perInstallment)})`,
+      });
+    }
+
+    this.logger.log(
+      `Installment group corrected: ${oldTotal} → ${newTotal} (${ordered.length}x) by user ${userId}`,
+    );
+    return true;
   }
 
   private async handleInstallment(
@@ -2153,7 +2264,7 @@ export class WhatsappService {
     }
 
     // 1) Aporte vira DESPESA (saiu do disponível do mês).
-    await this.transactionsRepository.create({
+    const expense = await this.transactionsRepository.create({
       amount: pending.amount,
       type: 'EXPENSE',
       description: `Guardado: ${chosen.name}`,
@@ -2167,6 +2278,17 @@ export class WhatsappService {
       chosen.id,
       pending.amount,
     );
+
+    // 3) Registra a AÇÃO INTEIRA para um "cancela" reverter os dois writes
+    //    (deleta a despesa E decrementa savedAmount) — sem isso o fallback
+    //    apagaria só a despesa e a reserva ficaria com dinheiro fantasma.
+    await this.conversation.setLastAction(phoneKey, {
+      kind: 'reserve-contribution',
+      transactionIds: [expense.id],
+      reserveId: chosen.id,
+      amount: pending.amount,
+      label: `Guardado em ${chosen.name}`,
+    });
 
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

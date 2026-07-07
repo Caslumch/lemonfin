@@ -77,4 +77,22 @@ export class ReservesRepository {
     }
     return reserve;
   }
+
+  // Reverte um aporte (desfaz addContribution): decrementa savedAmount e, se a
+  // reserva tinha sido desativada por ter completado, reativa — pois voltou a
+  // ficar abaixo do alvo. Espelha addContribution para o "cancela".
+  async removeContribution(id: string, amount: number) {
+    const reserve = await this.prisma.reserve.update({
+      where: { id },
+      data: { savedAmount: { decrement: new Prisma.Decimal(amount) } },
+    });
+
+    if (!reserve.active && reserve.savedAmount.lt(reserve.targetAmount)) {
+      return this.prisma.reserve.update({
+        where: { id },
+        data: { active: true },
+      });
+    }
+    return reserve;
+  }
 }
