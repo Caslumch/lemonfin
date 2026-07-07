@@ -14,8 +14,13 @@ export async function proxy(request: NextRequest) {
     // estando autenticado).
     request.nextUrl.pathname.startsWith("/esqueci-senha");
 
-  // Rotas públicas de marketing (landing) — acessíveis sem login.
-  const isPublicPage = request.nextUrl.pathname.startsWith("/landing");
+  // Rotas públicas de marketing (landing) e jurídicas (privacidade/termos) —
+  // acessíveis sem login. As páginas legais precisam ser públicas: são lidas
+  // antes do cadastro e por buscadores/lojas de app.
+  const isPublicPage =
+    request.nextUrl.pathname.startsWith("/landing") ||
+    request.nextUrl.pathname.startsWith("/privacidade") ||
+    request.nextUrl.pathname.startsWith("/termos");
 
   if (!session && !isAuthPage && !isPublicPage) {
     return NextResponse.redirect(new URL("/login", request.url));
