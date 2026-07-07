@@ -9,14 +9,8 @@ import {
 } from "lucide-react";
 import { CategoryIcon } from "@/components/ui/category-icon";
 import { cn } from "@/lib/utils";
+import { formatBRL as formatCurrency } from "@/lib/format";
 import type { Forecast } from "@/types/forecast";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
 
 interface ForecastCardProps {
   forecast: Forecast | null;
@@ -99,7 +93,8 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
         )}
         {forecast.estimatedVariableExpense > 0 && (
           <span className="text-danger font-medium">
-            − {formatCurrency(forecast.estimatedVariableExpense)} gastos estimados
+            − {formatCurrency(forecast.estimatedVariableExpense)} gastos
+            estimados
           </span>
         )}
       </div>
@@ -115,13 +110,15 @@ export function ForecastCard({ forecast, loading }: ForecastCardProps) {
       {/* Detalhe das recorrências pendentes */}
       {open && hasPending && (
         <div className="mt-5 pt-5 border-t border-white/10 space-y-2.5">
-          <p className="text-xs text-on-dark-muted mb-1">
-            Ainda neste mês
-          </p>
+          <p className="text-xs text-on-dark-muted mb-1">Ainda neste mês</p>
           {forecast.pending.map((p) => (
             <div key={p.id} className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-[10px] bg-white/10 flex items-center justify-center shrink-0">
-                <CategoryIcon slug={p.category?.slug} icon={p.category?.icon} size={14} />
+                <CategoryIcon
+                  slug={p.category?.slug}
+                  icon={p.category?.icon}
+                  size={14}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-on-dark truncate">{p.description}</p>

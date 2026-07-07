@@ -2,28 +2,13 @@
 
 import { Pencil, Trash2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  formatBRL as formatCurrency,
+  formatDateBR as formatDate,
+} from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import type { Transaction } from "@/types/transaction";
 import type { BadgeProps } from "@/components/ui/badge";
-
-function formatCurrency(value: string | number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(Number(value));
-}
-
-function formatDate(date: string) {
-  // Formata em UTC, não no fuso do navegador. As datas são gravadas ancoradas
-  // ao meio-dia UTC; formatar em fuso local (Brasil, UTC-3) puxaria datas
-  // próximas da meia-noite para o dia anterior — e divergiria do dia que o
-  // modal de edição mostra (ele faz slice(0,10) da string, sem fuso).
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(date));
-}
 
 function formatTime(createdAt: string) {
   // Horário REAL do registro vem de createdAt (a `date` é meio-dia UTC e não
@@ -131,9 +116,7 @@ export function TransactionList({
             )}
           </>
         ) : (
-          <p className="text-fg-muted text-sm">
-            Nenhuma transação neste mês.
-          </p>
+          <p className="text-fg-muted text-sm">Nenhuma transação neste mês.</p>
         )}
       </div>
     );
@@ -203,9 +186,7 @@ export function TransactionList({
                     · {total}x de {formatCurrency(Number(tx.amount))}
                   </span>
                 )}
-                {tx.user?.name && (
-                  <span>· {tx.user.name.split(" ")[0]}</span>
-                )}
+                {tx.user?.name && <span>· {tx.user.name.split(" ")[0]}</span>}
                 {tx.source === "WHATSAPP" && <span>· via WhatsApp</span>}
                 {tx.card && (
                   <span className="inline-flex items-center gap-1 text-fg-secondary">
