@@ -23,7 +23,7 @@ const FAQS = [
   },
   {
     q: "Meus dados estão seguros?",
-    a: "Sim. Operamos com criptografia de ponta a ponta e conformidade com a LGPD. Seus dados financeiros não são compartilhados com terceiros.",
+    a: "Sim. Seus dados trafegam com criptografia em trânsito e ficam criptografados em repouso. Não vendemos seus dados nem os compartilhamos para publicidade.",
   },
   {
     q: "E se eu não gostar?",
