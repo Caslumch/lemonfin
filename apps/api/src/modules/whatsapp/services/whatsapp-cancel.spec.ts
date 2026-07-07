@@ -21,6 +21,9 @@ function buildService(overrides: {
     findLastByUser: jest.fn().mockResolvedValue(overrides.lastTx ?? null),
     delete: jest.fn().mockResolvedValue(undefined),
   };
+  const reservesRepository = {
+    removeContribution: jest.fn().mockResolvedValue(undefined),
+  };
   const familyContext = {
     resolveUserIds: jest.fn().mockResolvedValue(['u1']),
   };
@@ -44,16 +47,24 @@ function buildService(overrides: {
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring
-    {} as never, // reserves
+    reservesRepository as never,
     {} as never, // goals
     {} as never, // listGoals
     {} as never, // chat
     conversation as never,
     {} as never, // premiumAccess
     {} as never, // billingConfig
+    {} as never, // payInvoice
   );
 
-  return { service, conversation, transactionsRepository, wmodeClient, sent };
+  return {
+    service,
+    conversation,
+    transactionsRepository,
+    reservesRepository,
+    wmodeClient,
+    sent,
+  };
 }
 
 // Acesso ao método privado.
@@ -147,5 +158,56 @@ describe('WhatsappService.handleCancel', () => {
     expect(transactionsRepository.deleteManyByIds).toHaveBeenCalled();
     // Como deleteMany não removeu nada, cai no fallback de transação única.
     expect(transactionsRepository.delete).toHaveBeenCalledWith('tx-fallback');
+  });
+
+  it('ao cancelar um APORTE de reserva, também reverte o savedAmount', async () => {
+    const {
+      service,
+      transactionsRepository,
+      reservesRepository,
+      conversation,
+    } = buildService({
+      lastAction: {
+        kind: 'reserve-contribution',
+        transactionIds: ['tx-aporte'],
+        reserveId: 'r1',
+        amount: 200,
+        label: 'Guardado em Viagem',
+      },
+      deleteManyCount: 1,
+    });
+
+    await callCancel(service);
+
+    // Apaga a despesa "Guardado"...
+    expect(transactionsRepository.deleteManyByIds).toHaveBeenCalledWith(
+      ['tx-aporte'],
+      ['u1'],
+    );
+    // ...E decrementa o acumulado da reserva (sem isso, dinheiro fantasma).
+    expect(reservesRepository.removeContribution).toHaveBeenCalledWith(
+      'r1',
+      200,
+    );
+    expect(conversation.clearLastAction).toHaveBeenCalled();
+  });
+
+  it('NÃO reverte o savedAmount se a despesa do aporte já não existia', async () => {
+    const { service, reservesRepository } = buildService({
+      lastAction: {
+        kind: 'reserve-contribution',
+        transactionIds: ['gone'],
+        reserveId: 'r1',
+        amount: 200,
+        label: 'Guardado em Viagem',
+      },
+      deleteManyCount: 0, // despesa já removida
+      lastTx: null,
+    });
+
+    await callCancel(service);
+
+    // Sem despesa apagada, não decrementa (evita reverter em dobro).
+    expect(reservesRepository.removeContribution).not.toHaveBeenCalled();
   });
 });

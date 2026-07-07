@@ -56,6 +56,15 @@ export type LastAction =
       installmentGroupIds: string[];
       count: number;
       label: string;
+    }
+  | {
+      // Aporte em reserva: a despesa "Guardado" (transactionIds) + os dados
+      // pra reverter o savedAmount da reserva num "cancela".
+      kind: 'reserve-contribution';
+      transactionIds: string[];
+      reserveId: string;
+      amount: number;
+      label: string;
     };
 
 const MAX_HISTORY = 4; // últimas 4 trocas

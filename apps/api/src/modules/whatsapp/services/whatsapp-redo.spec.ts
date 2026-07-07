@@ -106,6 +106,7 @@ function buildService(overrides: {
     conversation as never,
     {} as never, // premiumAccess
     {} as never, // billingConfig
+    {} as never, // payInvoice
   );
 
   return {
