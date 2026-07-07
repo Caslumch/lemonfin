@@ -110,7 +110,7 @@ export class WebhookController {
       .handleIncomingMessage({ from, content, sessionId, audio, image })
       .catch((error: unknown) => {
         this.logger.error(
-          `Error processing message ${messageId} from ${from}: ${error}`,
+          `Error processing message ${messageId} from ${from}: ${String(error)}`,
         );
         Sentry.captureException(error, {
           tags: { area: 'whatsapp-webhook', kind: 'post_claim_failure' },
