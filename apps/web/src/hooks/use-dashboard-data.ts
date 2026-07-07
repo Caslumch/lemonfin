@@ -7,7 +7,6 @@ import type {
   Transaction,
   TransactionSummary,
   MonthlyBreakdown,
-  CategoryBreakdown,
   PaginatedResponse,
   InsightsData,
 } from "@/types/transaction";
@@ -19,7 +18,6 @@ import type { Card } from "@/types/card";
 export interface DashboardData {
   summary: TransactionSummary;
   monthly: MonthlyBreakdown[];
-  categories: CategoryBreakdown[];
   recent: Transaction[];
   insights: InsightsData | null;
   goals: Goal[];
@@ -54,9 +52,9 @@ export function useDashboardData() {
       // mês seguinte) ficam no topo do `date desc` e roubam o lugar das reais.
       const recentEndDate = new Date().toISOString();
 
-      // Janela do mês corrente. Sem ela, /transactions/summary e /by-category
-      // somam TODOS os meses — incluindo as parcelas futuras de compras
-      // parceladas — e os cards ("Gastos do mês", "Saldo", categorias) explodem.
+      // Janela do mês corrente. Sem ela, /transactions/summary soma TODOS os
+      // meses — incluindo as parcelas futuras de compras parceladas — e os
+      // cards ("Gastos do mês", "Saldo") explodem.
       const now = new Date();
       const monthStart = new Date(
         now.getFullYear(),
@@ -84,7 +82,6 @@ export function useDashboardData() {
       const [
         summary,
         monthly,
-        categories,
         recentRes,
         insights,
         goals,
@@ -94,7 +91,6 @@ export function useDashboardData() {
       ] = await Promise.all([
         fetchApi<TransactionSummary>(`/transactions/summary?${monthQs}`),
         fetchApi<MonthlyBreakdown[]>("/transactions/monthly?months=6"),
-        fetchApi<CategoryBreakdown[]>(`/transactions/by-category?${monthQs}`),
         fetchApi<PaginatedResponse<Transaction>>(
           `/transactions?perPage=5&page=1&endDate=${encodeURIComponent(recentEndDate)}`,
         ),
@@ -108,7 +104,6 @@ export function useDashboardData() {
       return {
         summary,
         monthly,
-        categories,
         recent: recentRes.data,
         insights,
         goals,

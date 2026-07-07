@@ -2,14 +2,8 @@
 
 import { TrendingUp, TrendingDown, Wallet, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatBRL as formatCurrency } from "@/lib/format";
 import type { TransactionSummary } from "@/types/transaction";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
 
 function isCurrentMonth(month: Date) {
   const now = new Date();
@@ -141,9 +135,7 @@ export function SummaryCards({ summary, month, loading }: SummaryCardsProps) {
                 <p
                   className={cn(
                     "font-[family-name:var(--font-display)] text-xl font-bold tracking-tight",
-                    card.dark
-                      ? "text-on-dark"
-                      : card.color,
+                    card.dark ? "text-on-dark" : card.color,
                   )}
                 >
                   {formatCurrency(card.value)}

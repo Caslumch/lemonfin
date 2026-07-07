@@ -17,12 +17,19 @@ import {
   CreditCard as CreditCardIcon,
 } from "lucide-react";
 import { useAtom } from "jotai";
-import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
+import {
+  CategoryIcon,
+  CategoryIconWithBg,
+} from "@/components/ui/category-icon";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  formatBRL as formatCurrency,
+  formatDateBR as formatDate,
+} from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { ErrorState } from "@/components/ui/error-state";
@@ -37,23 +44,6 @@ import { queryKeys } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import { sidebarMobileOpenAtom } from "@/store/sidebar";
 import type { MonthlyBreakdown } from "@/types/transaction";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
-function formatDate(date: string) {
-  // Datas de transação são gravadas ancoradas ao meio-dia UTC; formata em UTC
-  // para não deslocar o dia no fuso do navegador (ver transaction-list.tsx).
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(date));
-}
 
 function WelcomeToast() {
   const searchParams = useSearchParams();
@@ -82,8 +72,13 @@ export default function DashboardPage() {
   const [, setMobileOpen] = useAtom(sidebarMobileOpenAtom);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
 
-  const { data, isPending: loading, isFetching, error, refetch } =
-    useDashboardData();
+  const {
+    data,
+    isPending: loading,
+    isFetching,
+    error,
+    refetch,
+  } = useDashboardData();
 
   useEffect(() => {
     if (error) logApiError("load:dashboard", error);
@@ -99,7 +94,8 @@ export default function DashboardPage() {
   const cards = data?.cards ?? [];
 
   // Calculate month-over-month variation from monthly breakdown
-  const currentMonthData = monthly.length > 0 ? monthly[monthly.length - 1] : null;
+  const currentMonthData =
+    monthly.length > 0 ? monthly[monthly.length - 1] : null;
   const prevMonthData = monthly.length > 1 ? monthly[monthly.length - 2] : null;
 
   function calcVariation(current: number, previous: number): number | null {
@@ -319,7 +315,10 @@ export default function DashboardPage() {
                 {loading ? (
                   <div className="space-y-3">
                     {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="flex animate-pulse items-center gap-3">
+                      <div
+                        key={i}
+                        className="flex animate-pulse items-center gap-3"
+                      >
                         <div className="h-9 w-9 rounded-full bg-muted" />
                         <div className="flex-1 space-y-1.5">
                           <div className="h-3 w-24 rounded bg-muted" />
@@ -414,7 +413,11 @@ export default function DashboardPage() {
                       key={alert.categoryId}
                       className="flex items-center gap-2 text-sm"
                     >
-                      <CategoryIcon slug={alert.category?.slug} icon={alert.category?.icon} size={14} />
+                      <CategoryIcon
+                        slug={alert.category?.slug}
+                        icon={alert.category?.icon}
+                        size={14}
+                      />
                       <span className="text-fg flex-1 truncate">
                         {alert.category?.name ?? "Outros"}
                       </span>
@@ -463,7 +466,12 @@ export default function DashboardPage() {
                       <div key={goal.id} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-fg truncate">
-                            <CategoryIcon slug={goal.category?.slug} icon={goal.category?.icon} size={12} className="inline mr-1" />
+                            <CategoryIcon
+                              slug={goal.category?.slug}
+                              icon={goal.category?.icon}
+                              size={12}
+                              className="inline mr-1"
+                            />
                             {goal.category?.name}
                           </span>
                           <span
@@ -486,7 +494,8 @@ export default function DashboardPage() {
                           />
                         </div>
                         <p className="text-[10px] text-fg-muted">
-                          {formatCurrency(goal.progress.spent)} / {formatCurrency(goal.progress.limit)}
+                          {formatCurrency(goal.progress.spent)} /{" "}
+                          {formatCurrency(goal.progress.limit)}
                         </p>
                       </div>
                     );
@@ -690,7 +699,14 @@ function ReceitaSparkline({ data }: { data: MonthlyBreakdown[] }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx={last.x} cy={last.y} r="5" fill="#fff" stroke="#6C5CE7" strokeWidth="2.5" />
+      <circle
+        cx={last.x}
+        cy={last.y}
+        r="5"
+        fill="#fff"
+        stroke="#6C5CE7"
+        strokeWidth="2.5"
+      />
     </svg>
   );
 }
