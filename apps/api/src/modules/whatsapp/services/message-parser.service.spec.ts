@@ -144,6 +144,13 @@ describe('MessageParserService', () => {
       mockResponse({ intent: 'cancel' });
       expect(await service.parse('cancela o último')).toEqual({
         intent: 'cancel',
+        target: null,
+      });
+
+      mockResponse({ intent: 'cancel', target: 'netflix' });
+      expect(await service.parse('cancela a netflix')).toEqual({
+        intent: 'cancel',
+        target: 'netflix',
       });
 
       mockResponse({ intent: 'correction', newAmount: 30 });

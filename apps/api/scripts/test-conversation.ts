@@ -5,9 +5,10 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const dbMatch = readFileSync(join(__dirname, '..', '..', '..', '.env'), 'utf8').match(
-  /^DATABASE_URL=(.+)$/m,
-);
+const dbMatch = readFileSync(
+  join(__dirname, '..', '..', '..', '.env'),
+  'utf8',
+).match(/^DATABASE_URL=(.+)$/m);
 if (!dbMatch) {
   console.error('DATABASE_URL não encontrado');
   process.exit(1);
@@ -50,7 +51,11 @@ async function main() {
   };
   await repo.setPending(phone, pending);
   const got = await repo.getPending(phone);
-  check('pending salvo e lido', got?.amount === 50 && got?.options.length === 2, JSON.stringify(got));
+  check(
+    'pending salvo e lido',
+    got?.type === 'category' && got.amount === 50 && got.options.length === 2,
+    JSON.stringify(got),
+  );
 
   // 3) Limpa pendente.
   await repo.clearPending(phone);
@@ -61,7 +66,10 @@ async function main() {
   await repo.appendHistory(phone, [{ role: 'bot', text: 'R$1.800 em junho' }]);
   const h = await repo.getHistory(phone);
   check('histórico tem 2 entradas', h.length === 2, `(got ${h.length})`);
-  check('ordem preservada', h[0].text === 'quanto gastei?' && h[1].role === 'bot');
+  check(
+    'ordem preservada',
+    h[0].text === 'quanto gastei?' && h[1].role === 'bot',
+  );
 
   // 5) Limite de histórico (MAX_HISTORY = 4): adiciona 6, sobram 4.
   for (let i = 0; i < 6; i++) {
@@ -69,25 +77,41 @@ async function main() {
   }
   const h2 = await repo.getHistory(phone);
   check('histórico limitado a 4', h2.length === 4, `(got ${h2.length})`);
-  check('mantém as mais recentes', h2[h2.length - 1].text === 'msg 5', `(got ${h2[h2.length - 1].text})`);
+  check(
+    'mantém as mais recentes',
+    h2[h2.length - 1].text === 'msg 5',
+    `(got ${h2[h2.length - 1].text})`,
+  );
 
   // 6) Truncamento de texto longo (MAX_TEXT = 160).
   const longText = 'x'.repeat(500);
   await repo.appendHistory(phone, [{ role: 'user', text: longText }]);
   const h3 = await repo.getHistory(phone);
-  check('texto truncado a 160', h3[h3.length - 1].text.length === 160, `(got ${h3[h3.length - 1].text.length})`);
+  check(
+    'texto truncado a 160',
+    h3[h3.length - 1].text.length === 160,
+    `(got ${h3[h3.length - 1].text.length})`,
+  );
 
   // 7) Pendente e histórico coexistem.
   await repo.setPending(phone, pending);
   const coexist = await repo.getHistory(phone);
   check('histórico preservado ao setar pendente', coexist.length === 4);
-  check('pendente presente junto com histórico', (await repo.getPending(phone)) !== null);
+  check(
+    'pendente presente junto com histórico',
+    (await repo.getPending(phone)) !== null,
+  );
 
-  console.log(`\n======================\nRESULTADO: ${pass} passou, ${fail} falhou\n======================\n`);
+  console.log(
+    `\n======================\nRESULTADO: ${pass} passou, ${fail} falhou\n======================\n`,
+  );
 }
 
 main()
-  .catch((e) => { console.error('ERRO:', e); fail++; })
+  .catch((e) => {
+    console.error('ERRO:', e);
+    fail++;
+  })
   .finally(async () => {
     console.log('Limpando...');
     await prisma.conversationState.deleteMany({ where: { phone } });

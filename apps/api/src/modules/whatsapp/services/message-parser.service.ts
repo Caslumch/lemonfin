@@ -102,7 +102,10 @@ export type ParseResult =
       // da fatura (não só o total).
       wantItems?: boolean;
     }
-  | { intent: 'cancel' }
+  // Cancelar o último registro. target: o que o usuário NOMEOU ("cancela a
+  // netflix" → "netflix"); null quando pediu genericamente ("cancela isso").
+  // O handler usa o target para não apagar a coisa errada.
+  | { intent: 'cancel'; target: string | null }
   | { intent: 'correction'; newAmount: number }
   // Corrige o cartão da última transação. null = remover vínculo; string = trocar.
   | { intent: 'correction_card'; cardName: string | null }
@@ -238,11 +241,12 @@ IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
 - Pergunta que cita UMA categoria de gasto ("comida", "transporte", "mercado", "saúde", "lazer"...) → queryType "category" com o categorySlug, NUNCA "expenses". "expenses" é SÓ o total geral de despesas, sem categoria citada.
 - "como está meu cartão X" / "gastos no X" → queryType "card", NUNCA o resumo geral.
 
-### 3. CANCEL — Cancelar última transação
-Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
-Exemplos: "cancela o último gasto", "apaga a última transação", "desfaz o último", "remove o último registro"
+### 3. CANCEL — Cancelar/apagar um registro
+Quando o usuário quer cancelar, desfazer ou apagar algo que foi registrado.
+Exemplos: "cancela o último gasto", "apaga a última transação", "desfaz o último", "remove o último registro", "cancela a netflix", "apaga o uber"
 
-Responda: {"intent": "cancel"}
+Responda: {"intent": "cancel", "target": string | null}
+- target: o NOME do que o usuário quer apagar, SÓ se ele nomeou algo específico ("cancela a netflix" → "netflix"; "apaga o uber" → "uber"; "remove o gasto do mercado" → "mercado"). Referências genéricas ao último registro ("cancela", "apaga isso", "desfaz o último", "cancela essa que criou") → null. Não invente target.
 
 ### 4. CORRECTION — Corrigir valor da última transação
 Quando o usuário quer corrigir o VALOR da última transação registrada.
@@ -520,7 +524,13 @@ export class MessageParserService {
         }
 
         case 'cancel':
-          return { intent: 'cancel' };
+          return {
+            intent: 'cancel',
+            target:
+              typeof json.target === 'string' && json.target.trim()
+                ? json.target.trim()
+                : null,
+          };
 
         case 'correction':
           if (!json.newAmount || typeof json.newAmount !== 'number') {
