@@ -236,6 +236,40 @@ describe('MessageParserService', () => {
     });
   });
 
+  describe('pagamento de fatura', () => {
+    it('parseia pagamento com mês específico (invoiceMonth)', async () => {
+      mockResponse({
+        intent: 'pay_invoice',
+        cardName: 'Nubank',
+        amount: null,
+        invoiceMonth: '2026-05',
+      });
+
+      expect(await service.parse('paguei a fatura de maio do nubank')).toEqual({
+        intent: 'pay_invoice',
+        cardName: 'Nubank',
+        amount: null,
+        invoiceMonth: '2026-05',
+      });
+    });
+
+    it('invoiceMonth fora do formato YYYY-MM vira null', async () => {
+      mockResponse({
+        intent: 'pay_invoice',
+        cardName: null,
+        amount: 300,
+        invoiceMonth: 'maio',
+      });
+
+      expect(await service.parse('paguei 300 da fatura')).toEqual({
+        intent: 'pay_invoice',
+        cardName: null,
+        amount: 300,
+        invoiceMonth: null,
+      });
+    });
+  });
+
   describe('reservas', () => {
     it('parseia criação de reserva com prazo futuro', async () => {
       const future = new Date(new Date().getFullYear() + 1, 11, 31)
