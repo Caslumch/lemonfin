@@ -34,6 +34,10 @@ function buildService(overrides: {
     create: jest.fn().mockResolvedValue({ id: 'tx-new' }),
     getCategoryBreakdown: jest.fn().mockResolvedValue([]),
   };
+  // O registro consulta a meta da categoria para o insight em tempo real.
+  const goalsRepository = {
+    findByCategory: jest.fn().mockResolvedValue(null),
+  };
   const familyContext = {
     resolveUserIds: jest.fn().mockResolvedValue(['u1']),
   };
@@ -58,7 +62,7 @@ function buildService(overrides: {
     {} as never, // forecast
     {} as never, // recurring
     {} as never, // reserves
-    {} as never, // goals
+    goalsRepository as never,
     {} as never, // listGoals
     {} as never, // chat
     conversation as never,

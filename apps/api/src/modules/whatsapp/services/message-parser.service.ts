@@ -115,8 +115,15 @@ export type ParseResult =
   | { intent: 'reserve_contribution'; amount: number }
   // Registrar o pagamento da fatura de um cartão. cardName: nome do cartão na
   // mensagem, "cartao" se genérico, ou null. amount: valor pago se mencionado
-  // (senão usa o total da fatura aberta).
-  | { intent: 'pay_invoice'; cardName: string | null; amount: number | null }
+  // (senão usa o total da fatura aberta). invoiceMonth: mês da fatura paga
+  // ("paguei a fatura de maio"), "YYYY-MM" = mês em que o ciclo FECHA; null =
+  // fatura corrente.
+  | {
+      intent: 'pay_invoice';
+      cardName: string | null;
+      amount: number | null;
+      invoiceMonth: string | null;
+    }
   | { intent: 'goal_create'; data: ParsedGoal }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
   // Refaz a ÚLTIMA AÇÃO de outro jeito: o bot exclui o que registrou por último
@@ -233,7 +240,7 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - invoiceMonth: SÓ quando queryType="card" E o usuário cita o MÊS de uma fatura específica ("fatura de junho", "fatura do Bradesco de maio", "o que fechou em junho"). Formato "YYYY-MM" = o mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Se NÃO citar mês, ou disser "fatura aberta"/"fatura atual"/"esse mês", retorne null (= fatura aberta corrente). Nos outros queryTypes, null.
 - wantItems: SÓ quando queryType="card". true se o usuário pede as COMPRAS/itens/parcelas/lançamentos da fatura ("as parcelas da fatura", "o que tem na fatura", "quais compras", "me lista a fatura"); false se pede só o total/vencimento ("qual minha fatura", "quanto devo no cartão"). Nos outros queryTypes, false.
 - categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
-- memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com qualquer queryType de gasto/resumo.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
+- memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com os queryTypes de gasto/resumo: summary, expenses, income, balance, category, last_transaction e top_transaction. Nos demais (forecast, budget, reserves, recurring, card) a visão é sempre da família inteira — retorne memberName null.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
 IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
 - "METAS" no LemonFin = teto/limite de GASTO do mês → queryType "budget". "minhas metas", "minhas metas de economia", "quais minhas metas" são budget.
 - "RESERVAS" = juntar dinheiro para um objetivo (viagem, carro) → queryType "reserves". SÓ use reserves quando o usuário fala explicitamente de "reserva", "juntar", "guardar" ou um objetivo nomeado. NUNCA classifique "metas" como reserves.
@@ -354,9 +361,10 @@ Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soa
 Quando o usuário diz que PAGOU (ou está pagando) a fatura de um cartão.
 Exemplos: "paguei a fatura do Bradesco", "quitei o cartão Nubank", "paguei 3000 da fatura", "paguei minha fatura".
 
-Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number | null}
+Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number | null, "invoiceMonth": string | null}
 - cardName: nome do cartão na mensagem (ex: "Bradesco"), "cartao" se disser só "minha fatura/meu cartão" sem nome, ou null.
 - amount: valor pago SÓ se mencionado (ex: "paguei 3000 da fatura" → 3000). Senão null (o bot usa o total da fatura).
+- invoiceMonth: SÓ quando o usuário cita o MÊS da fatura paga ("paguei a fatura de maio"). Formato "YYYY-MM" = mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Sem menção de mês → null (fatura corrente).
 NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é registrar que PAGOU.
 
 ## DESAMBIGUAÇÃO (evite confundir):
@@ -601,6 +609,11 @@ export class MessageParserService {
             amount:
               typeof json.amount === 'number' && json.amount > 0
                 ? Number(json.amount)
+                : null,
+            invoiceMonth:
+              typeof json.invoiceMonth === 'string' &&
+              /^\d{4}-\d{2}$/.test(json.invoiceMonth)
+                ? json.invoiceMonth
                 : null,
           };
 

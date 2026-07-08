@@ -220,7 +220,22 @@ export class WhatsappService {
       await this.conversation.clearPending(phoneKey);
     }
 
-    // 2) Fluxo normal — com histórico de conversa como contexto.
+    // 2) Comando de AJUDA determinístico (sem IA): "ajuda"/"menu"/"comandos"
+    // sempre respondem a lista de capacidades. Antes caía no advisor (improviso
+    // do LLM) e o usuário não tinha como descobrir o que o bot faz.
+    if (this.isHelpCommand(content)) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: this.buildHelpMessage(),
+      });
+      await this.conversation.appendHistory(phoneKey, [
+        { role: 'user', text: content },
+        { role: 'bot', text: '[enviei a lista do que sei fazer]' },
+      ]);
+      return;
+    }
+
+    // 3) Fluxo normal — com histórico de conversa como contexto.
     const history = await this.conversation.getHistory(phoneKey);
     // Categorias personalizadas entram no prompt para a IA poder classificar
     // transações nelas (além das de sistema).
@@ -261,7 +276,7 @@ export class WhatsappService {
         await this.handleTransaction(from, user.id, result, phoneKey);
         break;
       case 'query':
-        await this.handleQuery(from, user.id, result);
+        await this.handleQuery(from, user.id, result, phoneKey);
         break;
       case 'cancel':
         await this.handleCancel(from, user.id, result, phoneKey);
@@ -369,7 +384,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -566,11 +582,38 @@ export class WhatsappService {
         `Feito!`,
       ]);
 
-      const insight =
-        monthTotal > data.amount
-          ? `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* este mês. ` +
-            `Quer ver o resumo? 📊`
-          : `\n\nFoi o primeiro gasto em *${category.name}* este mês 👀`;
+      // Se a categoria tem META (teto mensal), o insight fecha o loop em tempo
+      // real — a promessa do goal_create ("te aviso quando chegar perto do
+      // teto") valia só no cron diário das 20h. Meta semanal fica de fora (o
+      // total aqui é do mês; o % sairia errado).
+      const goal = await this.goalsRepository.findByCategory(
+        userIds,
+        category.id,
+      );
+      let insight: string;
+      if (goal && goal.period === 'MONTHLY') {
+        const limit = goal.amount.toNumber();
+        const pct = limit > 0 ? Math.round((monthTotal / limit) * 100) : 0;
+        if (monthTotal > limit) {
+          insight =
+            `\n\n🚨 Estourou a meta de *${category.name}*: ` +
+            `*${fmt(monthTotal)}* de ${fmt(limit)} (${pct}%).`;
+        } else if (pct >= 80) {
+          insight =
+            `\n\n⚠️ Você já usou *${pct}%* da meta de *${category.name}* ` +
+            `(${fmt(monthTotal)} de ${fmt(limit)}).`;
+        } else {
+          insight =
+            `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* ` +
+            `este mês — ${pct}% da meta de ${fmt(limit)} 👍`;
+        }
+      } else {
+        insight =
+          monthTotal > data.amount
+            ? `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* este mês. ` +
+              `Quer ver o resumo? 📊`
+            : `\n\nFoi o primeiro gasto em *${category.name}* este mês 👀`;
+      }
 
       message =
         `${opener} ${category.icon} *${amountFormatted}* em *${data.description}* ` +
@@ -882,6 +925,58 @@ export class WhatsappService {
     return false; // não entendeu a resposta → reprocessa fora
   }
 
+  // "ajuda"/"menu"/"comandos" (e variações diretas) — atalho determinístico
+  // para a lista de capacidades, sem passar pelo LLM.
+  private isHelpCommand(content: string): boolean {
+    const text = this.normalizeText(content);
+    return [
+      'ajuda',
+      'menu',
+      'comandos',
+      'help',
+      'o que voce faz',
+      'o que voce faz?',
+      'o que voce sabe fazer',
+      'o que voce sabe fazer?',
+    ].includes(text);
+  }
+
+  private buildHelpMessage(): string {
+    return [
+      '🍋 *O que eu faço por você*',
+      '',
+      '💸 *Registrar:* _"gastei 50 no mercado"_, _"recebi 3000 de salário"_, _"comprei tênis de 300 em 3x no Nubank"_ — ou manda a *foto do comprovante* 🧾 e até *áudio* 🎤',
+      '',
+      '📊 *Consultar:* _"resumo"_, _"quanto gastei hoje?"_, _"quanto gastei com mercado?"_, _"minha última compra"_, _"quanto vai sobrar no fim do mês?"_',
+      '',
+      '🔁 *Contas fixas:* _"todo dia 5 pago 1500 de aluguel"_, _"minhas contas fixas"_',
+      '🎯 *Metas de gasto:* _"limite de 800 em alimentação por mês"_, _"minhas metas"_',
+      '🏦 *Reservas:* _"quero juntar 5000 pra viagem até dezembro"_, _"guardei 200"_',
+      '💳 *Cartão:* _"minha fatura do Nubank"_, _"paguei a fatura"_',
+      '✏️ *Corrigir:* _"foi 60 na verdade"_, _"cancela"_, _"foi no Nubank"_',
+      '',
+      'E pra conselho ou análise, é só perguntar: _"onde dá pra economizar?"_ 😉',
+    ].join('\n');
+  }
+
+  // Envia a resposta E grava no histórico da conversa (quando há phoneKey).
+  // Consultas precisam disso: sem a fala do bot no histórico, um follow-up
+  // ("e alimentação?") chegava ao parser sem contexto do que foi respondido.
+  private async sendAndRecord(
+    from: string,
+    phoneKey: string | undefined,
+    content: string,
+  ) {
+    await this.wmodeClient.sendMessage({ to: from, content });
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        // Colapsa quebras de linha: a entrada vira UMA linha no bloco de
+        // contexto do parser (o repositório já trunca a 160 chars).
+        { role: 'bot', text: content.replace(/\s+/g, ' ').trim() },
+      ]);
+    }
+  }
+
   // Minúsculas + sem acentos, para comparações tolerantes de nomes/alvos.
   private normalizeText(s: string): string {
     return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -998,49 +1093,72 @@ export class WhatsappService {
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'query' }>,
+    phoneKey?: string,
   ) {
     if (result.queryType === 'forecast') {
-      await this.handleForecast(from, userId);
+      await this.handleForecast(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'budget') {
       // "Metas" = tetos de gasto por categoria (model Goal). O antigo handleBudget
       // (model Budget, teto único do mês) ficou obsoleto para o WhatsApp.
-      await this.handleGoalsQuery(from, userId);
+      await this.handleGoalsQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'reserves') {
-      await this.handleReserveQuery(from, userId);
+      await this.handleReserveQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'recurring') {
-      await this.handleRecurringQuery(from, userId);
+      await this.handleRecurringQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'category') {
-      await this.handleCategoryQuery(from, userId, result.categorySlug);
+      await this.handleCategoryQuery(
+        from,
+        userId,
+        result.categorySlug,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
     if (result.queryType === 'card') {
-      await this.handleCardQuery(from, userId, result.cardName, {
-        invoiceMonth: result.invoiceMonth,
-        wantItems: result.wantItems,
-      });
+      await this.handleCardQuery(
+        from,
+        userId,
+        result.cardName,
+        {
+          invoiceMonth: result.invoiceMonth,
+          wantItems: result.wantItems,
+        },
+        phoneKey,
+      );
       return;
     }
 
     if (result.queryType === 'last_transaction') {
-      await this.handleLastTransactionQuery(from, userId);
+      await this.handleLastTransactionQuery(
+        from,
+        userId,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
     if (result.queryType === 'top_transaction') {
-      await this.handleTopTransactionQuery(from, userId);
+      await this.handleTopTransactionQuery(
+        from,
+        userId,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
@@ -1105,7 +1223,7 @@ export class WhatsappService {
         break;
     }
 
-    await this.wmodeClient.sendMessage({ to: from, content: message });
+    await this.sendAndRecord(from, phoneKey, message);
   }
 
   // Resolve o cartão de um comando (consulta/pagamento). cardName indefinido ou
@@ -1169,6 +1287,7 @@ export class WhatsappService {
     userId: string,
     cardName?: string,
     opts?: { invoiceMonth?: string; wantItems?: boolean },
+    phoneKey?: string,
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const fmt = (v: number) =>
@@ -1219,12 +1338,12 @@ export class WhatsappService {
         : '';
 
     if (count === 0) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content:
-          `${faturaLabel} do *${card.name}* está limpa — nada lançado 👍` +
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `${faturaLabel} do *${card.name}* está limpa — nada lançado 👍` +
           dueLine,
-      });
+      );
       return;
     }
 
@@ -1235,10 +1354,7 @@ export class WhatsappService {
 
     // Sem pedido de itens: só o total + vencimento.
     if (!opts?.wantItems) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: header + dueLine,
-      });
+      await this.sendAndRecord(from, phoneKey, header + dueLine);
       return;
     }
 
@@ -1273,17 +1389,27 @@ export class WhatsappService {
         ? `\n_…e mais ${count - lines.length}. Veja tudo no app._`
         : '';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `${header}${dueLine}\n\n${lines.join('\n')}${extra}`,
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${header}${dueLine}\n\n${lines.join('\n')}${extra}`,
+    );
   }
 
   // "Qual foi minha última transação?" — a REGISTRADA por último (createdAt).
   // Não usa findLatest (por `date`): numa compra parcelada, a parcela mais
   // futura (date em 2027) ganharia o `date desc` e viraria a "última".
-  private async handleLastTransactionQuery(from: string, userId: string) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+  private async handleLastTransactionQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+    memberName?: string,
+  ) {
+    // "a última compra da Dani" filtra pelo membro citado (antes ignorava o
+    // nome e respondia pela família inteira, contradizendo o parser).
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const tx = await this.transactionsRepository.findLastCreated(userIds);
 
     if (!tx) {
@@ -1305,17 +1431,24 @@ export class WhatsappService {
     const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
     const verb = tx.type === 'INCOME' ? 'Última entrada' : 'Último gasto';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${icon} *${verb}:* *${amount}* em _${label}_${cardInfo}\n` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${icon} *${verb}${who}:* *${amount}* em _${label}_${cardInfo}\n` +
         `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
-    });
+    );
   }
 
   // "Qual foi minha compra mais cara?" — maior DESPESA do mês corrente.
-  private async handleTopTransactionQuery(from: string, userId: string) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+  private async handleTopTransactionQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+    memberName?: string,
+  ) {
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const now = new Date();
     const startDate = new Date(
       now.getFullYear(),
@@ -1348,12 +1481,12 @@ export class WhatsappService {
     const when = this.formatTxDate(tx.date);
     const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${icon} *Sua maior despesa em ${monthName}:* *${amount}* em _${label}_${cardInfo}\n` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${icon} *${who ? `Maior despesa${who}` : 'Sua maior despesa'} em ${monthName}:* *${amount}* em _${label}_${cardInfo}\n` +
         `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
-    });
+    );
   }
 
   // Formata a data de uma transação para exibição (dd/mm/aaaa). Em UTC porque as
@@ -1373,11 +1506,16 @@ export class WhatsappService {
     from: string,
     userId: string,
     categorySlug?: string,
+    phoneKey?: string,
+    memberName?: string,
   ) {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    const userIds = await this.familyContext.resolveUserIds(userId);
+    // "o que a Dani gastou com alimentação" filtra pelo membro citado.
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const category = categorySlug
       ? await this.categoriesRepository.findBySlug(categorySlug, userIds)
       : null;
@@ -1408,24 +1546,29 @@ export class WhatsappService {
     const label = `${category.icon ?? ''} ${category.name}`.trim();
 
     if (!row || row.count === 0) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: `Zero gastos com *${category.name}* em ${monthName} até agora 👍`,
-      });
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `Zero gastos${who} com *${category.name}* em ${monthName} até agora 👍`,
+      );
       return;
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${label} Em ${monthName} você gastou *${fmt(row.total)}* com *${category.name}* ` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${label} Em ${monthName}${who ? who : ' você'} gastou *${fmt(row.total)}* com *${category.name}* ` +
         `(${row.count} ${row.count === 1 ? 'lançamento' : 'lançamentos'}).`,
-    });
+    );
   }
 
   // "Metas" = tetos de gasto por categoria (model Goal). O gasto é recalculado
   // por período (mês/semana) e o teto persiste — não precisa redefinir todo mês.
-  private async handleGoalsQuery(from: string, userId: string) {
+  private async handleGoalsQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const goals = await this.listGoals.execute(userId);
 
     const fmt = (v: number) =>
@@ -1458,10 +1601,11 @@ export class WhatsappService {
       );
     });
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🎯 *Suas metas de gasto*\n\n` + blocks.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🎯 *Suas metas de gasto*\n\n` + blocks.join('\n\n'),
+    );
   }
 
   // Cria uma meta (teto de gasto por categoria, model Goal) a partir de uma
@@ -1660,7 +1804,11 @@ export class WhatsappService {
     );
   }
 
-  private async handleForecast(from: string, userId: string) {
+  private async handleForecast(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const forecast = await this.getForecast.execute(userId);
 
     const fmt = (v: number) =>
@@ -1715,10 +1863,7 @@ export class WhatsappService {
       }
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: lines.join('\n'),
-    });
+    await this.sendAndRecord(from, phoneKey, lines.join('\n'));
   }
 
   private async handleCancel(
@@ -2166,7 +2311,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -2270,7 +2416,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -2414,7 +2561,11 @@ export class WhatsappService {
     this.logger.log(`Reserve created: ${reserve.id} for user ${userId}`);
   }
 
-  private async handleReserveQuery(from: string, userId: string) {
+  private async handleReserveQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const reserves = await this.reservesRepository.findManyActive(userIds);
 
@@ -2451,15 +2602,20 @@ export class WhatsappService {
       );
     });
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
+    );
   }
 
   // Lista as recorrências (contas fixas / assinaturas) ativas do usuário,
   // separando entradas fixas de saídas fixas e mostrando o dia do mês.
-  private async handleRecurringQuery(from: string, userId: string) {
+  private async handleRecurringQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const recurrences = await this.recurringRepository.findMany(userIds, true);
 
@@ -2498,10 +2654,11 @@ export class WhatsappService {
       );
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🔁 *Suas contas fixas do mês*\n\n` + sections.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🔁 *Suas contas fixas do mês*\n\n` + sections.join('\n\n'),
+    );
   }
 
   // SEMPRE pergunta em qual reserva lançar (decisão de produto): guarda o aporte
@@ -2569,10 +2726,22 @@ export class WhatsappService {
     );
     if (!card) return;
 
-    // Ciclo aberto = mês corrente (mesma régua de getInvoice). UTC para o `cycle`
-    // (chave do InvoicePayment) bater com o derivado no web em get-card-invoice.
+    // Ciclo a pagar: o mês citado ("paguei a fatura de maio") ou o corrente.
+    // UTC para o `cycle` (chave do InvoicePayment) bater com o derivado no web
+    // em get-card-invoice. Antes, "fatura de maio" era atribuída silenciosamente
+    // ao ciclo corrente — pagamento no mês errado.
     const now = new Date();
-    const cycle = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const cycle =
+      result.invoiceMonth ??
+      `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const [cy, cm] = cycle.split('-').map(Number);
+    const cycleLabel = new Date(Date.UTC(cy, cm - 1, 1)).toLocaleDateString(
+      'pt-BR',
+      { month: 'long', timeZone: 'UTC' },
+    );
+    const invoiceLabel = result.invoiceMonth
+      ? `fatura de ${cycleLabel} do *${card.name}*`
+      : `fatura do *${card.name}*`;
 
     // O use-case calcula o SALDO DEVEDOR (total − já pago), usa-o como default
     // quando o usuário não disse o valor ("paguei a fatura"), valida o teto e
@@ -2588,8 +2757,8 @@ export class WhatsappService {
       // Fatura quitada (ou valor inválido): responde amigável, não vaza erro.
       const msg =
         error instanceof BadRequestException
-          ? `A fatura do *${card.name}* já está quitada — nada a pagar 👍`
-          : `Não consegui registrar o pagamento da fatura do *${card.name}* agora. Tenta de novo?`;
+          ? `A ${invoiceLabel} já está quitada — nada a pagar 👍`
+          : `Não consegui registrar o pagamento da ${invoiceLabel} agora. Tenta de novo?`;
       await this.wmodeClient.sendMessage({ to: from, content: msg });
       return;
     }
@@ -2610,8 +2779,8 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `✅ Registrei o pagamento de *${fmt(res.amount)}* na fatura do ` +
-        `*${card.name}*.${clampNote}\n${statusLabel}`,
+        `✅ Registrei o pagamento de *${fmt(res.amount)}* na ` +
+        `${invoiceLabel}.${clampNote}\n${statusLabel}`,
     });
 
     if (phoneKey) {
@@ -2660,7 +2829,8 @@ export class WhatsappService {
     if (!category) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Erro interno: categoria de reservas não encontrada.',
+        content:
+          'Tive um problema pra registrar o aporte agora 😕 Tenta de novo em instantes? Nada foi guardado.',
       });
       return true;
     }
