@@ -3,6 +3,10 @@ import { ChatController } from './chat.controller';
 import { ChatCompletionUseCase } from './use-cases/chat-completion.use-case';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { FamiliesModule } from '../families/families.module';
+import { GoalsModule } from '../goals/goals.module';
+import { ReservesModule } from '../reserves/reserves.module';
+import { RecurringModule } from '../recurring/recurring.module';
+import { CardsModule } from '../cards/cards.module';
 import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 import { AiUsageModule } from '../ai-usage/ai-usage.module';
 
@@ -10,6 +14,11 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
   imports: [
     TransactionsModule,
     FamiliesModule,
+    // Tools do assessor: metas, reservas, contas fixas e cartões/fatura.
+    GoalsModule,
+    ReservesModule,
+    RecurringModule,
+    CardsModule,
     BillingEnforcementModule,
     AiUsageModule,
   ],
