@@ -6,6 +6,12 @@ import { FamilyContextService } from '../families/services/family-context.servic
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
 import { GoalsRepository } from '../goals/repositories/goals.repository';
 import { RecurringRepository } from '../recurring/repositories/recurring.repository';
+import { PremiumAccessService } from '../billing/services/premium-access.service';
+import { ReminderSettingsRepository } from '../reminders/repositories/reminder-settings.repository';
+
+// Horários dos crons são de Brasília — sem o timeZone, a hora era a do
+// servidor (Render roda em UTC: "20:00" chegava às 17:00 no Brasil).
+const TZ = { timeZone: 'America/Sao_Paulo' };
 
 @Injectable()
 export class AlertsService {
@@ -18,14 +24,37 @@ export class AlertsService {
     private readonly wmodeClient: WmodeClientService,
     private readonly goalsRepository: GoalsRepository,
     private readonly recurringRepository: RecurringRepository,
+    private readonly premiumAccess: PremiumAccessService,
+    private readonly reminderSettings: ReminderSettingsRepository,
   ) {}
 
+  // Destinatários dos alertas automáticos: telefone cadastrado + acesso
+  // premium efetivo (trial conta) + opt-out respeitado. Antes disparava para
+  // TODO usuário com telefone, sem gate nem preferência.
+  private async eligibleUsers() {
+    const users = await this.usersRepository.findAllWithPhone();
+    const eligible: typeof users = [];
+    for (const user of users) {
+      try {
+        if (!(await this.premiumAccess.hasAccess(user.id))) continue;
+        const setting = await this.reminderSettings.getEffective(user.id);
+        if (!setting.alertsEnabled) continue;
+        eligible.push(user);
+      } catch (error) {
+        this.logger.error(
+          `Eligibility check failed for user ${user.id}: ${error}`,
+        );
+      }
+    }
+    return eligible;
+  }
+
   // Run daily at 20:00 — check spending alerts
-  @Cron('0 20 * * *')
+  @Cron('0 20 * * *', TZ)
   async checkSpendingAlerts() {
     this.logger.log('Running spending alerts check...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -37,11 +66,11 @@ export class AlertsService {
   }
 
   // Run every Sunday at 21:00 — weekly summary
-  @Cron('0 21 * * 0')
+  @Cron('0 21 * * 0', TZ)
   async sendWeeklySummaries() {
     this.logger.log('Running weekly summary...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -55,11 +84,11 @@ export class AlertsService {
   }
 
   // Run on 1st of every month at 10:00 — monthly comparison
-  @Cron('0 10 1 * *')
+  @Cron('0 10 1 * *', TZ)
   async sendMonthlyComparisons() {
     this.logger.log('Running monthly comparisons...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -77,11 +106,11 @@ export class AlertsService {
   }
 
   // Run on 3rd of every month at 11:00 — detect possible subscriptions
-  @Cron('0 11 3 * *')
+  @Cron('0 11 3 * *', TZ)
   async detectSubscriptions() {
     this.logger.log('Running subscription detection...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -176,11 +205,11 @@ export class AlertsService {
   }
 
   // Run every Wednesday at 19:00 — detect spending out of pattern
-  @Cron('0 19 * * 3')
+  @Cron('0 19 * * 3', TZ)
   async detectAnomalies() {
     this.logger.log('Running anomaly detection...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
