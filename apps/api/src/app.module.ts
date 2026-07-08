@@ -15,6 +15,7 @@ import { FamiliesModule } from './modules/families/families.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { ReservesModule } from './modules/reserves/reserves.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
@@ -51,6 +52,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     WhatsappModule,
     ChatModule,
     AlertsModule,
+    RemindersModule,
     GoalsModule,
     ReservesModule,
     RecurringModule,

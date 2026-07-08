@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { Select } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TwoFactorSetupModal } from "@/components/settings/two-factor-setup-modal";
 import { Disable2FAModal } from "@/components/settings/disable-2fa-modal";
@@ -44,6 +46,12 @@ interface UserProfile {
   email: string;
   phone: string | null;
   twoFactorEnabled: boolean;
+}
+
+interface ReminderSettings {
+  billsEnabled: boolean;
+  daysBefore: number;
+  alertsEnabled: boolean;
 }
 
 function phoneToInternational(phone: string | null): string {
@@ -104,6 +112,11 @@ export default function ConfiguracoesPage() {
   // Leave
   const [leaving, setLeaving] = useState(false);
 
+  // Notificações proativas (lembretes de vencimento + alertas automáticos)
+  const [reminders, setReminders] = useState<ReminderSettings | null>(null);
+  const [loadingReminders, setLoadingReminders] = useState(true);
+  const [remindersError, setRemindersError] = useState(false);
+
   // Subscription (billing)
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(true);
@@ -155,11 +168,45 @@ export default function ConfiguracoesPage() {
     }
   }, [fetchApi]);
 
+  const fetchReminders = useCallback(async () => {
+    setLoadingReminders(true);
+    setRemindersError(false);
+    try {
+      const data = await fetchApi<ReminderSettings>("/reminders/settings");
+      setReminders(data);
+    } catch (error) {
+      logApiError("load:reminder-settings", error);
+      setRemindersError(true);
+    } finally {
+      setLoadingReminders(false);
+    }
+  }, [fetchApi]);
+
   useEffect(() => {
     fetchProfile();
     fetchFamily();
     fetchBilling();
-  }, [fetchProfile, fetchFamily, fetchBilling]);
+    fetchReminders();
+  }, [fetchProfile, fetchFamily, fetchBilling, fetchReminders]);
+
+  // Toggles/select salvam na hora (sem botão "Salvar"): atualização otimista
+  // com rollback + toast no erro.
+  async function handleUpdateReminders(patch: Partial<ReminderSettings>) {
+    if (!reminders) return;
+    const previous = reminders;
+    setReminders({ ...reminders, ...patch });
+    try {
+      const updated = await fetchApi<ReminderSettings>("/reminders/settings", {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      });
+      setReminders(updated);
+      toast.success("Preferências salvas!");
+    } catch {
+      setReminders(previous);
+      toast.error("Erro ao salvar preferências");
+    }
+  }
 
   async function handleCheckout(cycle: BillingCycle) {
     setRedirecting(cycle);
@@ -340,6 +387,7 @@ export default function ConfiguracoesPage() {
             onValueChange={setActiveTab}
             items={[
               { value: "perfil", label: "Perfil" },
+              { value: "notificacoes", label: "Notificações" },
               { value: "assinatura", label: "Assinatura" },
               { value: "seguranca", label: "Segurança" },
               { value: "familia", label: "Família" },
@@ -432,6 +480,93 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
+        </div>
+        )}
+
+        {activeTab === "notificacoes" && (
+        <div className="space-y-6">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Bell size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Notificações no WhatsApp
+            </h2>
+          </div>
+
+          {loadingReminders ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : remindersError || !reminders ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar suas preferências.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchReminders}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Lembretes de vencimento */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Lembrar contas a vencer
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Aviso quando uma conta fixa ou fatura de cartão estiver
+                    perto de vencer.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.billsEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ billsEnabled: checked })
+                  }
+                />
+              </div>
+
+              {reminders.billsEnabled && (
+                <div className="max-w-xs">
+                  <Select
+                    id="daysBefore"
+                    label="Antecedência do aviso"
+                    value={String(reminders.daysBefore)}
+                    onChange={(value) =>
+                      handleUpdateReminders({ daysBefore: Number(value) })
+                    }
+                    options={[1, 2, 3, 4, 5, 6, 7].map((d) => ({
+                      value: String(d),
+                      label: d === 1 ? "1 dia antes" : `${d} dias antes`,
+                    }))}
+                  />
+                </div>
+              )}
+
+              <div className="h-px bg-border" />
+
+              {/* Alertas automáticos */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Alertas automáticos
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Alerta de gastos, resumo semanal, comparativo mensal,
+                    assinaturas detectadas e gastos fora do padrão.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.alertsEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ alertsEnabled: checked })
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </div>
         </div>
         )}
 

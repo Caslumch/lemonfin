@@ -6,6 +6,8 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { FamiliesModule } from '../families/families.module';
 import { GoalsModule } from '../goals/goals.module';
 import { RecurringModule } from '../recurring/recurring.module';
+import { RemindersModule } from '../reminders/reminders.module';
+import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
   imports: [
@@ -15,6 +17,9 @@ import { RecurringModule } from '../recurring/recurring.module';
     FamiliesModule,
     GoalsModule,
     RecurringModule,
+    // Gate premium + opt-out dos alertas automáticos.
+    BillingEnforcementModule,
+    RemindersModule,
   ],
   providers: [AlertsService],
 })

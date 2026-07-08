@@ -58,8 +58,50 @@ model User {
   verificationCodes    VerificationCode[]
   categories           Category[]
   aiUsage              AiUsage[]
+  reminderSetting      ReminderSetting?
+  reminderLogs         ReminderLog[]
 
   @@map("users")
+}
+
+// Preferências de mensagens proativas (lembretes + alertas automáticos).
+// Ausência de linha = defaults (tudo ligado, 3 dias de antecedência) — só é
+// criada quando o usuário mexe nas configurações.
+model ReminderSetting {
+  id            String  @id @default(cuid())
+  userId        String  @unique @map("user_id")
+  // Lembretes de vencimento (contas fixas + faturas de cartão).
+  billsEnabled  Boolean @default(true) @map("bills_enabled")
+  // Antecedência do lembrete de vencimento, em dias (1–7).
+  daysBefore    Int     @default(3) @map("days_before")
+  // Alertas automáticos já existentes (alerta de gastos, resumo semanal,
+  // comparativo mensal, assinaturas, anomalias). Opt-out único: são o mesmo
+  // "canal" na percepção do usuário.
+  alertsEnabled Boolean @default(true) @map("alerts_enabled")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reminder_settings")
+}
+
+// Auditoria + idempotência de mensagens proativas: o cron marca o envio ANTES
+// de mandar (claim via dedupeKey único) — um restart no horário do cron não
+// duplica a mensagem.
+model ReminderLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String // "bill" | "card_invoice" (futuro: "reminder")
+  refId     String?  @map("ref_id") // recurringId / cardId
+  // Chave natural do envio, ex. "bill:<recurringId>:2026-07-10" (data do
+  // vencimento). Única = claim atômico.
+  dedupeKey String   @unique @map("dedupe_key")
+  sentAt    DateTime @default(now()) @map("sent_at")
+  channel   String // "whatsapp"
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, sentAt])
+  @@map("reminder_logs")
 }
 
 enum SubscriptionStatus {
