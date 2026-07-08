@@ -45,6 +45,7 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
   exports: [
     TransactionsRepository,
     GetForecastUseCase,
+    GetInsightsUseCase,
     CreateInstallmentsUseCase,
   ],
 })

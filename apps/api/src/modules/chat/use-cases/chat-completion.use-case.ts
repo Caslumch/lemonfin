@@ -9,6 +9,14 @@ import type {
 } from 'openai/resources/chat/completions';
 import { AiFeature } from '@prisma/client';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
+import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
+import { GetInsightsUseCase } from '../../transactions/use-cases/get-insights.use-case';
+import { ListGoalsUseCase } from '../../goals/use-cases/list-goals.use-case';
+import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
+import { computeReserveProgress } from '../../reserves/reserve-progress';
+import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
+import { CardsRepository } from '../../cards/repositories/cards.repository';
+import { cardCycleRange, nextDueDate } from '../../cards/utils/card-cycle';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import { AiUsageService } from '../../ai-usage/ai-usage.service';
 import type { ChatMessageInput } from '../dtos/chat.dto';
@@ -37,11 +45,18 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Seu foco e financas pessoais do usuario. Se ele te cumprimentar, perguntar seu nome/como vai, ou trocar uma palavra leve ("bom dia", "tudo bem?", "qual meu nome?"), responda de forma breve, humana e calorosa (use o nome dele quando souber) e reconduza com gentileza para as financas. Para assuntos totalmente fora do escopo (noticias, esportes, codigo, etc.), diga com simpatia que esse nao e o seu forte e lembre no que voce ajuda.
 
 ## Funcoes disponiveis:
-- Voce tem acesso a funcoes para consultar transacoes, resumos e gastos por categoria em qualquer periodo
+- Voce tem acesso a funcoes para consultar transacoes, resumos e gastos por categoria em qualquer periodo — e tambem METAS de gasto, RESERVAS, contas fixas, faturas de cartao, previsao de fim de mes e insights do mes.
 - O "Contexto financeiro atual" abaixo cobre APENAS o mes corrente inteiro. Ele NAO serve para responder sobre um dia, uma semana ou qualquer recorte mais especifico — nesses casos os numeros do mes estao errados para a pergunta.
-- Por isso, quando o usuario pedir QUALQUER recorte que nao seja "o mes inteiro" — incluindo "hoje", "ontem", "essa semana", "semana passada", "ontem", uma data, um intervalo, um mes diferente do atual — voce DEVE chamar a funcao apropriada (getSummaryByPeriod / queryTransactions / getCategoryBreakdownByPeriod) com as datas certas. NUNCA responda esses recortes com os numeros do mes do contexto, nem derive o dia a partir do total do mes.
+- Por isso, quando o usuario pedir QUALQUER recorte que nao seja "o mes inteiro" — incluindo "hoje", "ontem", "essa semana", "semana passada", uma data, um intervalo, um mes diferente do atual — voce DEVE chamar a funcao apropriada (getSummaryByPeriod / queryTransactions / getCategoryBreakdownByPeriod) com as datas certas. NUNCA responda esses recortes com os numeros do mes do contexto, nem derive o dia a partir do total do mes.
 - "resumo do dia" / "como foi meu dia" / "gastei com o que hoje" => use as funcoes com startDate=endDate=hoje. Para "hoje", startDate e endDate sao a data de hoje informada abaixo.
-- So responda direto do contexto (sem funcao) quando a pergunta for claramente sobre o mes inteiro corrente ou um panorama geral.`;
+- So responda direto do contexto (sem funcao) quando a pergunta for claramente sobre o mes inteiro corrente ou um panorama geral.
+- Perguntas sobre METAS de gasto ("como estao minhas metas", "estou dentro da meta de alimentacao", "posso gastar mais X?") => chame getSpendingGoals. NUNCA responda sobre metas sem chamar a funcao.
+- Perguntas sobre RESERVAS/poupanca/objetivos ("quanto ja juntei", "quando completo a reserva da viagem") => chame getReserves.
+- Perguntas sobre contas fixas/assinaturas ("quais minhas assinaturas", "quanto pago de contas fixas") => chame getRecurringTransactions.
+- Perguntas sobre cartao/fatura ("quanto ta minha fatura", "quando vence o cartao") => chame getCardsAndInvoices.
+- Perguntas sobre o futuro do mes ("quanto vai sobrar", "fecho o mes no azul?", "da pra gastar mais?") => chame getMonthEndForecast.
+- Pedidos de analise/diagnostico do mes ("como estou indo", "onde estou gastando mais que antes", "me da um panorama") => chame getSpendingInsights e combine com o contexto.
+- Ao aconselhar (ex.: "da pra comprar X?", "como economizo?"), cruze os dados: metas estouradas, previsao de fim de mes, contas fixas ainda por vencer e fatura aberta mudam a resposta. Prefira chamar as funcoes relevantes a supor.`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -117,6 +132,60 @@ const tools: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'getSpendingGoals',
+      description:
+        'Metas de GASTO do usuario (teto por categoria) com o progresso do periodo atual: limite, quanto ja gastou, %, quanto resta e se estourou. Use para "como estao minhas metas", "estou dentro da meta de X", "quanto ainda posso gastar em Y".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getReserves',
+      description:
+        'Reservas de poupanca do usuario (objetivos de juntar dinheiro): valor-alvo, quanto ja guardou, %, quanto falta, prazo e aporte mensal sugerido. Use para "quanto ja juntei", "como esta a reserva da viagem", "quando completo o objetivo".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getRecurringTransactions',
+      description:
+        'Contas fixas e assinaturas ativas (despesas e receitas recorrentes mensais): descricao, valor, dia do mes e categoria. Use para "quais minhas contas fixas/assinaturas", "quanto pago por mes de fixo", "quando cai o aluguel".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getCardsAndInvoices',
+      description:
+        'Cartoes do usuario com a FATURA ABERTA de cada um: total lancado, quantidade de compras, quando o ciclo fecha e quando vence. Use para "quanto ta minha fatura", "quando vence o cartao", "quanto ja gastei no Nubank".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getMonthEndForecast',
+      description:
+        'Previsao de fim do mes: saldo atual, saldo projetado, receitas/despesas recorrentes que ainda vao cair, gasto variavel estimado e dias restantes. Use para "quanto vai sobrar", "fecho o mes no azul?", "da pra gastar mais?".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getSpendingInsights',
+      description:
+        'Analise do mes atual vs anterior: variacao geral, categorias que mais cresceram/cairam e alertas de gasto acelerado. Use para "como estou indo", "onde estou gastando mais que antes", pedidos de diagnostico/panorama.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
 ];
 
 @Injectable()
@@ -129,6 +198,12 @@ export class ChatCompletionUseCase {
     private readonly transactionsRepository: TransactionsRepository,
     private readonly familyContext: FamilyContextService,
     private readonly aiUsage: AiUsageService,
+    private readonly listGoals: ListGoalsUseCase,
+    private readonly reservesRepository: ReservesRepository,
+    private readonly recurringRepository: RecurringRepository,
+    private readonly cardsRepository: CardsRepository,
+    private readonly getForecast: GetForecastUseCase,
+    private readonly getInsights: GetInsightsUseCase,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {
     this.openai = new OpenAI({
@@ -257,6 +332,7 @@ export class ChatCompletionUseCase {
           const result = await this.executeFunctionCall(
             tc.name,
             tc.arguments,
+            userId,
             userIds,
           );
           return {
@@ -284,6 +360,7 @@ export class ChatCompletionUseCase {
   private async executeFunctionCall(
     name: string,
     rawArgs: string,
+    userId: string,
     userIds: string[],
   ): Promise<Record<string, unknown>> {
     let args: Record<string, string>;
@@ -380,6 +457,163 @@ export class ChatCompletionUseCase {
             name: cat.category?.name ?? 'Outros',
             total: cat.total.toFixed(2),
             count: cat.count,
+          })),
+        };
+      }
+
+      case 'getSpendingGoals': {
+        const goals = await this.listGoals.execute(userId);
+        if (goals.length === 0) {
+          return { goals: [], note: 'O usuario nao tem metas de gasto.' };
+        }
+        return {
+          goals: goals.map((g) => ({
+            category: g.category?.name ?? 'Geral',
+            period: g.period,
+            limit: g.progress.limit.toFixed(2),
+            spent: g.progress.spent.toFixed(2),
+            percentage: g.progress.percentage,
+            remaining: g.progress.remaining.toFixed(2),
+            exceeded: g.progress.exceeded,
+          })),
+        };
+      }
+
+      case 'getReserves': {
+        const reserves = await this.reservesRepository.findMany(userIds);
+        if (reserves.length === 0) {
+          return { reserves: [], note: 'O usuario nao tem reservas.' };
+        }
+        return {
+          reserves: reserves.map((r) => {
+            const target = r.targetAmount.toNumber();
+            const saved = r.savedAmount.toNumber();
+            const progress = computeReserveProgress(target, saved, r.deadline);
+            return {
+              name: r.name,
+              target: target.toFixed(2),
+              saved: saved.toFixed(2),
+              percentage: progress.percentage,
+              remaining: progress.remaining.toFixed(2),
+              deadline: r.deadline.toISOString().split('T')[0],
+              suggestedMonthly: progress.suggestedMonthly.toFixed(2),
+              completed: !r.active && saved >= target,
+            };
+          }),
+        };
+      }
+
+      case 'getRecurringTransactions': {
+        const recurrings = await this.recurringRepository.findMany(
+          userIds,
+          true,
+        );
+        if (recurrings.length === 0) {
+          return {
+            recurring: [],
+            note: 'O usuario nao tem contas fixas cadastradas.',
+          };
+        }
+        const items = recurrings.map((r) => ({
+          description: r.description,
+          amount: r.amount.toNumber().toFixed(2),
+          type: r.type,
+          dayOfMonth: r.dayOfMonth,
+          category: r.category?.name ?? '',
+        }));
+        const monthlyExpense = recurrings
+          .filter((r) => r.type === 'EXPENSE')
+          .reduce((sum, r) => sum + r.amount.toNumber(), 0);
+        const monthlyIncome = recurrings
+          .filter((r) => r.type === 'INCOME')
+          .reduce((sum, r) => sum + r.amount.toNumber(), 0);
+        return {
+          recurring: items,
+          monthlyExpenseTotal: monthlyExpense.toFixed(2),
+          monthlyIncomeTotal: monthlyIncome.toFixed(2),
+        };
+      }
+
+      case 'getCardsAndInvoices': {
+        const cards = await this.cardsRepository.findMany(userIds);
+        if (cards.length === 0) {
+          return { cards: [], note: 'O usuario nao tem cartoes cadastrados.' };
+        }
+        const now = new Date();
+        const ref = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+        );
+        const result = await Promise.all(
+          cards.map(async (card) => {
+            // Mesma régua de ciclo da tela /cartoes e do WhatsApp
+            // (cardCycleRange em UTC — fonte única do recorte de fatura).
+            const { start, end } = cardCycleRange(card.closingDay, ref);
+            const { total, count } =
+              await this.transactionsRepository.getCardSummary(
+                userIds,
+                card.id,
+                start.toISOString(),
+                end.toISOString(),
+              );
+            return {
+              name: card.name,
+              openInvoiceTotal: total.toFixed(2),
+              purchases: count,
+              closesAt: end.toISOString().split('T')[0],
+              dueDate:
+                card.dueDay != null
+                  ? nextDueDate(card.dueDay, end).toISOString().split('T')[0]
+                  : null,
+            };
+          }),
+        );
+        return { cards: result };
+      }
+
+      case 'getMonthEndForecast': {
+        const forecast = await this.getForecast.execute(userId);
+        return {
+          currentBalance: forecast.currentBalance.toFixed(2),
+          projectedBalance: forecast.projectedBalance.toFixed(2),
+          pendingIncome: forecast.pendingIncome.toFixed(2),
+          pendingExpense: forecast.pendingExpense.toFixed(2),
+          estimatedVariableExpense:
+            forecast.estimatedVariableExpense.toFixed(2),
+          daysRemaining: forecast.daysRemaining,
+          pendingRecurrences: forecast.pending.map((p) => ({
+            description: p.description,
+            amount: p.amount.toFixed(2),
+            type: p.type,
+            dayOfMonth: p.dayOfMonth,
+          })),
+        };
+      }
+
+      case 'getSpendingInsights': {
+        const insights = await this.getInsights.execute(userId);
+        const comparison = (c: {
+          category: { name: string } | null;
+          currentTotal: number;
+          previousTotal: number;
+          variation: number;
+        }) => ({
+          category: c.category?.name ?? 'Outros',
+          current: c.currentTotal.toFixed(2),
+          previous: c.previousTotal.toFixed(2),
+          variationPercent: c.variation,
+        });
+        return {
+          currentMonth: insights.currentMonth,
+          previousMonth: insights.previousMonth,
+          overallVariationPercent: insights.overallVariation,
+          topGrowing: insights.topGrowing.map(comparison),
+          topShrinking: insights.topShrinking.map(comparison),
+          alerts: insights.alerts.map((a) => ({
+            category: a.category?.name ?? 'Outros',
+            current: a.currentTotal.toFixed(2),
+            previousMonthTotal: a.previousTotal.toFixed(2),
+            percentOfPrevious: a.percentOfPrevious,
+            daysRemaining: a.daysRemaining,
           })),
         };
       }
