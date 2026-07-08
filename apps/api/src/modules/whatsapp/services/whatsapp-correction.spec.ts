@@ -1,9 +1,10 @@
 import { WhatsappService } from './whatsapp.service';
 
-// Testa handleCorrection ("o total era X"): corrige o GRUPO INTEIRO quando a
-// última ação foi um parcelamento (redividindo o novo total, resíduo na última
-// parcela), com fallback para a transação avulsa quando não há lastAction.
-// Mocka só as dependências desse caminho.
+// Testa handleCorrection ("o total era X"): corrige a ÚLTIMA AÇÃO da conversa
+// pelo tipo dela — grupo inteiro para parcelamento (redividindo o novo total,
+// resíduo na última parcela), a transação da ação para avulsa, e despesa +
+// savedAmount para aporte de reserva. Sem lastAction, só corrige a última
+// transação global se ela for RECENTE. Mocka só as dependências desse caminho.
 function buildService(overrides: {
   lastAction?: unknown;
   lastTx?: unknown;
@@ -25,6 +26,10 @@ function buildService(overrides: {
         updates.push({ id, amount: data.amount });
         return Promise.resolve(undefined);
       }),
+  };
+  const reservesRepository = {
+    addContribution: jest.fn().mockResolvedValue(undefined),
+    removeContribution: jest.fn().mockResolvedValue(undefined),
   };
   const familyContext = {
     resolveUserIds: jest.fn().mockResolvedValue(['u1']),
@@ -49,7 +54,7 @@ function buildService(overrides: {
     wmodeClient as never,
     {} as never, // forecast
     {} as never, // recurring
-    {} as never, // reserves
+    reservesRepository as never,
     {} as never, // goals
     {} as never, // listGoals
     {} as never, // chat
@@ -63,6 +68,7 @@ function buildService(overrides: {
     service,
     conversation,
     transactionsRepository,
+    reservesRepository,
     wmodeClient,
     sent,
     updates,
@@ -149,7 +155,103 @@ describe('WhatsappService.handleCorrection', () => {
     );
   });
 
-  it('faz fallback para a transação avulsa quando não há lastAction', async () => {
+  it('corrige a transação da ÚLTIMA AÇÃO (não a última global)', async () => {
+    const { service, transactionsRepository, conversation, updates, sent } =
+      buildService({
+        lastAction: {
+          kind: 'transaction',
+          transactionIds: ['tx-acao'],
+          label: 'R$ 50,00 em Alimentação',
+          description: 'mercado',
+        },
+        groupRows: [
+          {
+            id: 'tx-acao',
+            amount: 50,
+            description: 'mercado',
+            category: { name: 'Alimentação', icon: '🍽️' },
+          },
+        ],
+        // Última global é OUTRA transação — não pode ser tocada.
+        lastTx: {
+          id: 'tx-web',
+          amount: 999,
+          description: 'compra no painel',
+          category: { name: 'Outros', icon: '📦' },
+          createdAt: new Date(),
+        },
+      });
+
+    await callCorrection(service, 45);
+
+    expect(updates).toEqual([{ id: 'tx-acao', amount: 45 }]);
+    expect(transactionsRepository.findLastByUser).not.toHaveBeenCalled();
+    // Rótulo da ação atualizado (segue cancelável com o valor novo).
+    expect(conversation.setLastAction).toHaveBeenCalledWith(
+      '5511999',
+      expect.objectContaining({ label: expect.stringContaining('45') }),
+    );
+    expect(sent[0]).toContain('Alimentação');
+  });
+
+  it('corrige um APORTE de reserva ajustando a despesa E o savedAmount (delta)', async () => {
+    const { service, reservesRepository, updates, sent } = buildService({
+      lastAction: {
+        kind: 'reserve-contribution',
+        transactionIds: ['tx-aporte'],
+        reserveId: 'r1',
+        amount: 200,
+        label: 'Guardado em Viagem',
+      },
+      groupRows: [
+        {
+          id: 'tx-aporte',
+          amount: 200,
+          description: 'Guardado: Viagem',
+          category: { name: 'Reservas', icon: '🏦' },
+        },
+      ],
+    });
+
+    // 200 → 300: reserva recebe +100.
+    await callCorrection(service, 300);
+
+    expect(updates).toEqual([{ id: 'tx-aporte', amount: 300 }]);
+    expect(reservesRepository.addContribution).toHaveBeenCalledWith('r1', 100);
+    expect(reservesRepository.removeContribution).not.toHaveBeenCalled();
+    expect(sent[0]).toContain('aporte');
+  });
+
+  it('corrige um APORTE pra baixo revertendo a diferença na reserva', async () => {
+    const { service, reservesRepository } = buildService({
+      lastAction: {
+        kind: 'reserve-contribution',
+        transactionIds: ['tx-aporte'],
+        reserveId: 'r1',
+        amount: 200,
+        label: 'Guardado em Viagem',
+      },
+      groupRows: [
+        {
+          id: 'tx-aporte',
+          amount: 200,
+          description: 'Guardado: Viagem',
+          category: { name: 'Reservas', icon: '🏦' },
+        },
+      ],
+    });
+
+    // 200 → 150: reserva devolve 50.
+    await callCorrection(service, 150);
+
+    expect(reservesRepository.removeContribution).toHaveBeenCalledWith(
+      'r1',
+      50,
+    );
+    expect(reservesRepository.addContribution).not.toHaveBeenCalled();
+  });
+
+  it('corrige a última transação global quando não há lastAction E ela é recente', async () => {
     const { service, transactionsRepository, updates, sent } = buildService({
       lastAction: null,
       lastTx: {
@@ -157,6 +259,7 @@ describe('WhatsappService.handleCorrection', () => {
         amount: 50,
         description: 'mercado',
         category: { name: 'Alimentacao', icon: '🍽️' },
+        createdAt: new Date(),
       },
     });
 
@@ -168,14 +271,33 @@ describe('WhatsappService.handleCorrection', () => {
     expect(sent[0]).toContain('Alimentacao');
   });
 
-  it('cai no fallback se o grupo referenciado já não existe', async () => {
-    const { service, transactionsRepository } = buildService({
+  it('NÃO corrige a última transação global se ela for antiga', async () => {
+    const { service, transactionsRepository, sent } = buildService({
+      lastAction: null,
+      lastTx: {
+        id: 'tx-old',
+        amount: 50,
+        description: 'mercado',
+        category: { name: 'Alimentacao', icon: '🍽️' },
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 dias
+      },
+    });
+
+    await callCorrection(service, 45);
+
+    // Corrigir um lançamento de dias atrás por engano é pior que orientar.
+    expect(transactionsRepository.update).not.toHaveBeenCalled();
+    expect(sent[0]).toContain('Não achei um registro recente');
+  });
+
+  it('avisa (sem corrigir outra transação) se o grupo referenciado já não existe', async () => {
+    const { service, transactionsRepository, sent } = buildService({
       lastAction: {
         kind: 'installment',
         transactionIds: ['gone1', 'gone2'],
         installmentGroupId: 'g-old',
         installments: 2,
-        label: 'x',
+        label: 'tênis (2x de R$ 50,00)',
       },
       groupRows: [], // grupo apagado
       lastTx: {
@@ -183,16 +305,33 @@ describe('WhatsappService.handleCorrection', () => {
         amount: 10,
         description: null,
         category: { name: 'Outros', icon: '📦' },
+        createdAt: new Date(),
       },
     });
 
     await callCorrection(service, 15);
 
-    // Grupo vazio → fallback de transação avulsa.
-    expect(transactionsRepository.findLastByUser).toHaveBeenCalled();
-    expect(transactionsRepository.update).toHaveBeenCalledWith('tx-fallback', {
-      amount: 15,
+    // Grupo vazio NÃO pode redirecionar a correção pra outra transação.
+    expect(transactionsRepository.update).not.toHaveBeenCalled();
+    expect(transactionsRepository.findLastByUser).not.toHaveBeenCalled();
+    expect(sent[0]).toContain('já não existe');
+  });
+
+  it('lote: orienta em vez de chutar qual item corrigir', async () => {
+    const { service, transactionsRepository, sent } = buildService({
+      lastAction: {
+        kind: 'batch',
+        transactionIds: ['b1', 'b2', 'b3'],
+        installmentGroupIds: [],
+        count: 3,
+        label: '3 lançamentos',
+      },
     });
+
+    await callCorrection(service, 60);
+
+    expect(transactionsRepository.update).not.toHaveBeenCalled();
+    expect(sent[0]).toContain('lote');
   });
 
   it('avisa quando não há nada para corrigir', async () => {
@@ -204,6 +343,6 @@ describe('WhatsappService.handleCorrection', () => {
     await callCorrection(service, 99);
 
     expect(transactionsRepository.update).not.toHaveBeenCalled();
-    expect(sent[0]).toContain('Nenhuma transação');
+    expect(sent[0]).toContain('Não achei um registro recente');
   });
 });

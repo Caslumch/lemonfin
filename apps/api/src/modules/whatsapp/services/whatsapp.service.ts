@@ -220,7 +220,22 @@ export class WhatsappService {
       await this.conversation.clearPending(phoneKey);
     }
 
-    // 2) Fluxo normal — com histórico de conversa como contexto.
+    // 2) Comando de AJUDA determinístico (sem IA): "ajuda"/"menu"/"comandos"
+    // sempre respondem a lista de capacidades. Antes caía no advisor (improviso
+    // do LLM) e o usuário não tinha como descobrir o que o bot faz.
+    if (this.isHelpCommand(content)) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: this.buildHelpMessage(),
+      });
+      await this.conversation.appendHistory(phoneKey, [
+        { role: 'user', text: content },
+        { role: 'bot', text: '[enviei a lista do que sei fazer]' },
+      ]);
+      return;
+    }
+
+    // 3) Fluxo normal — com histórico de conversa como contexto.
     const history = await this.conversation.getHistory(phoneKey);
     // Categorias personalizadas entram no prompt para a IA poder classificar
     // transações nelas (além das de sistema).
@@ -261,10 +276,10 @@ export class WhatsappService {
         await this.handleTransaction(from, user.id, result, phoneKey);
         break;
       case 'query':
-        await this.handleQuery(from, user.id, result);
+        await this.handleQuery(from, user.id, result, phoneKey);
         break;
       case 'cancel':
-        await this.handleCancel(from, user.id, phoneKey);
+        await this.handleCancel(from, user.id, result, phoneKey);
         break;
       case 'correction':
         await this.handleCorrection(from, user.id, result, phoneKey);
@@ -369,7 +384,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -418,6 +434,7 @@ export class WhatsappService {
               kind: 'transaction',
               transactionIds: [transaction.id],
               label: `${amountFormatted} em ${category.name}`,
+              description: data.description,
             });
           }
 
@@ -439,24 +456,58 @@ export class WhatsappService {
         } else {
           // 0 ou vários: NÃO registra sem cartão calado — avisa e pede o nome
           // certo (registrar silenciosamente no "sem cartão" bagunçava a fatura).
+          // A transação em voo fica como PENDÊNCIA: a resposta ("2", "o roxinho",
+          // "sem cartão") resolve sem re-parse — antes ela era descartada e o
+          // usuário tinha que redigitar o gasto inteiro.
           const cards = await this.cardsRepository.findMany(userIds);
           const amountFmt = data.amount.toLocaleString('pt-BR', {
             style: 'currency',
             currency: 'BRL',
           });
-          const tail =
-            cards.length > 0
-              ? `Seus cartões: ${cards.map((c) => c.name).join(', ')}. Em qual eu registro?`
-              : 'Você ainda não tem cartão cadastrado — quer registrar sem cartão?';
           const lead =
             matches.length > 1
               ? `Achei mais de um cartão parecido com *${data.cardName}*.`
               : `Não achei um cartão chamado *${data.cardName}*.`;
+          const body =
+            `${lead} Ainda não registrei *${amountFmt}* em *${data.description}* ` +
+            `pra não vincular no cartão errado.`;
+
+          if (!phoneKey) {
+            const tail =
+              cards.length > 0
+                ? `Seus cartões: ${cards.map((c) => c.name).join(', ')}. Em qual eu registro?`
+                : 'Você ainda não tem cartão cadastrado — quer registrar sem cartão?';
+            await this.wmodeClient.sendMessage({
+              to: from,
+              content: `${body}\n\n${tail}`,
+            });
+            return;
+          }
+
+          const options = (matches.length > 1 ? matches : cards).map((c) => ({
+            id: c.id,
+            name: c.name,
+          }));
+          await this.conversation.setPending(phoneKey, {
+            type: 'card',
+            amount: data.amount,
+            txType: data.type,
+            description: data.description,
+            categorySlug: data.categorySlug,
+            purchaseDate: data.purchaseDate,
+            options,
+          });
+
+          const tail =
+            options.length > 0
+              ? `Em qual eu registro?\n` +
+                options.map((c, i) => `${i + 1}. ${c.name}`).join('\n') +
+                `\n\n_Responde com o número (ou *sem cartão*)._`
+              : `Você ainda não tem cartão cadastrado — quer registrar sem cartão? ` +
+                `_Responde *sim* (ou *cancela*)._`;
           await this.wmodeClient.sendMessage({
             to: from,
-            content:
-              `${lead} Ainda não registrei *${amountFmt}* em *${data.description}* ` +
-              `pra não vincular no cartão errado.\n\n${tail}`,
+            content: `${body}\n\n${tail}`,
           });
           return;
         }
@@ -531,11 +582,38 @@ export class WhatsappService {
         `Feito!`,
       ]);
 
-      const insight =
-        monthTotal > data.amount
-          ? `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* este mês. ` +
-            `Quer ver o resumo? 📊`
-          : `\n\nFoi o primeiro gasto em *${category.name}* este mês 👀`;
+      // Se a categoria tem META (teto mensal), o insight fecha o loop em tempo
+      // real — a promessa do goal_create ("te aviso quando chegar perto do
+      // teto") valia só no cron diário das 20h. Meta semanal fica de fora (o
+      // total aqui é do mês; o % sairia errado).
+      const goal = await this.goalsRepository.findByCategory(
+        userIds,
+        category.id,
+      );
+      let insight: string;
+      if (goal && goal.period === 'MONTHLY') {
+        const limit = goal.amount.toNumber();
+        const pct = limit > 0 ? Math.round((monthTotal / limit) * 100) : 0;
+        if (monthTotal > limit) {
+          insight =
+            `\n\n🚨 Estourou a meta de *${category.name}*: ` +
+            `*${fmt(monthTotal)}* de ${fmt(limit)} (${pct}%).`;
+        } else if (pct >= 80) {
+          insight =
+            `\n\n⚠️ Você já usou *${pct}%* da meta de *${category.name}* ` +
+            `(${fmt(monthTotal)} de ${fmt(limit)}).`;
+        } else {
+          insight =
+            `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* ` +
+            `este mês — ${pct}% da meta de ${fmt(limit)} 👍`;
+        }
+      } else {
+        insight =
+          monthTotal > data.amount
+            ? `\n\nVocê já gastou *${fmt(monthTotal)}* em *${category.name}* este mês. ` +
+              `Quer ver o resumo? 📊`
+            : `\n\nFoi o primeiro gasto em *${category.name}* este mês 👀`;
+      }
 
       message =
         `${opener} ${category.icon} *${amountFormatted}* em *${data.description}* ` +
@@ -561,6 +639,7 @@ export class WhatsappService {
         kind: 'transaction',
         transactionIds: [transaction.id],
         label: `${amountFormatted} em ${category.name}`,
+        description: data.description,
       });
     }
 
@@ -658,6 +737,18 @@ export class WhatsappService {
         content,
       );
     }
+    if (pending.type === 'card') {
+      return this.resolveCardPending(from, phoneKey, userId, pending, content);
+    }
+    if (pending.type === 'cancel-confirm') {
+      return this.resolveCancelConfirm(
+        from,
+        phoneKey,
+        userId,
+        pending,
+        content,
+      );
+    }
     if (pending.type !== 'category') return false;
 
     const text = content.trim().toLowerCase();
@@ -710,6 +801,198 @@ export class WhatsappService {
       phoneKey,
     );
     return true;
+  }
+
+  // Resolve a pendência de CARTÃO: a transação ficou em voo esperando o usuário
+  // dizer em qual cartão registrar (número, nome, "sem cartão" ou cancelar).
+  // Antes dessa pendência existir, a resposta era re-parseada fria e o gasto
+  // se perdia — o usuário tinha que redigitar tudo.
+  private async resolveCardPending(
+    from: string,
+    phoneKey: string,
+    userId: string,
+    pending: Extract<PendingConfirmation, { type: 'card' }>,
+    content: string,
+  ): Promise<boolean> {
+    const text = this.normalizeText(content);
+
+    if (['cancela', 'cancelar', 'deixa', 'esquece'].includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Ok, cancelei. Nada foi registrado.',
+      });
+      return true;
+    }
+
+    const register = async (cardName?: string) => {
+      await this.conversation.clearPending(phoneKey);
+      await this.handleTransaction(
+        from,
+        userId,
+        {
+          intent: 'transaction',
+          data: {
+            amount: pending.amount,
+            type: pending.txType,
+            categorySlug: pending.categorySlug,
+            // Categoria já passou pelo funil (confiança alta ou confirmada) —
+            // não re-perguntar.
+            categoryConfidence: 1,
+            description: pending.description,
+            cardName,
+            purchaseDate: pending.purchaseDate,
+          },
+        },
+        phoneKey,
+      );
+    };
+
+    // "sem cartão" (ou "sim" quando não há cartões pra oferecer).
+    const noCardWords = ['sem cartao', 'sem', 'nenhum'];
+    const yesWords = ['sim', 's', 'pode', 'pode ser', 'quero'];
+    if (
+      noCardWords.includes(text) ||
+      (pending.options.length === 0 && yesWords.includes(text))
+    ) {
+      await register(undefined);
+      return true;
+    }
+
+    // Resolve por número (1, 2, ...) ou por nome.
+    let chosen: { id: string; name: string } | undefined;
+    const num = parseInt(text, 10);
+    if (!Number.isNaN(num) && num >= 1 && num <= pending.options.length) {
+      chosen = pending.options[num - 1];
+    } else {
+      chosen = pending.options.find((o) => {
+        const name = this.normalizeText(o.name);
+        return name.includes(text) || text.includes(name);
+      });
+    }
+
+    if (!chosen) return false; // não entendeu a resposta → reprocessa fora
+
+    // O nome EXATO do cartão garante match único no fuzzy (exato vem primeiro).
+    await register(chosen.name);
+    return true;
+  }
+
+  // Resolve a confirmação de um "cancela" cujo alvo não bateu com a última
+  // ação: só apaga se o usuário confirmar explicitamente.
+  private async resolveCancelConfirm(
+    from: string,
+    phoneKey: string,
+    userId: string,
+    pending: Extract<PendingConfirmation, { type: 'cancel-confirm' }>,
+    content: string,
+  ): Promise<boolean> {
+    const text = this.normalizeText(content);
+
+    const yesWords = [
+      'sim',
+      's',
+      'pode',
+      'apaga',
+      'apagar',
+      'confirma',
+      'confirmo',
+      'isso',
+    ];
+    const noWords = [
+      'nao',
+      'n',
+      'deixa',
+      'esquece',
+      'cancela',
+      'cancelar',
+      'nem',
+    ];
+
+    if (yesWords.includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.performCancelAction(from, userId, pending.action, phoneKey);
+      return true;
+    }
+    if (noWords.includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Beleza, não apaguei nada 👍',
+      });
+      return true;
+    }
+    return false; // não entendeu a resposta → reprocessa fora
+  }
+
+  // "ajuda"/"menu"/"comandos" (e variações diretas) — atalho determinístico
+  // para a lista de capacidades, sem passar pelo LLM.
+  private isHelpCommand(content: string): boolean {
+    const text = this.normalizeText(content);
+    return [
+      'ajuda',
+      'menu',
+      'comandos',
+      'help',
+      'o que voce faz',
+      'o que voce faz?',
+      'o que voce sabe fazer',
+      'o que voce sabe fazer?',
+    ].includes(text);
+  }
+
+  private buildHelpMessage(): string {
+    return [
+      '🍋 *O que eu faço por você*',
+      '',
+      '💸 *Registrar:* _"gastei 50 no mercado"_, _"recebi 3000 de salário"_, _"comprei tênis de 300 em 3x no Nubank"_ — ou manda a *foto do comprovante* 🧾 e até *áudio* 🎤',
+      '',
+      '📊 *Consultar:* _"resumo"_, _"quanto gastei hoje?"_, _"quanto gastei com mercado?"_, _"minha última compra"_, _"quanto vai sobrar no fim do mês?"_',
+      '',
+      '🔁 *Contas fixas:* _"todo dia 5 pago 1500 de aluguel"_, _"minhas contas fixas"_',
+      '🎯 *Metas de gasto:* _"limite de 800 em alimentação por mês"_, _"minhas metas"_',
+      '🏦 *Reservas:* _"quero juntar 5000 pra viagem até dezembro"_, _"guardei 200"_',
+      '💳 *Cartão:* _"minha fatura do Nubank"_, _"paguei a fatura"_',
+      '✏️ *Corrigir:* _"foi 60 na verdade"_, _"cancela"_, _"foi no Nubank"_',
+      '',
+      'E pra conselho ou análise, é só perguntar: _"onde dá pra economizar?"_ 😉',
+    ].join('\n');
+  }
+
+  // Envia a resposta E grava no histórico da conversa (quando há phoneKey).
+  // Consultas precisam disso: sem a fala do bot no histórico, um follow-up
+  // ("e alimentação?") chegava ao parser sem contexto do que foi respondido.
+  private async sendAndRecord(
+    from: string,
+    phoneKey: string | undefined,
+    content: string,
+  ) {
+    await this.wmodeClient.sendMessage({ to: from, content });
+    if (phoneKey) {
+      await this.conversation.appendHistory(phoneKey, [
+        // Colapsa quebras de linha: a entrada vira UMA linha no bloco de
+        // contexto do parser (o repositório já trunca a 160 chars).
+        { role: 'bot', text: content.replace(/\s+/g, ' ').trim() },
+      ]);
+    }
+  }
+
+  // Minúsculas + sem acentos, para comparações tolerantes de nomes/alvos.
+  private normalizeText(s: string): string {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
+  // A transação foi criada há pouco? Guarda de recência para operações que
+  // caem na "última transação global" (sem lastAction): corrigir/apagar algo
+  // de dias atrás por engano é pior do que pedir pra usar o app.
+  private isRecentlyCreated(
+    createdAt: Date | string | undefined,
+    hours = 24,
+  ): boolean {
+    if (!createdAt) return false;
+    const t = new Date(createdAt).getTime();
+    if (Number.isNaN(t)) return false;
+    return Date.now() - t <= hours * 60 * 60 * 1000;
   }
 
   // Resolve a janela de tempo de uma consulta em horário de Brasília (UTC-3) e
@@ -810,49 +1093,72 @@ export class WhatsappService {
     from: string,
     userId: string,
     result: Extract<ParseResult, { intent: 'query' }>,
+    phoneKey?: string,
   ) {
     if (result.queryType === 'forecast') {
-      await this.handleForecast(from, userId);
+      await this.handleForecast(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'budget') {
       // "Metas" = tetos de gasto por categoria (model Goal). O antigo handleBudget
       // (model Budget, teto único do mês) ficou obsoleto para o WhatsApp.
-      await this.handleGoalsQuery(from, userId);
+      await this.handleGoalsQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'reserves') {
-      await this.handleReserveQuery(from, userId);
+      await this.handleReserveQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'recurring') {
-      await this.handleRecurringQuery(from, userId);
+      await this.handleRecurringQuery(from, userId, phoneKey);
       return;
     }
 
     if (result.queryType === 'category') {
-      await this.handleCategoryQuery(from, userId, result.categorySlug);
+      await this.handleCategoryQuery(
+        from,
+        userId,
+        result.categorySlug,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
     if (result.queryType === 'card') {
-      await this.handleCardQuery(from, userId, result.cardName, {
-        invoiceMonth: result.invoiceMonth,
-        wantItems: result.wantItems,
-      });
+      await this.handleCardQuery(
+        from,
+        userId,
+        result.cardName,
+        {
+          invoiceMonth: result.invoiceMonth,
+          wantItems: result.wantItems,
+        },
+        phoneKey,
+      );
       return;
     }
 
     if (result.queryType === 'last_transaction') {
-      await this.handleLastTransactionQuery(from, userId);
+      await this.handleLastTransactionQuery(
+        from,
+        userId,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
     if (result.queryType === 'top_transaction') {
-      await this.handleTopTransactionQuery(from, userId);
+      await this.handleTopTransactionQuery(
+        from,
+        userId,
+        phoneKey,
+        result.memberName,
+      );
       return;
     }
 
@@ -917,7 +1223,7 @@ export class WhatsappService {
         break;
     }
 
-    await this.wmodeClient.sendMessage({ to: from, content: message });
+    await this.sendAndRecord(from, phoneKey, message);
   }
 
   // Resolve o cartão de um comando (consulta/pagamento). cardName indefinido ou
@@ -981,6 +1287,7 @@ export class WhatsappService {
     userId: string,
     cardName?: string,
     opts?: { invoiceMonth?: string; wantItems?: boolean },
+    phoneKey?: string,
   ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const fmt = (v: number) =>
@@ -1031,12 +1338,12 @@ export class WhatsappService {
         : '';
 
     if (count === 0) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content:
-          `${faturaLabel} do *${card.name}* está limpa — nada lançado 👍` +
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `${faturaLabel} do *${card.name}* está limpa — nada lançado 👍` +
           dueLine,
-      });
+      );
       return;
     }
 
@@ -1047,10 +1354,7 @@ export class WhatsappService {
 
     // Sem pedido de itens: só o total + vencimento.
     if (!opts?.wantItems) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: header + dueLine,
-      });
+      await this.sendAndRecord(from, phoneKey, header + dueLine);
       return;
     }
 
@@ -1085,17 +1389,27 @@ export class WhatsappService {
         ? `\n_…e mais ${count - lines.length}. Veja tudo no app._`
         : '';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `${header}${dueLine}\n\n${lines.join('\n')}${extra}`,
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${header}${dueLine}\n\n${lines.join('\n')}${extra}`,
+    );
   }
 
   // "Qual foi minha última transação?" — a REGISTRADA por último (createdAt).
   // Não usa findLatest (por `date`): numa compra parcelada, a parcela mais
   // futura (date em 2027) ganharia o `date desc` e viraria a "última".
-  private async handleLastTransactionQuery(from: string, userId: string) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+  private async handleLastTransactionQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+    memberName?: string,
+  ) {
+    // "a última compra da Dani" filtra pelo membro citado (antes ignorava o
+    // nome e respondia pela família inteira, contradizendo o parser).
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const tx = await this.transactionsRepository.findLastCreated(userIds);
 
     if (!tx) {
@@ -1117,17 +1431,24 @@ export class WhatsappService {
     const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
     const verb = tx.type === 'INCOME' ? 'Última entrada' : 'Último gasto';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${icon} *${verb}:* *${amount}* em _${label}_${cardInfo}\n` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${icon} *${verb}${who}:* *${amount}* em _${label}_${cardInfo}\n` +
         `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
-    });
+    );
   }
 
   // "Qual foi minha compra mais cara?" — maior DESPESA do mês corrente.
-  private async handleTopTransactionQuery(from: string, userId: string) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
+  private async handleTopTransactionQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+    memberName?: string,
+  ) {
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const now = new Date();
     const startDate = new Date(
       now.getFullYear(),
@@ -1160,12 +1481,12 @@ export class WhatsappService {
     const when = this.formatTxDate(tx.date);
     const cardInfo = tx.card ? ` no *${tx.card.name}*` : '';
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${icon} *Sua maior despesa em ${monthName}:* *${amount}* em _${label}_${cardInfo}\n` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${icon} *${who ? `Maior despesa${who}` : 'Sua maior despesa'} em ${monthName}:* *${amount}* em _${label}_${cardInfo}\n` +
         `🗓️ ${when} • ${tx.category?.name ?? 'sem categoria'}`,
-    });
+    );
   }
 
   // Formata a data de uma transação para exibição (dd/mm/aaaa). Em UTC porque as
@@ -1185,11 +1506,16 @@ export class WhatsappService {
     from: string,
     userId: string,
     categorySlug?: string,
+    phoneKey?: string,
+    memberName?: string,
   ) {
     const fmt = (v: number) =>
       v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    const userIds = await this.familyContext.resolveUserIds(userId);
+    // "o que a Dani gastou com alimentação" filtra pelo membro citado.
+    const scope = await this.resolveQueryScope(from, userId, memberName);
+    if (!scope) return;
+    const { userIds, who } = scope;
     const category = categorySlug
       ? await this.categoriesRepository.findBySlug(categorySlug, userIds)
       : null;
@@ -1220,24 +1546,29 @@ export class WhatsappService {
     const label = `${category.icon ?? ''} ${category.name}`.trim();
 
     if (!row || row.count === 0) {
-      await this.wmodeClient.sendMessage({
-        to: from,
-        content: `Zero gastos com *${category.name}* em ${monthName} até agora 👍`,
-      });
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `Zero gastos${who} com *${category.name}* em ${monthName} até agora 👍`,
+      );
       return;
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content:
-        `${label} Em ${monthName} você gastou *${fmt(row.total)}* com *${category.name}* ` +
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `${label} Em ${monthName}${who ? who : ' você'} gastou *${fmt(row.total)}* com *${category.name}* ` +
         `(${row.count} ${row.count === 1 ? 'lançamento' : 'lançamentos'}).`,
-    });
+    );
   }
 
   // "Metas" = tetos de gasto por categoria (model Goal). O gasto é recalculado
   // por período (mês/semana) e o teto persiste — não precisa redefinir todo mês.
-  private async handleGoalsQuery(from: string, userId: string) {
+  private async handleGoalsQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const goals = await this.listGoals.execute(userId);
 
     const fmt = (v: number) =>
@@ -1270,10 +1601,11 @@ export class WhatsappService {
       );
     });
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🎯 *Suas metas de gasto*\n\n` + blocks.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🎯 *Suas metas de gasto*\n\n` + blocks.join('\n\n'),
+    );
   }
 
   // Cria uma meta (teto de gasto por categoria, model Goal) a partir de uma
@@ -1408,12 +1740,16 @@ export class WhatsappService {
       ids = lastAction.transactionIds;
       label = lastAction.label;
     } else {
+      // Sem ação recente na conversa: só aceita a última transação global se
+      // ela for recente — senão um "foi no nubank" solto trocava o cartão de
+      // um lançamento antigo ou feito pelo painel.
       const last = await this.transactionsRepository.findLastByUser(userId);
-      if (!last) {
+      if (!last || !this.isRecentlyCreated(last.createdAt)) {
         await this.wmodeClient.sendMessage({
           to: from,
           content:
-            'Não encontrei nenhuma transação recente pra trocar o cartão.',
+            'Não encontrei nenhuma transação recente pra trocar o cartão. ' +
+            'Pra editar lançamentos antigos, usa o painel de transações 😉',
         });
         return;
       }
@@ -1468,7 +1804,11 @@ export class WhatsappService {
     );
   }
 
-  private async handleForecast(from: string, userId: string) {
+  private async handleForecast(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const forecast = await this.getForecast.execute(userId);
 
     const fmt = (v: number) =>
@@ -1523,66 +1863,98 @@ export class WhatsappService {
       }
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: lines.join('\n'),
-    });
+    await this.sendAndRecord(from, phoneKey, lines.join('\n'));
   }
 
-  private async handleCancel(from: string, userId: string, phoneKey?: string) {
-    const userIds = await this.familyContext.resolveUserIds(userId);
-
+  private async handleCancel(
+    from: string,
+    userId: string,
+    result: Extract<ParseResult, { intent: 'cancel' }>,
+    phoneKey?: string,
+  ) {
     // Caminho preferido: cancela a ÚLTIMA AÇÃO inteira (parcelamento/lote =
-    // N transações), não só a última transação. Fallback para a última
-    // transação quando não há ação registrada (ex.: conversas antigas).
+    // N transações), não só a última transação. O lastAction tem TTL — um
+    // "cancela" horas depois não pode apagar uma ação que o usuário nem lembra.
     const lastAction = phoneKey
       ? await this.conversation.getLastAction(phoneKey)
       : null;
+    const hasAction = !!lastAction && lastAction.transactionIds.length > 0;
 
-    if (lastAction && lastAction.transactionIds.length > 0) {
-      const count = await this.transactionsRepository.deleteManyByIds(
-        lastAction.transactionIds,
-        userIds,
-      );
+    const target = result.target;
 
-      // Aporte de reserva: além de apagar a despesa, reverte o savedAmount —
-      // senão a reserva mostraria dinheiro guardado sem lastro em caixa. Só
-      // reverte se a despesa foi de fato removida (count > 0), pra não
-      // decrementar duas vezes num "cancela" repetido.
-      if (lastAction.kind === 'reserve-contribution' && count > 0) {
-        await this.reservesRepository.removeContribution(
-          lastAction.reserveId,
-          lastAction.amount,
-        );
+    // "cancela a netflix" / "apaga o uber": o usuário NOMEOU o alvo. Só apaga
+    // direto se o alvo bate com a última ação — senão o "cancela a netflix"
+    // apagava silenciosamente um lançamento sem nenhuma relação.
+    if (target) {
+      if (hasAction && this.lastActionMatchesTarget(lastAction, target)) {
+        await this.performCancelAction(from, userId, lastAction, phoneKey);
+        return;
       }
 
-      if (phoneKey) await this.conversation.clearLastAction(phoneKey);
-
-      if (count > 0) {
-        const what =
-          count === 1
-            ? `*${lastAction.label}*`
-            : `as *${count}* transações de *${lastAction.label}*`;
+      // O alvo é uma conta fixa/assinatura? "cancela a netflix" NÃO é um
+      // lançamento avulso — apagar a última transação aqui era o pior bug.
+      const userIds = await this.familyContext.resolveUserIds(userId);
+      const recurrings = await this.recurringRepository.findMany(userIds, true);
+      const t = this.normalizeText(target);
+      const rec = recurrings.find((r) => {
+        const name = this.normalizeText(r.description ?? '');
+        return name.length > 0 && (name.includes(t) || t.includes(name));
+      });
+      if (rec) {
         await this.wmodeClient.sendMessage({
           to: from,
           content:
-            `Prontinho, removi ✅\n\n` +
-            `Apaguei ${what}. Tá tudo certo de novo no painel 🧹`,
+            `*${rec.description}* é uma conta fixa, não um lançamento avulso — ` +
+            `então não apaguei nada. Por aqui eu ainda não cancelo contas fixas 😕 ` +
+            `Dá pra apagar em *Configurações › Contas fixas* no app.`,
         });
-        this.logger.log(
-          `Cancelled last action (${count} tx) for user ${userId}`,
-        );
         return;
       }
-      // Se nada foi apagado (ids já removidos), cai no fallback abaixo.
-    }
 
-    const last = await this.transactionsRepository.findLastByUser(userId);
+      if (hasAction && phoneKey) {
+        // Alvo não bate com a última ação: confirma antes de apagar qualquer
+        // coisa, em vez de chutar.
+        await this.conversation.setPending(phoneKey, {
+          type: 'cancel-confirm',
+          action: lastAction,
+        });
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            `Não achei *${target}* nos últimos registros daqui. ` +
+            `O último registro foi *${lastAction.label}* — quer que eu apague esse?\n\n` +
+            `_Responde *sim* ou *deixa*._`,
+        });
+        return;
+      }
 
-    if (!last) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Nenhuma transação encontrada para cancelar.',
+        content:
+          `Não achei *${target}* nos registros recentes da nossa conversa, ` +
+          `então não apaguei nada. Eu consigo desfazer o último registro feito ` +
+          `por aqui — pra excluir outros lançamentos, usa o painel de transações 😉`,
+      });
+      return;
+    }
+
+    // "cancela" genérico.
+    if (hasAction) {
+      await this.performCancelAction(from, userId, lastAction, phoneKey);
+      return;
+    }
+
+    // Sem ação recente na conversa: NÃO apaga a última transação global às
+    // cegas (podia ser um lançamento antigo ou feito pelo painel). Se houver
+    // uma transação recente, oferece com confirmação; senão, orienta.
+    const last = await this.transactionsRepository.findLastByUser(userId);
+    if (!last || !this.isRecentlyCreated(last.createdAt) || !phoneKey) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não achei um registro recente pra cancelar por aqui 🤔 ' +
+          'Eu consigo desfazer o último registro da nossa conversa — ' +
+          'pra excluir outros lançamentos, usa o painel de transações 😉',
       });
       return;
     }
@@ -1591,20 +1963,86 @@ export class WhatsappService {
       style: 'currency',
       currency: 'BRL',
     });
-
-    await this.transactionsRepository.delete(last.id);
-    if (phoneKey) await this.conversation.clearLastAction(phoneKey);
-
+    const label = `${amountFormatted} em ${last.category.name}`;
+    await this.conversation.setPending(phoneKey, {
+      type: 'cancel-confirm',
+      action: {
+        kind: 'transaction',
+        transactionIds: [last.id],
+        label,
+        description: last.description ?? undefined,
+      },
+    });
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `Prontinho, removi ✅\n\n` +
-        `Apaguei *${amountFormatted}* de *${last.category.name}* ` +
-        `(${last.description || 'sem descrição'}). ` +
-        `Tá tudo certo de novo no painel 🧹`,
+        `Não tenho um registro recente da nossa conversa, mas seu último ` +
+        `lançamento foi *${label}* (${last.description || 'sem descrição'}). ` +
+        `Quer que eu apague esse?\n\n_Responde *sim* ou *deixa*._`,
     });
+  }
 
-    this.logger.log(`Transaction ${last.id} cancelled by user ${userId}`);
+  // Alvo nomeado num "cancela <alvo>" bate com a última ação? Compara com o
+  // rótulo (valor + categoria) e com a descrição do lançamento.
+  private lastActionMatchesTarget(action: LastAction, target: string): boolean {
+    const t = this.normalizeText(target);
+    if (!t) return false;
+    if (this.normalizeText(action.label).includes(t)) return true;
+    if (action.kind === 'transaction' && action.description) {
+      const d = this.normalizeText(action.description);
+      return d.includes(t) || t.includes(d);
+    }
+    return false;
+  }
+
+  // Apaga a última ação inteira (e reverte efeitos colaterais, ex.: aporte de
+  // reserva). Usado pelo "cancela" direto e pela confirmação pendente.
+  private async performCancelAction(
+    from: string,
+    userId: string,
+    action: LastAction,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const count = await this.transactionsRepository.deleteManyByIds(
+      action.transactionIds,
+      userIds,
+    );
+
+    // Aporte de reserva: além de apagar a despesa, reverte o savedAmount —
+    // senão a reserva mostraria dinheiro guardado sem lastro em caixa. Só
+    // reverte se a despesa foi de fato removida (count > 0), pra não
+    // decrementar duas vezes num "cancela" repetido.
+    if (action.kind === 'reserve-contribution' && count > 0) {
+      await this.reservesRepository.removeContribution(
+        action.reserveId,
+        action.amount,
+      );
+    }
+
+    if (phoneKey) await this.conversation.clearLastAction(phoneKey);
+
+    if (count > 0) {
+      const what =
+        count === 1
+          ? `*${action.label}*`
+          : `as *${count}* transações de *${action.label}*`;
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          `Prontinho, removi ✅\n\n` +
+          `Apaguei ${what}. Tá tudo certo de novo no painel 🧹`,
+      });
+      this.logger.log(`Cancelled last action (${count} tx) for user ${userId}`);
+      return;
+    }
+
+    // Ids já não existem (apagados antes): avisa em vez de cair num fallback
+    // que apagava OUTRA transação — um "cancela" repetido virava exclusão dupla.
+    await this.wmodeClient.sendMessage({
+      to: from,
+      content: `Esse registro (*${action.label}*) já tinha sido removido 👍 Não apaguei mais nada.`,
+    });
   }
 
   private async handleCorrection(
@@ -1613,65 +2051,174 @@ export class WhatsappService {
     result: Extract<ParseResult, { intent: 'correction' }>,
     phoneKey?: string,
   ) {
-    // Se a última ação foi um parcelamento, "o total era X" corrige o GRUPO
-    // inteiro (não só a última parcela): redivide o novo total nas N parcelas,
-    // mantendo o resíduo de arredondamento na última — senão soma(parcelas) ≠
-    // total e o grupo fica internamente inconsistente.
+    const fmt = (v: number) =>
+      v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Caminho preferido: corrige a ÚLTIMA AÇÃO da conversa (com TTL), pelo
+    // tipo dela — nunca a "última transação global", que podia ser outra coisa.
     const lastAction = phoneKey
       ? await this.conversation.getLastAction(phoneKey)
       : null;
 
-    if (
-      lastAction?.kind === 'installment' &&
-      lastAction.transactionIds.length > 0
-    ) {
-      const handled = await this.correctInstallmentGroup(
-        from,
-        userId,
-        lastAction,
-        result.newAmount,
-        phoneKey,
-      );
-      if (handled) return;
-      // Se o grupo já não existe (parcelas apagadas), cai no fallback abaixo.
-    }
+    if (lastAction && lastAction.transactionIds.length > 0) {
+      // Parcelamento: "o total era X" corrige o GRUPO inteiro (não só a última
+      // parcela): redivide o novo total nas N parcelas, mantendo o resíduo de
+      // arredondamento na última — senão soma(parcelas) ≠ total.
+      if (lastAction.kind === 'installment') {
+        const handled = await this.correctInstallmentGroup(
+          from,
+          userId,
+          lastAction,
+          result.newAmount,
+          phoneKey,
+        );
+        if (handled) return;
+        // Grupo já não existe (parcelas apagadas): avisa em vez de corrigir
+        // outra transação qualquer.
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content: `Esse parcelamento (*${lastAction.label}*) já não existe mais — não corrigi nada.`,
+        });
+        return;
+      }
 
-    const last = await this.transactionsRepository.findLastByUser(userId);
+      if (lastAction.kind === 'transaction') {
+        const userIds = await this.familyContext.resolveUserIds(userId);
+        const rows = await this.transactionsRepository.findManyByIds(
+          lastAction.transactionIds,
+          userIds,
+        );
+        const row = rows[0];
+        if (!row) {
+          await this.wmodeClient.sendMessage({
+            to: from,
+            content: `Esse registro (*${lastAction.label}*) já não existe mais — não corrigi nada.`,
+          });
+          return;
+        }
+        await this.applyAmountCorrection(from, userId, row, result.newAmount);
+        // Atualiza o rótulo (o registro segue cancelável com o valor novo).
+        if (phoneKey) {
+          await this.conversation.setLastAction(phoneKey, {
+            ...lastAction,
+            label: `${fmt(result.newAmount)} em ${row.category.name}`,
+          });
+        }
+        return;
+      }
 
-    if (!last) {
+      if (lastAction.kind === 'reserve-contribution') {
+        const userIds = await this.familyContext.resolveUserIds(userId);
+        const rows = await this.transactionsRepository.findManyByIds(
+          lastAction.transactionIds,
+          userIds,
+        );
+        const row = rows[0];
+        if (!row) {
+          await this.wmodeClient.sendMessage({
+            to: from,
+            content: `Esse aporte (*${lastAction.label}*) já não existe mais — não corrigi nada.`,
+          });
+          return;
+        }
+        await this.transactionsRepository.update(row.id, {
+          amount: result.newAmount,
+        });
+        // Ajusta o acumulado da reserva pelo DELTA — corrigir só a despesa
+        // deixaria a reserva com dinheiro fantasma (ou a menos).
+        const delta = result.newAmount - lastAction.amount;
+        if (delta > 0) {
+          await this.reservesRepository.addContribution(
+            lastAction.reserveId,
+            delta,
+          );
+        } else if (delta < 0) {
+          await this.reservesRepository.removeContribution(
+            lastAction.reserveId,
+            -delta,
+          );
+        }
+        if (phoneKey) {
+          await this.conversation.setLastAction(phoneKey, {
+            ...lastAction,
+            amount: result.newAmount,
+          });
+        }
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            `Corrigido ✏️\n\n` +
+            `Ajustei o aporte (*${lastAction.label}*): de ~${fmt(lastAction.amount)}~ ` +
+            `pra *${fmt(result.newAmount)}*. A reserva já reflete o valor certo ✨`,
+        });
+        this.logger.log(
+          `Reserve contribution corrected: ${lastAction.amount} → ${result.newAmount} by user ${userId}`,
+        );
+        return;
+      }
+
+      // batch: corrigir "o valor" de um lote é ambíguo — qual item?
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Nenhuma transação encontrada para corrigir.',
+        content:
+          `Seu último registro foi um lote de *${lastAction.transactionIds.length}* lançamentos, ` +
+          `e ainda não consigo corrigir um item só do lote por aqui 😕 ` +
+          `Dá pra apagar tudo com *cancela* e registrar de novo, ou ajustar no painel.`,
       });
       return;
     }
 
-    const oldAmount = Number(last.amount);
+    // Sem ação recente na conversa: corrige a última transação global SÓ se
+    // ela for recente — sem a guarda, um "corrige pra 30" dias depois editava
+    // um lançamento antigo ou feito pelo painel.
+    const last = await this.transactionsRepository.findLastByUser(userId);
+    if (!last || !this.isRecentlyCreated(last.createdAt)) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content:
+          'Não achei um registro recente pra corrigir por aqui 🤔 ' +
+          'Eu consigo corrigir o último registro da nossa conversa — ' +
+          'pra editar outros lançamentos, usa o painel de transações 😉',
+      });
+      return;
+    }
+
+    await this.applyAmountCorrection(from, userId, last, result.newAmount);
+  }
+
+  // Aplica a correção de valor numa transação avulsa e responde com o de→para.
+  private async applyAmountCorrection(
+    from: string,
+    userId: string,
+    row: NonNullable<
+      Awaited<ReturnType<TransactionsRepository['findLastByUser']>>
+    >,
+    newAmount: number,
+  ) {
+    const oldAmount = Number(row.amount);
     const oldFormatted = oldAmount.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     });
-    const newFormatted = result.newAmount.toLocaleString('pt-BR', {
+    const newFormatted = newAmount.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     });
 
-    await this.transactionsRepository.update(last.id, {
-      amount: result.newAmount,
-    });
+    await this.transactionsRepository.update(row.id, { amount: newAmount });
 
     await this.wmodeClient.sendMessage({
       to: from,
       content:
         `Corrigido ✏️\n\n` +
-        `${last.category.icon} *${last.category.name}* ` +
-        `(${last.description || 'sem descrição'}): ` +
+        `${row.category.icon} *${row.category.name}* ` +
+        `(${row.description || 'sem descrição'}): ` +
         `de ~${oldFormatted}~ pra *${newFormatted}*. ` +
         `Já ajustei tudo no painel ✨`,
     });
 
     this.logger.log(
-      `Transaction ${last.id} corrected: ${oldAmount} → ${result.newAmount} by user ${userId}`,
+      `Transaction ${row.id} corrected: ${oldAmount} → ${newAmount} by user ${userId}`,
     );
   }
 
@@ -1764,7 +2311,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -1868,7 +2416,8 @@ export class WhatsappService {
       if (!category) {
         await this.wmodeClient.sendMessage({
           to: from,
-          content: 'Erro interno ao processar categoria. Tente novamente.',
+          content:
+            'Tive um problema pra achar a categoria agora 😕 Tenta de novo em instantes?',
         });
         return;
       }
@@ -2012,7 +2561,11 @@ export class WhatsappService {
     this.logger.log(`Reserve created: ${reserve.id} for user ${userId}`);
   }
 
-  private async handleReserveQuery(from: string, userId: string) {
+  private async handleReserveQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const reserves = await this.reservesRepository.findManyActive(userIds);
 
@@ -2049,15 +2602,20 @@ export class WhatsappService {
       );
     });
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🏦 *Suas reservas*\n\n` + blocks.join('\n\n'),
+    );
   }
 
   // Lista as recorrências (contas fixas / assinaturas) ativas do usuário,
   // separando entradas fixas de saídas fixas e mostrando o dia do mês.
-  private async handleRecurringQuery(from: string, userId: string) {
+  private async handleRecurringQuery(
+    from: string,
+    userId: string,
+    phoneKey?: string,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const recurrences = await this.recurringRepository.findMany(userIds, true);
 
@@ -2096,10 +2654,11 @@ export class WhatsappService {
       );
     }
 
-    await this.wmodeClient.sendMessage({
-      to: from,
-      content: `🔁 *Suas contas fixas do mês*\n\n` + sections.join('\n\n'),
-    });
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🔁 *Suas contas fixas do mês*\n\n` + sections.join('\n\n'),
+    );
   }
 
   // SEMPRE pergunta em qual reserva lançar (decisão de produto): guarda o aporte
@@ -2167,10 +2726,22 @@ export class WhatsappService {
     );
     if (!card) return;
 
-    // Ciclo aberto = mês corrente (mesma régua de getInvoice). UTC para o `cycle`
-    // (chave do InvoicePayment) bater com o derivado no web em get-card-invoice.
+    // Ciclo a pagar: o mês citado ("paguei a fatura de maio") ou o corrente.
+    // UTC para o `cycle` (chave do InvoicePayment) bater com o derivado no web
+    // em get-card-invoice. Antes, "fatura de maio" era atribuída silenciosamente
+    // ao ciclo corrente — pagamento no mês errado.
     const now = new Date();
-    const cycle = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const cycle =
+      result.invoiceMonth ??
+      `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const [cy, cm] = cycle.split('-').map(Number);
+    const cycleLabel = new Date(Date.UTC(cy, cm - 1, 1)).toLocaleDateString(
+      'pt-BR',
+      { month: 'long', timeZone: 'UTC' },
+    );
+    const invoiceLabel = result.invoiceMonth
+      ? `fatura de ${cycleLabel} do *${card.name}*`
+      : `fatura do *${card.name}*`;
 
     // O use-case calcula o SALDO DEVEDOR (total − já pago), usa-o como default
     // quando o usuário não disse o valor ("paguei a fatura"), valida o teto e
@@ -2186,8 +2757,8 @@ export class WhatsappService {
       // Fatura quitada (ou valor inválido): responde amigável, não vaza erro.
       const msg =
         error instanceof BadRequestException
-          ? `A fatura do *${card.name}* já está quitada — nada a pagar 👍`
-          : `Não consegui registrar o pagamento da fatura do *${card.name}* agora. Tenta de novo?`;
+          ? `A ${invoiceLabel} já está quitada — nada a pagar 👍`
+          : `Não consegui registrar o pagamento da ${invoiceLabel} agora. Tenta de novo?`;
       await this.wmodeClient.sendMessage({ to: from, content: msg });
       return;
     }
@@ -2208,8 +2779,8 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({
       to: from,
       content:
-        `✅ Registrei o pagamento de *${fmt(res.amount)}* na fatura do ` +
-        `*${card.name}*.${clampNote}\n${statusLabel}`,
+        `✅ Registrei o pagamento de *${fmt(res.amount)}* na ` +
+        `${invoiceLabel}.${clampNote}\n${statusLabel}`,
     });
 
     if (phoneKey) {
@@ -2258,7 +2829,8 @@ export class WhatsappService {
     if (!category) {
       await this.wmodeClient.sendMessage({
         to: from,
-        content: 'Erro interno: categoria de reservas não encontrada.',
+        content:
+          'Tive um problema pra registrar o aporte agora 😕 Tenta de novo em instantes? Nada foi guardado.',
       });
       return true;
     }

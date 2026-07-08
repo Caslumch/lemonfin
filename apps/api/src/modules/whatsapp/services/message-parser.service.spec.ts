@@ -144,6 +144,13 @@ describe('MessageParserService', () => {
       mockResponse({ intent: 'cancel' });
       expect(await service.parse('cancela o último')).toEqual({
         intent: 'cancel',
+        target: null,
+      });
+
+      mockResponse({ intent: 'cancel', target: 'netflix' });
+      expect(await service.parse('cancela a netflix')).toEqual({
+        intent: 'cancel',
+        target: 'netflix',
       });
 
       mockResponse({ intent: 'correction', newAmount: 30 });
@@ -226,6 +233,40 @@ describe('MessageParserService', () => {
       const result = await service.parse('não foi no cartão');
 
       expect(result).toEqual({ intent: 'correction_card', cardName: null });
+    });
+  });
+
+  describe('pagamento de fatura', () => {
+    it('parseia pagamento com mês específico (invoiceMonth)', async () => {
+      mockResponse({
+        intent: 'pay_invoice',
+        cardName: 'Nubank',
+        amount: null,
+        invoiceMonth: '2026-05',
+      });
+
+      expect(await service.parse('paguei a fatura de maio do nubank')).toEqual({
+        intent: 'pay_invoice',
+        cardName: 'Nubank',
+        amount: null,
+        invoiceMonth: '2026-05',
+      });
+    });
+
+    it('invoiceMonth fora do formato YYYY-MM vira null', async () => {
+      mockResponse({
+        intent: 'pay_invoice',
+        cardName: null,
+        amount: 300,
+        invoiceMonth: 'maio',
+      });
+
+      expect(await service.parse('paguei 300 da fatura')).toEqual({
+        intent: 'pay_invoice',
+        cardName: null,
+        amount: 300,
+        invoiceMonth: null,
+      });
     });
   });
 
