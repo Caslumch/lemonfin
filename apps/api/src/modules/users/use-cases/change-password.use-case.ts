@@ -5,12 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { UsersRepository } from '../repositories/users.repository';
 import { ChangePasswordInput } from '../dtos/change-password.dto';
 
 @Injectable()
 export class ChangePasswordUseCase {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    // Prisma direto (padrão do delete-account) para revogar as sessões sem
+    // importar o AuthModule — auth já importa users; seria ciclo de DI.
+    private readonly prisma: PrismaService,
+  ) {}
 
   async execute(userId: string, input: ChangePasswordInput) {
     const user = await this.usersRepository.findById(userId);
@@ -33,6 +39,13 @@ export class ChangePasswordUseCase {
 
     const passwordHash = await bcrypt.hash(input.newPassword, 10);
     await this.usersRepository.updatePassword(userId, passwordHash);
+
+    // Trocou a senha → derruba TODAS as sessões de longa duração. Se a troca
+    // foi por suspeita de invasão, o invasor não pode continuar renovando.
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
     return { success: true };
   }

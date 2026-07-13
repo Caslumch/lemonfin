@@ -23,7 +23,7 @@ describe('HandleStripeWebhookUseCase', () => {
     setStripeCustomerId: jest.Mock;
   };
   let stripe: { getSubscription: jest.Mock };
-  let cache: { get: jest.Mock; set: jest.Mock };
+  let processedEvents: { claim: jest.Mock; release: jest.Mock };
   let mail: {
     sendSubscriptionWelcome: jest.Mock;
     sendPaymentFailed: jest.Mock;
@@ -46,7 +46,10 @@ describe('HandleStripeWebhookUseCase', () => {
       setStripeCustomerId: jest.fn().mockResolvedValue(undefined),
     };
     stripe = { getSubscription: jest.fn().mockResolvedValue(sub()) };
-    cache = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() };
+    processedEvents = {
+      claim: jest.fn().mockResolvedValue(true),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
     mail = {
       sendSubscriptionWelcome: jest.fn().mockResolvedValue(true),
       sendPaymentFailed: jest.fn().mockResolvedValue(true),
@@ -56,7 +59,7 @@ describe('HandleStripeWebhookUseCase', () => {
       billing as never,
       stripe as never,
       mail as never,
-      cache as never,
+      processedEvents as never,
     );
   });
 
@@ -134,18 +137,49 @@ describe('HandleStripeWebhookUseCase', () => {
     expect(mail.sendPaymentFailed).not.toHaveBeenCalled();
   });
 
-  it('é idempotente: ignora evento já processado', async () => {
-    cache.get.mockResolvedValueOnce(true); // já visto
+  it('é idempotente: claim negado (evento já processado) não reprocessa', async () => {
+    processedEvents.claim.mockResolvedValueOnce(false); // já visto (durável)
     await useCase.execute(event('customer.subscription.updated', sub()));
     expect(billing.updateSubscription).not.toHaveBeenCalled();
   });
 
-  it('marca o evento como processado ao final', async () => {
+  it('reivindica o evento ANTES de processar (sobrevive a restart)', async () => {
     await useCase.execute(event('customer.subscription.updated', sub()));
-    expect(cache.set).toHaveBeenCalledWith(
-      'stripe:evt:evt_1',
-      true,
-      expect.any(Number),
+    expect(processedEvents.claim).toHaveBeenCalledWith(
+      'evt_1',
+      'customer.subscription.updated',
+    );
+  });
+
+  it('falha no processamento LIBERA o claim (permite reenvio manual)', async () => {
+    billing.updateSubscription.mockRejectedValueOnce(new Error('db down'));
+    await expect(
+      useCase.execute(event('customer.subscription.updated', sub())),
+    ).rejects.toThrow('db down');
+    expect(processedEvents.release).toHaveBeenCalledWith('evt_1');
+  });
+
+  it('subscription `incomplete` (3DS em curso) NÃO rebaixa o status', async () => {
+    await useCase.execute(
+      event('customer.subscription.updated', sub({ status: 'incomplete' })),
+    );
+    // Antes: incomplete → CANCELED, travando o comprador no meio da
+    // autenticação do cartão. Agora: status intocado.
+    expect(billing.updateSubscription).not.toHaveBeenCalled();
+  });
+
+  it('`incomplete_expired` (pagamento falhou de vez) segue CANCELED', async () => {
+    await useCase.execute(
+      event(
+        'customer.subscription.updated',
+        sub({ status: 'incomplete_expired' }),
+      ),
+    );
+    expect(billing.updateSubscription).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        subscriptionStatus: SubscriptionStatus.CANCELED,
+      }),
     );
   });
 

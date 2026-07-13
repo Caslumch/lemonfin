@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { VerificationService } from '../../verification/services/verification.service';
+import { RefreshTokensRepository } from '../repositories/refresh-tokens.repository';
 
 /**
  * Conclui o reset: valida o OTP de PASSWORD_RESET e troca a senha. O código é de
@@ -12,6 +13,7 @@ export class ResetPasswordUseCase {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly verification: VerificationService,
+    private readonly refreshTokens: RefreshTokensRepository,
   ) {}
 
   async execute(email: string, code: string, newPassword: string) {
@@ -37,6 +39,10 @@ export class ResetPasswordUseCase {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.usersRepository.updatePassword(user.id, passwordHash);
+
+    // Reset de senha ("esqueci") costuma ser resposta a comprometimento —
+    // derruba todas as sessões de longa duração.
+    await this.refreshTokens.revokeAllForUser(user.id);
 
     return { reset: true };
   }

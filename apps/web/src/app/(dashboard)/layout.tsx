@@ -4,6 +4,7 @@ import { EmailVerificationBanner } from "@/components/layout/email-verification-
 import { TrialBanner } from "@/components/layout/trial-banner";
 import { PaywallGuard } from "@/components/layout/paywall-guard";
 import { SentryUser } from "@/components/layout/sentry-user";
+import { SessionGuard } from "@/components/layout/session-guard";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="bg-page flex-1 overflow-y-auto rounded-none md:rounded-[36px]">
         <SentryUser />
+        <SessionGuard />
         <PaywallGuard />
         <EmailVerificationBanner />
         <TrialBanner />
