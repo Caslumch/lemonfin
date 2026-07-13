@@ -1,8 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Injectable, Logger } from '@nestjs/common';
 import { SubscriptionStatus } from '@prisma/client';
 import { BillingRepository } from '../repositories/billing.repository';
+import { ProcessedStripeEventsRepository } from '../repositories/processed-stripe-events.repository';
 import {
   StripeClientService,
   type StripeEvent,
@@ -12,11 +11,6 @@ import {
 } from '../services/stripe-client.service';
 import { MailService } from '../../mail/services/mail.service';
 
-// Idempotência: o Stripe reenvia eventos. Guardamos os event.id já processados
-// por um tempo curto no cache em memória (suficiente contra a janela de retry).
-const EVENT_TTL = 24 * 60 * 60 * 1000; // 24h
-const eventKey = (id: string) => `stripe:evt:${id}`;
-
 @Injectable()
 export class HandleStripeWebhookUseCase {
   private readonly logger = new Logger(HandleStripeWebhookUseCase.name);
@@ -25,41 +19,51 @@ export class HandleStripeWebhookUseCase {
     private readonly billing: BillingRepository,
     private readonly stripe: StripeClientService,
     private readonly mail: MailService,
-    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly processedEvents: ProcessedStripeEventsRepository,
   ) {}
 
   async execute(event: StripeEvent): Promise<void> {
-    // Dedup por event.id.
-    const seenKey = eventKey(event.id);
-    if (await this.cache.get(seenKey)) {
+    // Idempotência DURÁVEL por event.id: claim no banco ANTES de processar —
+    // o dedupe anterior era cache em memória e morria a cada restart do
+    // Render, então um retry do Stripe pós-restart duplicava e-mails de
+    // billing. Também cobre entrega concorrente em 2 instâncias.
+    const fresh = await this.processedEvents.claim(event.id, event.type);
+    if (!fresh) {
       this.logger.log(`Evento ${event.id} já processado — ignorando.`);
       return;
     }
 
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await this.onCheckoutCompleted(
-          event.data.object as StripeCheckoutSession,
-        );
-        break;
-      case 'customer.subscription.updated':
-      case 'customer.subscription.created':
-        await this.syncSubscription(event.data.object as StripeSubscription);
-        break;
-      case 'customer.subscription.deleted':
-        await this.onSubscriptionDeleted(
-          event.data.object as StripeSubscription,
-        );
-        break;
-      case 'invoice.payment_succeeded':
-      case 'invoice.payment_failed':
-        await this.onInvoice(event.data.object as StripeInvoice, event.type);
-        break;
-      default:
-        this.logger.debug(`Evento não tratado: ${event.type}`);
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed':
+          await this.onCheckoutCompleted(
+            event.data.object as StripeCheckoutSession,
+          );
+          break;
+        case 'customer.subscription.updated':
+        case 'customer.subscription.created':
+          await this.syncSubscription(event.data.object as StripeSubscription);
+          break;
+        case 'customer.subscription.deleted':
+          await this.onSubscriptionDeleted(
+            event.data.object as StripeSubscription,
+          );
+          break;
+        case 'invoice.payment_succeeded':
+        case 'invoice.payment_failed':
+          await this.onInvoice(event.data.object as StripeInvoice, event.type);
+          break;
+        default:
+          this.logger.debug(`Evento não tratado: ${event.type}`);
+      }
+    } catch (error) {
+      // Falhou no meio: solta o claim para o evento poder ser reprocessado
+      // (reenvio manual pelo dashboard — devolvemos 200 mesmo em erro, então
+      // o retry automático não vem). Sem o release, o evento ficaria
+      // "processado" sem efeito nenhum.
+      await this.processedEvents.release(event.id);
+      throw error;
     }
-
-    await this.cache.set(seenKey, true, EVENT_TTL);
   }
 
   private async onCheckoutCompleted(
@@ -126,6 +130,18 @@ export class HandleStripeWebhookUseCase {
   private async syncSubscription(
     subscription: StripeSubscription,
   ): Promise<void> {
+    // `incomplete` = primeiro pagamento ainda em curso (ex.: 3DS aguardando
+    // autenticação). NÃO rebaixa o status do usuário: quem está no trial
+    // continuaria no trial; se o pagamento concluir vem `active`, se falhar
+    // de vez vem `incomplete_expired` (aí sim CANCELED). Antes, o comprador
+    // era marcado CANCELED no meio da autenticação do cartão.
+    if (subscription.status === 'incomplete') {
+      this.logger.log(
+        `Subscription ${subscription.id} incomplete (pagamento em curso) — status mantido.`,
+      );
+      return;
+    }
+
     const user = await this.resolveUser(subscription);
     if (!user) {
       const customerId =
@@ -174,7 +190,9 @@ export class HandleStripeWebhookUseCase {
       case 'incomplete_expired':
         return SubscriptionStatus.CANCELED;
       default:
-        // incomplete / paused: ainda não dá acesso, trata como cancelado.
+        // paused (e demais): não dá acesso, trata como cancelado.
+        // `incomplete` nunca chega aqui — é curto-circuitado no
+        // syncSubscription para não rebaixar quem está autenticando o cartão.
         return SubscriptionStatus.CANCELED;
     }
   }
