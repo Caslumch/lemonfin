@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BillingController } from './controllers/billing.controller';
 import { StripeWebhookController } from './controllers/stripe-webhook.controller';
 import { BillingRepository } from './repositories/billing.repository';
+import { ProcessedStripeEventsRepository } from './repositories/processed-stripe-events.repository';
 import { StripeClientService } from './services/stripe-client.service';
 import { PremiumAccessService } from './services/premium-access.service';
 import { CreateCheckoutSessionUseCase } from './use-cases/create-checkout-session.use-case';
@@ -16,6 +17,7 @@ import { MailModule } from '../mail/mail.module';
   controllers: [BillingController, StripeWebhookController],
   providers: [
     BillingRepository,
+    ProcessedStripeEventsRepository,
     StripeClientService,
     PremiumAccessService,
     CreateCheckoutSessionUseCase,

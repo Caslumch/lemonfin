@@ -87,6 +87,21 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// Idempotência do webhook do Stripe: o Stripe reenvia eventos (retry por até
+// 3 dias), e o dedupe anterior era cache em memória — não sobrevivia a restart
+// do Render, então um retry pós-restart reprocessava o evento (e-mail de
+// billing duplicado). Claim atômico por event.id único, mesmo padrão do
+// ProcessedMessage (WhatsApp).
+model ProcessedStripeEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique @map("event_id")
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("processed_stripe_events")
+}
+
 // Preferências de mensagens proativas (lembretes + alertas automáticos).
 // Ausência de linha = defaults (tudo ligado, 3 dias de antecedência) — só é
 // criada quando o usuário mexe nas configurações.
