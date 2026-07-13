@@ -60,6 +60,8 @@ export class UsersRepository {
     passwordHash: string;
     phone?: string;
     trialEndsAt?: Date;
+    termsAcceptedAt?: Date;
+    termsVersion?: string;
   }) {
     return this.prisma.user.create({ data });
   }

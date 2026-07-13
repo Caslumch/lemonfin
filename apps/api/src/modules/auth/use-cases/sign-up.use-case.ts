@@ -7,6 +7,10 @@ import { VerificationService } from '../../verification/services/verification.se
 import { MailService } from '../../mail/services/mail.service';
 import { SignUpInput } from '../dtos/auth.dto';
 
+// Versão vigente dos Termos/Política ("Última atualização" das páginas
+// legais). Atualizar aqui quando as páginas mudarem de forma relevante.
+const TERMS_VERSION = '2026-07-07';
+
 @Injectable()
 export class SignUpUseCase {
   private readonly logger = new Logger(SignUpUseCase.name);
@@ -44,6 +48,11 @@ export class SignUpUseCase {
       email: input.email,
       passwordHash,
       trialEndsAt,
+      // Registro auditável do aceite (LGPD): criar a conta implica concordar
+      // com os termos/política vigentes — a tela de cadastro deixa isso
+      // explícito com links. A versão é a data publicada nas páginas legais.
+      termsAcceptedAt: new Date(),
+      termsVersion: TERMS_VERSION,
       ...(normalizedPhone && { phone: normalizedPhone }),
     });
 

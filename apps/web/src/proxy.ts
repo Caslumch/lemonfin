@@ -14,13 +14,15 @@ export async function proxy(request: NextRequest) {
     // estando autenticado).
     request.nextUrl.pathname.startsWith("/esqueci-senha");
 
-  // Rotas públicas de marketing (landing) e jurídicas (privacidade/termos) —
-  // acessíveis sem login. As páginas legais precisam ser públicas: são lidas
-  // antes do cadastro e por buscadores/lojas de app.
+  // Rotas públicas de marketing (landing) e jurídicas (privacidade/termos/
+  // exclusão de conta) — acessíveis sem login. As páginas legais precisam ser
+  // públicas: são lidas antes do cadastro e por buscadores/lojas de app (o
+  // Google Play exige um link WEB de exclusão de conta no Data safety form).
   const isPublicPage =
     request.nextUrl.pathname.startsWith("/landing") ||
     request.nextUrl.pathname.startsWith("/privacidade") ||
-    request.nextUrl.pathname.startsWith("/termos");
+    request.nextUrl.pathname.startsWith("/termos") ||
+    request.nextUrl.pathname.startsWith("/excluir-conta");
 
   if (!session && !isAuthPage && !isPublicPage) {
     return NextResponse.redirect(new URL("/login", request.url));

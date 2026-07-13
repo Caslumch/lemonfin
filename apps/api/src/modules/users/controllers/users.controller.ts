@@ -8,6 +8,7 @@ import {
   UseGuards,
   ConflictException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { hasPremiumAccess } from '../../../common/billing/premium-access';
@@ -20,6 +21,7 @@ import { SetupTwoFactorUseCase } from '../use-cases/setup-2fa.use-case';
 import { EnableTwoFactorUseCase } from '../use-cases/enable-2fa.use-case';
 import { DisableTwoFactorUseCase } from '../use-cases/disable-2fa.use-case';
 import { DeleteAccountUseCase } from '../use-cases/delete-account.use-case';
+import { ExportUserDataUseCase } from '../use-cases/export-user-data.use-case';
 import { onboardingSchema } from '../dtos/onboarding.dto';
 import type { OnboardingInput } from '../dtos/onboarding.dto';
 import { changePasswordSchema } from '../dtos/change-password.dto';
@@ -49,6 +51,7 @@ export class UsersController {
     private readonly enableTwoFactor: EnableTwoFactorUseCase,
     private readonly disableTwoFactor: DisableTwoFactorUseCase,
     private readonly deleteAccount: DeleteAccountUseCase,
+    private readonly exportUserData: ExportUserDataUseCase,
   ) {}
 
   @Get('me')
@@ -107,6 +110,14 @@ export class UsersController {
     body: ChangePasswordInput,
   ) {
     return this.changePassword.execute(user.id, body);
+  }
+
+  // Exportação dos dados do titular (LGPD — portabilidade). Consulta pesada:
+  // throttle apertado para não virar vetor de carga.
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Get('me/export')
+  async exportDataHandler(@CurrentUser() user: { id: string }) {
+    return this.exportUserData.execute(user.id);
   }
 
   // Exclusão de conta (LGPD). Re-autentica por senha e apaga tudo.

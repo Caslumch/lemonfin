@@ -173,6 +173,18 @@ export default function RegisterPage() {
               "Criar conta"
             )}
           </Button>
+
+          <p className="text-xs text-fg-muted text-center">
+            Ao criar sua conta, você concorda com os{" "}
+            <Link href="/termos" className="underline hover:text-fg">
+              Termos de Uso
+            </Link>{" "}
+            e a{" "}
+            <Link href="/privacidade" className="underline hover:text-fg">
+              Política de Privacidade
+            </Link>
+            .
+          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-fg-secondary">
