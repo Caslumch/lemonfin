@@ -11,7 +11,7 @@ export class LogoutUseCase {
   async execute(rawRefreshToken: string) {
     const record = await this.refreshTokens.findByToken(rawRefreshToken);
     if (record && !record.revokedAt) {
-      await this.refreshTokens.revoke(record.id);
+      await this.refreshTokens.revoke(record.id, 'logout');
     }
     return { loggedOut: true };
   }

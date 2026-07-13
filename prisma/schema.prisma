@@ -79,6 +79,11 @@ model RefreshToken {
   tokenHash String    @unique @map("token_hash")
   expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
+  // Motivo da revogação: "rotation" (trocado por um novo no refresh) |
+  // "logout" | "security" (troca/reset de senha, detecção de roubo). A janela
+  // de graça para reuso concorrente SÓ vale para "rotation" — sem o motivo,
+  // a graça ressuscitaria sessões derrubadas por segurança.
+  revokedReason String? @map("revoked_reason")
   createdAt DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

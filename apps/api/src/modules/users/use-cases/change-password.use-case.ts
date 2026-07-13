@@ -44,7 +44,7 @@ export class ChangePasswordUseCase {
     // foi por suspeita de invasão, o invasor não pode continuar renovando.
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), revokedReason: 'security' },
     });
 
     return { success: true };

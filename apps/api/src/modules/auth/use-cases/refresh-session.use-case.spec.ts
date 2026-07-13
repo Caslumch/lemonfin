@@ -43,6 +43,7 @@ const validRecord = {
   id: 'rt1',
   userId: 'u1',
   revokedAt: null,
+  revokedReason: null,
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
 };
 
@@ -54,7 +55,7 @@ describe('RefreshSessionUseCase', () => {
 
     const out = await useCase.execute('token-cru');
 
-    expect(refreshTokens.revoke).toHaveBeenCalledWith('rt1');
+    expect(refreshTokens.revoke).toHaveBeenCalledWith('rt1', 'rotation');
     expect(authTokens.issueSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'u1' }),
     );
@@ -64,9 +65,13 @@ describe('RefreshSessionUseCase', () => {
     expect(refreshTokens.pruneForUser).toHaveBeenCalledWith('u1');
   });
 
-  it('REUSO de token revogado derruba TODAS as sessões do usuário', async () => {
+  it('REUSO TARDIO de token revogado (roubo) derruba TODAS as sessões', async () => {
     const { useCase, refreshTokens } = buildUseCase({
-      record: { ...validRecord, revokedAt: new Date() },
+      record: {
+        ...validRecord,
+        revokedAt: new Date(Date.now() - 5 * 60 * 1000), // 5min atrás
+        revokedReason: 'rotation',
+      },
     });
 
     await expect(useCase.execute('token-roubado')).rejects.toThrow(
@@ -74,6 +79,42 @@ describe('RefreshSessionUseCase', () => {
     );
     expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith('u1');
     expect(refreshTokens.revoke).not.toHaveBeenCalled();
+  });
+
+  it('reuso IMEDIATO (corrida de requests paralelas) NÃO derruba: emite sessão nova', async () => {
+    const { useCase, refreshTokens, authTokens } = buildUseCase({
+      record: {
+        ...validRecord,
+        revokedAt: new Date(Date.now() - 2000), // rotacionado há 2s
+        revokedReason: 'rotation',
+      },
+    });
+
+    const out = await useCase.execute('token-da-corrida');
+
+    // Janela de graça: renovações concorrentes no vencimento do access são
+    // normais (auth() roda no proxy a cada navegação) — punir era deslogar
+    // qualquer usuário com 2+ requests simultâneas.
+    expect(refreshTokens.revokeAllForUser).not.toHaveBeenCalled();
+    expect(authTokens.issueSession).toHaveBeenCalled();
+    expect(out.token).toBe('novo-access');
+  });
+
+  it('token revogado por SEGURANÇA não ganha graça, mesmo recém-revogado', async () => {
+    const { useCase, authTokens } = buildUseCase({
+      record: {
+        ...validRecord,
+        revokedAt: new Date(Date.now() - 2000), // 2s atrás, mas...
+        revokedReason: 'security', // ...derrubado por roubo/troca de senha
+      },
+    });
+
+    // Sem a distinção de motivo, a graça RESSUSCITAVA sessões que a própria
+    // detecção de roubo (ou logout/troca de senha) tinha acabado de derrubar.
+    await expect(useCase.execute('token-derrubado')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(authTokens.issueSession).not.toHaveBeenCalled();
   });
 
   it('token expirado → 401 sem emitir sessão', async () => {

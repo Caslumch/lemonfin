@@ -33,10 +33,13 @@ export class RefreshTokensRepository {
     });
   }
 
-  async revoke(id: string) {
+  // Revoga UM token com o motivo. O motivo importa: reuso de token revogado
+  // por "rotation" dentro da janela de graça é corrida benigna; por
+  // "logout"/"security", nunca.
+  async revoke(id: string, reason: 'rotation' | 'logout') {
     await this.prisma.refreshToken.update({
       where: { id },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), revokedReason: reason },
     });
   }
 
@@ -44,7 +47,7 @@ export class RefreshTokensRepository {
   async revokeAllForUser(userId: string) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), revokedReason: 'security' },
     });
   }
 

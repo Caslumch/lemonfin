@@ -3,8 +3,11 @@ import Credentials from "next-auth/providers/credentials";
 import type { JWT } from "next-auth/jwt";
 
 // Renova a sessão na API (rotação: o refresh token usado é revogado e um novo
-// volta). Falhou = sessão morta (revogada/expirada/reuso detectado) → marca o
-// erro para o SessionGuard deslogar o usuário.
+// volta). Só marca a sessão como MORTA (SessionGuard desloga) quando a API
+// responde 401/403 — sessão de fato revogada/expirada. Falha transitória
+// (rede, deploy, cold start do Render) NÃO derruba: mantém o token e tenta na
+// próxima checagem; se o access já venceu, as chamadas à API caem no fluxo de
+// 401 existente (?expired=1) até a renovação passar.
 async function refreshSession(token: JWT): Promise<JWT> {
   try {
     const res = await fetch(
@@ -15,6 +18,10 @@ async function refreshSession(token: JWT): Promise<JWT> {
         body: JSON.stringify({ refreshToken: token.refreshToken }),
       }
     );
+
+    if (res.status === 401 || res.status === 403) {
+      return { ...token, error: "RefreshTokenError" as const };
+    }
     if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
 
     const data = await res.json();
@@ -26,7 +33,8 @@ async function refreshSession(token: JWT): Promise<JWT> {
       error: undefined,
     };
   } catch {
-    return { ...token, error: "RefreshTokenError" as const };
+    // Transitório: preserva a sessão e deixa a próxima checagem tentar.
+    return token;
   }
 }
 

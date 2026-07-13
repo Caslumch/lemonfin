@@ -19,9 +19,9 @@ describe('JwtStrategy', () => {
   });
 
   it('rejeita o tempToken pré-2FA (twofa: pending) — fecha o bypass de 2FA', () => {
-    expect(() =>
-      strategy.validate({ sub: 'u1', twofa: 'pending' }),
-    ).toThrow(UnauthorizedException);
+    expect(() => strategy.validate({ sub: 'u1', twofa: 'pending' })).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('rejeita token sem a marca type: access (token legado/forjado)', () => {
