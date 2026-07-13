@@ -7,6 +7,8 @@ import { SendEmailVerificationUseCase } from '../use-cases/send-email-verificati
 import { VerifyEmailUseCase } from '../use-cases/verify-email.use-case';
 import { RequestPasswordResetUseCase } from '../use-cases/request-password-reset.use-case';
 import { ResetPasswordUseCase } from '../use-cases/reset-password.use-case';
+import { RefreshSessionUseCase } from '../use-cases/refresh-session.use-case';
+import { LogoutUseCase } from '../use-cases/logout.use-case';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { z } from 'zod';
 
@@ -48,6 +50,10 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
+const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
 // Endpoints de auth são alvo de brute-force: limite apertado (5/min por IP).
 @Throttle({ default: { ttl: 60_000, limit: 5 } })
 @Controller('auth')
@@ -62,7 +68,27 @@ export class AuthController {
     private readonly verifyEmailUseCase: VerifyEmailUseCase,
     private readonly requestPasswordResetUseCase: RequestPasswordResetUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
+    private readonly refreshSessionUseCase: RefreshSessionUseCase,
+    private readonly logoutUseCase: LogoutUseCase,
   ) {}
+
+  // Renovação de sessão roda a cada ~15min por usuário logado — o limite
+  // anti-brute-force do controller (5/min por IP) derrubaria redes com várias
+  // sessões (NAT). Não é alvo de brute-force: o token é opaco de 256 bits.
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @Post('refresh')
+  @UsePipes(new ZodValidationPipe(refreshTokenSchema))
+  refresh(@Body() body: { refreshToken: string }) {
+    return this.refreshSessionUseCase.execute(body.refreshToken);
+  }
+
+  // Logout revoga a sessão de longa duração. A posse do refresh token É a
+  // credencial (funciona mesmo com o access token já expirado).
+  @Post('logout')
+  @UsePipes(new ZodValidationPipe(refreshTokenSchema))
+  logout(@Body() body: { refreshToken: string }) {
+    return this.logoutUseCase.execute(body.refreshToken);
+  }
 
   @Post('sign-up')
   @UsePipes(new ZodValidationPipe(signUpSchema))
