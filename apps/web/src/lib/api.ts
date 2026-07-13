@@ -1,9 +1,11 @@
-import { signOut } from "next-auth/react";
+import { signOut, getSession } from "next-auth/react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface FetchOptions extends RequestInit {
   token?: string;
+  // Interno: marca a repetição pós-renovação de sessão para não retentar em loop.
+  _retried?: boolean;
 }
 
 // Erro de request com o status HTTP anexado — permite ao chamador distinguir
@@ -19,7 +21,7 @@ export class ApiError extends Error {
 
 export async function api<T = unknown>(
   path: string,
-  { token, headers, ...options }: FetchOptions = {},
+  { token, headers, _retried, ...options }: FetchOptions = {},
 ): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
@@ -32,12 +34,25 @@ export async function api<T = unknown>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    // 401 = token da API expirado/inválido. Antes o app ficava "logado mas
-    // quebrado" (sessão NextAuth ainda válida, mas toda request 401). Deslogamos
-    // de forma limpa: leva ao login com ?expired=1 para exibir um aviso. Só no
-    // cliente (no SSR/route handler não há window nem signOut) e fora das
-    // próprias telas de auth, para não entrar em loop de redirect.
+    // 401 = access token da API expirado/inválido. Com aba parada 15+ min o
+    // access vence antes de o useSession do componente perceber; deslogar
+    // direto era punir sessão renovável. Primeiro força a renovação
+    // (getSession → o jwt callback renova via /auth/refresh e grava o cookie
+    // novo) e REPETE a request uma vez; só desloga se nem assim resolver.
     if (res.status === 401 && typeof window !== "undefined") {
+      if (!_retried) {
+        const fresh = await getSession().catch(() => null);
+        const freshToken = (fresh as { accessToken?: string } | null)
+          ?.accessToken;
+        if (freshToken && freshToken !== token) {
+          return api<T>(path, {
+            ...options,
+            headers,
+            token: freshToken,
+            _retried: true,
+          });
+        }
+      }
       const p = window.location.pathname;
       const onAuthPage =
         p.startsWith("/login") ||

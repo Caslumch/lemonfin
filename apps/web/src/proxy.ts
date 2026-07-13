@@ -1,9 +1,15 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export async function proxy(request: NextRequest) {
-  const session = await auth();
+// IMPORTANTE: o proxy usa o WRAPPER `auth(fn)` do NextAuth (não `await auth()`
+// solto). Quando o access token vence, o callback jwt renova a sessão AQUI no
+// proxy — e só o wrapper propaga o Set-Cookie do token rotacionado para a
+// resposta. Com `await auth()` + resposta própria, o cookie novo era
+// DESCARTADO: o navegador reapresentava o refresh token velho para sempre e,
+// passada a janela de graça, a sessão caía (usuário deslogado ao voltar de
+// manhã, mesmo com sessão renovável).
+export const proxy = auth((request) => {
+  const session = request.auth;
 
   const isAuthPage =
     request.nextUrl.pathname.startsWith("/login") ||
@@ -33,7 +39,7 @@ export async function proxy(request: NextRequest) {
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
