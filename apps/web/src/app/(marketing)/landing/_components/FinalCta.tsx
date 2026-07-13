@@ -70,7 +70,7 @@ export function FinalCta() {
                 href={CTA_URL}
                 iconRight={<ArrowRight size={19} />}
               >
-                Começar por R$ 14,99/mês
+                Começar por R$ 14,90/mês
               </Button>
             </div>
             <div
