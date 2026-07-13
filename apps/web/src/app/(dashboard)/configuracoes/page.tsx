@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell, Download, Trash2 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +111,12 @@ export default function ConfiguracoesPage() {
 
   // Leave
   const [leaving, setLeaving] = useState(false);
+
+  // Meus dados (LGPD): exportação + exclusão de conta
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Notificações proativas (lembretes de vencimento + alertas automáticos)
   const [reminders, setReminders] = useState<ReminderSettings | null>(null);
@@ -370,6 +376,49 @@ export default function ConfiguracoesPage() {
     toast.success("Código copiado!");
   }
 
+  // Exportação dos dados (LGPD — portabilidade): baixa o JSON completo.
+  async function handleExportData() {
+    setExporting(true);
+    try {
+      const data = await fetchApi<Record<string, unknown>>("/users/me/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lemonfin-dados-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Dados exportados!");
+    } catch {
+      toast.error("Não foi possível exportar seus dados. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // Exclusão de conta (LGPD): re-autentica por senha; irreversível.
+  async function handleDeleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleting(true);
+    try {
+      await fetchApi("/users/me/delete", {
+        method: "POST",
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      toast.success("Conta excluída. Sentiremos sua falta 🍋");
+      await signOut({ callbackUrl: "/login" });
+    } catch (err) {
+      toast.error(
+        err instanceof Error && err.message.includes("Senha")
+          ? "Senha incorreta"
+          : "Não foi possível excluir a conta. Tente novamente.",
+      );
+      setDeleting(false);
+    }
+  }
+
   const roleLabel: Record<string, string> = {
     OWNER: "Dono",
     ADMIN: "Admin",
@@ -478,6 +527,107 @@ export default function ConfiguracoesPage() {
               </Button>
             </form>
           )}
+        </div>
+
+        {/* Meus dados (LGPD): exportação + exclusão de conta */}
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Download size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Meus dados
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm text-fg-secondary">
+              Baixe uma cópia de tudo que você registrou no LemonFin
+              (transações, cartões, metas, reservas e mais), em formato JSON.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportData}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                  Exportando...
+                </>
+              ) : (
+                <>
+                  <Download size={14} className="mr-2" />
+                  Exportar meus dados
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="h-px bg-border my-6" />
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-fg">Excluir conta</h3>
+            <p className="text-sm text-fg-secondary">
+              Apaga permanentemente sua conta e todos os seus dados —
+              transações, cartões, metas, reservas, histórico do WhatsApp e
+              assinatura. Essa ação não pode ser desfeita.
+            </p>
+
+            {!deleteOpen ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={14} className="mr-2" />
+                Excluir minha conta
+              </Button>
+            ) : (
+              <form onSubmit={handleDeleteAccount} className="space-y-3">
+                <PasswordInput
+                  id="deletePassword"
+                  label="Confirme sua senha para excluir"
+                  placeholder="Sua senha"
+                  autoComplete="current-password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  required
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    variant="danger"
+                    size="sm"
+                    disabled={deleting || deletePassword.length === 0}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin mr-2" />
+                        Excluindo...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={14} className="mr-2" />
+                        Excluir definitivamente
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDeleteOpen(false);
+                      setDeletePassword("");
+                    }}
+                    disabled={deleting}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
 
         </div>

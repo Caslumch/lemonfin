@@ -40,6 +40,10 @@ model User {
   // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
   // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
   // A fonte da verdade do status é o webhook do Stripe, não a resposta do checkout.
+  // Registro auditável de aceite dos termos/política no cadastro (LGPD —
+  // accountability). Version = data da versão vigente das páginas legais.
+  termsAcceptedAt      DateTime?              @map("terms_accepted_at")
+  termsVersion         String?                @map("terms_version")
   stripeCustomerId     String?                @unique @map("stripe_customer_id")
   stripeSubscriptionId String?                @unique @map("stripe_subscription_id")
   subscriptionStatus   SubscriptionStatus     @default(TRIALING) @map("subscription_status")
