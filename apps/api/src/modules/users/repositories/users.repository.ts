@@ -54,6 +54,24 @@ export class UsersRepository {
     });
   }
 
+  // Usuários em TRIAL cujo teste termina dentro da janela — para o aviso de
+  // fim de trial. Só TRIALING: quem já assinou (ACTIVE) não recebe.
+  async findTrialsEndingBetween(start: Date, end: Date) {
+    return this.prisma.user.findMany({
+      where: {
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: { gte: start, lte: end },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        trialEndsAt: true,
+      },
+    });
+  }
+
   async create(data: {
     name: string;
     email: string;

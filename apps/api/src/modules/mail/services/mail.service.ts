@@ -106,6 +106,37 @@ export class MailService {
     });
   }
 
+  async sendTrialEnding(
+    to: string,
+    name: string,
+    endsAt: Date,
+  ): Promise<boolean> {
+    const firstName = name.split(' ')[0];
+    const url = `${this.appUrl()}/assinar`;
+    const when = endsAt.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      timeZone: 'America/Sao_Paulo',
+    });
+    return this.resend.send({
+      to,
+      subject: 'Seu teste grátis termina em breve — LemonFin',
+      text:
+        `Olá, ${firstName}!\n\n` +
+        `Seu período de teste do LemonFin termina em ${when}. Assine para ` +
+        `continuar registrando e consultando suas finanças sem interrupção: ${url}`,
+      html: this.messageTemplate({
+        title: 'Seu teste grátis termina em breve',
+        greeting: `Olá, ${firstName}!`,
+        paragraphs: [
+          `Seu período de teste do LemonFin termina em ${when}.`,
+          'Assine para continuar registrando gastos pelo WhatsApp, recebendo lembretes de contas e acompanhando suas metas — sem interrupção. Seus dados continuam salvos de qualquer forma.',
+        ],
+        cta: { label: 'Assinar o LemonFin', url },
+      }),
+    });
+  }
+
   async sendSubscriptionCanceled(to: string, name: string): Promise<boolean> {
     const firstName = name.split(' ')[0];
     const url = `${this.appUrl()}/assinar`;
