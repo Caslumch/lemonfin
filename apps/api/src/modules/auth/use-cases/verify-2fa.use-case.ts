@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { verify as verifyOtp } from 'otplib';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
+import { AuthTokensService } from '../services/auth-tokens.service';
 import { decryptSecret } from '../../../common/crypto/totp-crypto';
 
 interface VerifyTwoFactorInput {
@@ -20,6 +21,7 @@ export class VerifyTwoFactorUseCase {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly jwtService: JwtService,
+    private readonly authTokens: AuthTokensService,
   ) {}
 
   async execute(input: VerifyTwoFactorInput) {
@@ -70,16 +72,12 @@ export class VerifyTwoFactorUseCase {
       throw new UnauthorizedException('Código inválido');
     }
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      type: 'access',
-    });
+    const session = await this.authTokens.issueSession(user);
 
     return {
       status: 'SUCCESS' as const,
       user: { id: user.id, name: user.name, email: user.email },
-      token,
+      ...session,
     };
   }
 

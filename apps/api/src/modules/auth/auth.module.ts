@@ -10,6 +10,10 @@ import { SendEmailVerificationUseCase } from './use-cases/send-email-verificatio
 import { VerifyEmailUseCase } from './use-cases/verify-email.use-case';
 import { RequestPasswordResetUseCase } from './use-cases/request-password-reset.use-case';
 import { ResetPasswordUseCase } from './use-cases/reset-password.use-case';
+import { RefreshSessionUseCase } from './use-cases/refresh-session.use-case';
+import { LogoutUseCase } from './use-cases/logout.use-case';
+import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
+import { AuthTokensService } from './services/auth-tokens.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
@@ -30,7 +34,10 @@ import { VerificationModule } from '../verification/verification.module';
         // getOrThrow: assinatura e verificação compartilham o MESMO segredo
         // obrigatório. Sem ele, o boot falha (em vez de assinar com undefined).
         secret: configService.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '7d' },
+        // Access curto: com refresh + rotação (ver AuthTokensService), 15min
+        // limita a janela de um token vazado. Manter em sincronia com
+        // ACCESS_TTL_MS do auth-tokens.service.
+        signOptions: { expiresIn: '15m' },
       }),
     }),
   ],
@@ -43,6 +50,10 @@ import { VerificationModule } from '../verification/verification.module';
     VerifyEmailUseCase,
     RequestPasswordResetUseCase,
     ResetPasswordUseCase,
+    RefreshSessionUseCase,
+    LogoutUseCase,
+    RefreshTokensRepository,
+    AuthTokensService,
     JwtStrategy,
   ],
 })
