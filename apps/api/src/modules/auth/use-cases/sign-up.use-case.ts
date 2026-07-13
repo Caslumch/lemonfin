@@ -1,7 +1,7 @@
 import { Injectable, ConflictException, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
+import { AuthTokensService } from '../services/auth-tokens.service';
 import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
 import { VerificationService } from '../../verification/services/verification.service';
 import { MailService } from '../../mail/services/mail.service';
@@ -17,7 +17,7 @@ export class SignUpUseCase {
 
   constructor(
     private readonly usersRepository: UsersRepository,
-    private readonly jwtService: JwtService,
+    private readonly authTokens: AuthTokensService,
     private readonly wmodeClient: WmodeClientService,
     private readonly verification: VerificationService,
     private readonly mail: MailService,
@@ -56,11 +56,7 @@ export class SignUpUseCase {
       ...(normalizedPhone && { phone: normalizedPhone }),
     });
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      type: 'access',
-    });
+    const session = await this.authTokens.issueSession(user);
 
     if (normalizedPhone) {
       this.sendWelcomeWhatsApp(normalizedPhone, input.name).catch((err) =>
@@ -76,7 +72,7 @@ export class SignUpUseCase {
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
-      token,
+      ...session,
     };
   }
 

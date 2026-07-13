@@ -64,8 +64,27 @@ model User {
   aiUsage              AiUsage[]
   reminderSetting      ReminderSetting?
   reminderLogs         ReminderLog[]
+  refreshTokens        RefreshToken[]
 
   @@map("users")
+}
+
+// Sessão de longa duração (refresh token). O token em si é opaco (random) e
+// NUNCA é armazenado — só o hash SHA-256 (vazamento do banco não vaza sessões).
+// Rotação a cada uso: o antigo é revogado ao emitir o novo. Reapresentar um
+// token JÁ REVOGADO é sinal de roubo → todas as sessões do usuário caem.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 // Preferências de mensagens proativas (lembretes + alertas automáticos).

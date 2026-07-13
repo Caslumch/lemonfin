@@ -20,6 +20,8 @@ interface SignInSuccess {
   status: "SUCCESS";
   user: SignInUser;
   token: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string;
 }
 
 interface TotpRequired {
@@ -56,9 +58,13 @@ export default function LoginPage() {
    * Establish the NextAuth session from an already-obtained access token,
    * bypassing the API re-auth (and thus the 2FA prompt) via directToken mode.
    */
-  async function establishSession(user: SignInUser, token: string) {
+  async function establishSession(user: SignInUser, data: SignInSuccess) {
     const result = await signIn("credentials", {
-      directToken: token,
+      directToken: data.token,
+      // Sessão de longa duração: o NextAuth renova o access (15min) com este
+      // refresh token; sem ele a sessão morreria em 15 minutos.
+      refreshToken: data.refreshToken ?? "",
+      tokenExpiresAt: data.tokenExpiresAt ?? "",
       userId: user.id,
       name: user.name,
       email: user.email,
@@ -101,7 +107,7 @@ export default function LoginPage() {
         return;
       }
 
-      await establishSession(data.user, data.token);
+      await establishSession(data.user, data);
     } catch {
       setError("Não foi possível entrar. Tente novamente.");
     } finally {
@@ -133,7 +139,7 @@ export default function LoginPage() {
         return;
       }
 
-      await establishSession(data.user, data.token);
+      await establishSession(data.user, data);
     } catch {
       setError("Não foi possível verificar o código. Tente novamente.");
     } finally {
