@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ChatController } from './chat.controller';
 import { ChatCompletionUseCase } from './use-cases/chat-completion.use-case';
+import { AdvisorMemoryRepository } from './repositories/advisor-memory.repository';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { FamiliesModule } from '../families/families.module';
 import { GoalsModule } from '../goals/goals.module';
@@ -23,7 +24,7 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
     AiUsageModule,
   ],
   controllers: [ChatController],
-  providers: [ChatCompletionUseCase],
+  providers: [ChatCompletionUseCase, AdvisorMemoryRepository],
   exports: [ChatCompletionUseCase],
 })
 export class ChatModule {}

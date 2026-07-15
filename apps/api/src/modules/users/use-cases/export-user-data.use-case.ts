@@ -42,6 +42,7 @@ export class ExportUserDataUseCase {
       invoicePayments,
       reminderSetting,
       familyMemberships,
+      advisorMemories,
     ] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { userId },
@@ -118,7 +119,12 @@ export class ExportUserDataUseCase {
       }),
       this.prisma.reminderSetting.findUnique({
         where: { userId },
-        select: { billsEnabled: true, daysBefore: true, alertsEnabled: true },
+        select: {
+          billsEnabled: true,
+          daysBefore: true,
+          alertsEnabled: true,
+          dailySummaryEnabled: true,
+        },
       }),
       this.prisma.familyMember.findMany({
         where: { userId },
@@ -127,6 +133,13 @@ export class ExportUserDataUseCase {
           joinedAt: true,
           family: { select: { name: true } },
         },
+      }),
+      // Memória de longo prazo do assessor (fatos de conversas) — é dado
+      // pessoal do titular, entra na portabilidade.
+      this.prisma.advisorMemory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        select: { content: true, createdAt: true },
       }),
     ]);
 
@@ -146,6 +159,7 @@ export class ExportUserDataUseCase {
       customCategories: categories,
       invoicePayments,
       reminderSettings: reminderSetting,
+      advisorMemories,
       families: familyMemberships.map((m) => ({
         name: m.family.name,
         role: m.role,

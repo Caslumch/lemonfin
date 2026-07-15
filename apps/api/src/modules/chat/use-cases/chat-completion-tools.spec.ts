@@ -14,6 +14,8 @@ function buildUseCase(overrides: {
   cardSummary?: { total: number; count: number };
   forecast?: unknown;
   insights?: unknown;
+  rememberDeduped?: boolean;
+  forgetResult?: boolean;
 }) {
   const config = { getOrThrow: jest.fn().mockReturnValue('test-key') };
   const transactionsRepository = {
@@ -40,6 +42,17 @@ function buildUseCase(overrides: {
   const getInsights = {
     execute: jest.fn().mockResolvedValue(overrides.insights),
   };
+  const advisorMemories = {
+    list: jest.fn().mockResolvedValue([]),
+    remember: jest.fn().mockImplementation((userId: string, content: string) =>
+      Promise.resolve({
+        id: 'mem1',
+        content,
+        deduped: overrides.rememberDeduped ?? false,
+      }),
+    ),
+    forget: jest.fn().mockResolvedValue(overrides.forgetResult ?? true),
+  };
 
   const useCase = new ChatCompletionUseCase(
     config as never,
@@ -52,6 +65,7 @@ function buildUseCase(overrides: {
     cardsRepository as never,
     getForecast as never,
     getInsights as never,
+    advisorMemories as never,
     {} as never, // cache
   );
 
@@ -62,12 +76,14 @@ function buildUseCase(overrides: {
     recurringRepository,
     cardsRepository,
     transactionsRepository,
+    advisorMemories,
   };
 }
 
 const callTool = (
   useCase: ChatCompletionUseCase,
   name: string,
+  args = '{}',
 ): Promise<Record<string, unknown>> =>
   (
     useCase as unknown as {
@@ -78,7 +94,7 @@ const callTool = (
         userIds: string[],
       ) => Promise<Record<string, unknown>>;
     }
-  ).executeFunctionCall(name, '{}', 'u1', ['u1']);
+  ).executeFunctionCall(name, args, 'u1', ['u1']);
 
 describe('ChatCompletionUseCase — tools do assessor', () => {
   it('getSpendingGoals expõe limite/gasto/percentual/estouro por meta', async () => {
@@ -307,6 +323,75 @@ describe('ChatCompletionUseCase — tools do assessor', () => {
     expect(alert.percentOfPrevious).toBe(96);
     // Campos de UI (cores/ids) não vão pro modelo.
     expect(alert.colorBg).toBeUndefined();
+  });
+
+  it('rememberFact salva o fato escopado ao usuário e devolve o id', async () => {
+    const { useCase, advisorMemories } = buildUseCase({});
+
+    const out = await callTool(
+      useCase,
+      'rememberFact',
+      JSON.stringify({ fact: 'Quer quitar o cartao ate dezembro' }),
+    );
+
+    expect(advisorMemories.remember).toHaveBeenCalledWith(
+      'u1',
+      'Quer quitar o cartao ate dezembro',
+    );
+    expect(out.saved).toBe(true);
+    expect(out.memoryId).toBe('mem1');
+  });
+
+  it('rememberFact duplicado devolve saved=false com nota (modelo não re-salva)', async () => {
+    const { useCase } = buildUseCase({ rememberDeduped: true });
+
+    const out = await callTool(
+      useCase,
+      'rememberFact',
+      JSON.stringify({ fact: 'Quer quitar o cartao ate dezembro' }),
+    );
+
+    expect(out.saved).toBe(false);
+    expect(out.note).toContain('ja estava');
+  });
+
+  it('rememberFact sem fato devolve erro (não cria memória vazia)', async () => {
+    const { useCase, advisorMemories } = buildUseCase({});
+
+    const out = await callTool(
+      useCase,
+      'rememberFact',
+      JSON.stringify({ fact: '   ' }),
+    );
+
+    expect(advisorMemories.remember).not.toHaveBeenCalled();
+    expect(out.error).toBeDefined();
+  });
+
+  it('forgetFact apaga pelo id escopado ao usuário', async () => {
+    const { useCase, advisorMemories } = buildUseCase({});
+
+    const out = await callTool(
+      useCase,
+      'forgetFact',
+      JSON.stringify({ memoryId: 'mem1' }),
+    );
+
+    expect(advisorMemories.forget).toHaveBeenCalledWith('u1', 'mem1');
+    expect(out.forgotten).toBe(true);
+  });
+
+  it('forgetFact com id inexistente devolve forgotten=false com nota', async () => {
+    const { useCase } = buildUseCase({ forgetResult: false });
+
+    const out = await callTool(
+      useCase,
+      'forgetFact',
+      JSON.stringify({ memoryId: 'nao-existe' }),
+    );
+
+    expect(out.forgotten).toBe(false);
+    expect(out.note).toContain('nao encontrado');
   });
 
   it('função desconhecida devolve erro amigável', async () => {

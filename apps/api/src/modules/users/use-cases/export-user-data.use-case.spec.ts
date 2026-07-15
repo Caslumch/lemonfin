@@ -32,6 +32,7 @@ function buildUseCase(overrides: { user?: Record<string, unknown> | null }) {
     category: { findMany: jest.fn().mockResolvedValue([]) },
     invoicePayment: { findMany: jest.fn().mockResolvedValue([]) },
     reminderSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+    advisorMemory: { findMany: jest.fn().mockResolvedValue([]) },
     familyMember: {
       findMany: jest
         .fn()

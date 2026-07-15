@@ -19,6 +19,7 @@ import { CardsRepository } from '../../cards/repositories/cards.repository';
 import { cardCycleRange, nextDueDate } from '../../cards/utils/card-cycle';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import { AiUsageService } from '../../ai-usage/ai-usage.service';
+import { AdvisorMemoryRepository } from '../repositories/advisor-memory.repository';
 import type { ChatMessageInput } from '../dtos/chat.dto';
 
 // O contexto financeiro (resumo do mês, breakdown, evolução, últimas
@@ -56,7 +57,14 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Perguntas sobre cartao/fatura ("quanto ta minha fatura", "quando vence o cartao") => chame getCardsAndInvoices.
 - Perguntas sobre o futuro do mes ("quanto vai sobrar", "fecho o mes no azul?", "da pra gastar mais?") => chame getMonthEndForecast.
 - Pedidos de analise/diagnostico do mes ("como estou indo", "onde estou gastando mais que antes", "me da um panorama") => chame getSpendingInsights e combine com o contexto.
-- Ao aconselhar (ex.: "da pra comprar X?", "como economizo?"), cruze os dados: metas estouradas, previsao de fim de mes, contas fixas ainda por vencer e fatura aberta mudam a resposta. Prefira chamar as funcoes relevantes a supor.`;
+- Ao aconselhar (ex.: "da pra comprar X?", "como economizo?"), cruze os dados: metas estouradas, previsao de fim de mes, contas fixas ainda por vencer e fatura aberta mudam a resposta. Prefira chamar as funcoes relevantes a supor.
+
+## Memoria de longo prazo:
+- A secao "O que voce lembra deste usuario" (abaixo) traz fatos salvos de conversas passadas. Use-os com naturalidade para personalizar respostas e conselhos — sem recitar a lista nem citar os ids.
+- Quando o usuario contar algo ESTAVEL e util para conselhos futuros — um objetivo ("quero quitar o cartao ate dezembro"), contexto de vida (profissao, renda variavel, filhos, mudanca, casamento marcado), uma preferencia ("nao abro mao de delivery") ou uma decisao combinada com voce ("vamos limitar lazer a R$ 300") — chame rememberFact com UMA frase curta e autocontida.
+- NAO salve o que ja esta no sistema (transacoes, metas, reservas, contas fixas, faturas) nem fatos que ja aparecem na lista. Nao salve dados sensiveis alheios as financas (saude, religiao, politica).
+- Se o usuario pedir para esquecer algo, ou um fato lembrado estiver errado/desatualizado, chame forgetFact com o id do fato (e rememberFact com a versao nova, se houver).
+- Se o usuario perguntar o que voce sabe/lembra sobre ele, responda a partir da lista, de forma transparente e amigavel — e diga que ele pode pedir para voce esquecer qualquer item.`;
 
 const MODEL = 'gpt-4o-mini';
 
@@ -180,6 +188,44 @@ const tools: ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'rememberFact',
+      description:
+        'Salva na memoria de longo prazo UM fato estavel que o usuario contou e que melhora conselhos futuros (objetivo, contexto de vida, preferencia, decisao combinada). NAO use para dados que ja estao no sistema (transacoes, metas, reservas, contas fixas) nem para fatos ja presentes na lista "O que voce lembra deste usuario".',
+      parameters: {
+        type: 'object',
+        properties: {
+          fact: {
+            type: 'string',
+            description:
+              'O fato, em UMA frase curta e autocontida, em portugues. Ex: "Quer quitar a fatura do cartao ate dezembro de 2026".',
+          },
+        },
+        required: ['fact'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forgetFact',
+      description:
+        'Apaga um fato da memoria de longo prazo. Use quando o usuario pedir para esquecer algo, quando um fato estiver errado/desatualizado, ou antes de salvar a versao corrigida.',
+      parameters: {
+        type: 'object',
+        properties: {
+          memoryId: {
+            type: 'string',
+            description:
+              'O id do fato, como aparece entre colchetes na lista "O que voce lembra deste usuario".',
+          },
+        },
+        required: ['memoryId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'getSpendingInsights',
       description:
         'Analise do mes atual vs anterior: variacao geral, categorias que mais cresceram/cairam e alertas de gasto acelerado. Use para "como estou indo", "onde estou gastando mais que antes", pedidos de diagnostico/panorama.',
@@ -204,6 +250,7 @@ export class ChatCompletionUseCase {
     private readonly cardsRepository: CardsRepository,
     private readonly getForecast: GetForecastUseCase,
     private readonly getInsights: GetInsightsUseCase,
+    private readonly advisorMemories: AdvisorMemoryRepository,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {
     this.openai = new OpenAI({
@@ -231,13 +278,22 @@ export class ChatCompletionUseCase {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const context = await this.getFinancialContext(userIds);
 
+    // Memória de longo prazo: fatos do USUÁRIO que conversa (não da família —
+    // contexto pessoal). Sem cache: é 1 query leve e o modelo pode ter acabado
+    // de salvar/apagar um fato na mensagem anterior.
+    const memories = await this.advisorMemories.list(userId);
+    const memoriesBlock =
+      memories.length > 0
+        ? memories.map((m) => `- [${m.id}] ${m.content}`).join('\n')
+        : '(nenhum fato salvo ainda)';
+
     // "Hoje" no fuso do usuario (Brasil) — toISOString() daria a data em UTC,
     // que vira o dia seguinte a partir das 21h locais. en-CA formata YYYY-MM-DD.
     const today = new Date().toLocaleDateString('en-CA', {
       timeZone: 'America/Sao_Paulo',
     });
     const nameLine = userName ? `\nNome do usuario: ${userName}` : '';
-    const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}${nameLine}\n\n## Contexto financeiro atual do usuario:\n${context}`;
+    const systemInstruction = `${SYSTEM_PROMPT}\n\nData de hoje: ${today}${nameLine}\n\n## O que voce lembra deste usuario (conversas passadas):\n${memoriesBlock}\n\n## Contexto financeiro atual do usuario:\n${context}`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemInstruction },
@@ -616,6 +672,31 @@ export class ChatCompletionUseCase {
             daysRemaining: a.daysRemaining,
           })),
         };
+      }
+
+      case 'rememberFact': {
+        const fact = (args.fact ?? '').trim();
+        if (!fact) return { error: 'Fato vazio' };
+        const saved = await this.advisorMemories.remember(userId, fact);
+        return saved.deduped
+          ? {
+              saved: false,
+              memoryId: saved.id,
+              note: 'Fato ja estava na memoria.',
+            }
+          : { saved: true, memoryId: saved.id };
+      }
+
+      case 'forgetFact': {
+        const id = (args.memoryId ?? '').trim();
+        if (!id) return { error: 'memoryId vazio' };
+        const forgotten = await this.advisorMemories.forget(userId, id);
+        return forgotten
+          ? { forgotten: true }
+          : {
+              forgotten: false,
+              note: 'Fato nao encontrado (id invalido ou ja apagado).',
+            };
       }
 
       default:
