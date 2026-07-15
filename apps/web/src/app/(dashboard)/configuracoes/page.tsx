@@ -703,8 +703,9 @@ export default function ConfiguracoesPage() {
                     Alertas automáticos
                   </p>
                   <p className="text-sm text-fg-secondary mt-0.5">
-                    Alerta de gastos, resumo semanal, comparativo mensal,
-                    assinaturas detectadas e gastos fora do padrão.
+                    Alerta de gastos, resumo semanal, comparativo mensal (com
+                    fechamento das metas), check-in das reservas, assinaturas
+                    detectadas e gastos fora do padrão.
                   </p>
                 </div>
                 <Toggle
