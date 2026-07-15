@@ -94,6 +94,18 @@ export class UsersRepository {
     return user;
   }
 
+  // Carimba (ou limpa, com null) o envio das boas-vindas do WhatsApp. Limpa-se
+  // quando o telefone é removido, para um novo vínculo ser recebido de novo.
+  async setWhatsappWelcomed(id: string, when: Date | null) {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { whatsappWelcomedAt: when },
+      select: { id: true, whatsappWelcomedAt: true },
+    });
+    await this.cache.del(byIdKey(id));
+    return user;
+  }
+
   async markOnboarded(id: string) {
     const user = await this.prisma.user.update({
       where: { id },

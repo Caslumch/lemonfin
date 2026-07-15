@@ -35,6 +35,11 @@ import {
 } from '../repositories/conversation.repository';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { BillingConfigService } from '../../../common/billing/billing-config.service';
+import {
+  buildFirstContactWelcome,
+  buildWelcomeIntro,
+  isGreeting,
+} from '../welcome-message';
 
 interface IncomingMessage {
   from: string;
@@ -129,6 +134,34 @@ export class WhatsappService {
         );
         return;
       }
+    }
+
+    // Boas-vindas de primeiro contato: usuário registrado que nunca recebeu a
+    // apresentação (vinculou o telefone antes do welcome proativo existir, ou
+    // aquele envio falhou). Carimba ANTES de enviar — perder um welcome num
+    // crash é melhor que mandar em dobro a cada retry do webhook.
+    if (!user.whatsappWelcomedAt) {
+      await this.usersRepository.setWhatsappWelcomed(user.id, new Date());
+      const isText = !audio && !image;
+      // Saudação seca ("oi", "bom dia") ou "ajuda" → a apresentação É a
+      // resposta; nem passa pelo parser.
+      if (isText && (isGreeting(content) || this.isHelpCommand(content))) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content: buildFirstContactWelcome(user.name),
+        });
+        await this.conversation.appendHistory(phone, [
+          { role: 'user', text: content },
+          { role: 'bot', text: '[dei as boas-vindas e mostrei exemplos]' },
+        ]);
+        return;
+      }
+      // Pedido de verdade já na primeira mensagem: uma linha de boas-vindas e
+      // segue o fluxo normal — a resposta ao que a pessoa pediu vem logo atrás.
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: buildWelcomeIntro(user.name),
+      });
     }
 
     // Áudio: transcreve para texto (Whisper) e segue o fluxo normal a partir

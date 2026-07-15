@@ -247,12 +247,20 @@ export default function ConfiguracoesPage() {
     try {
       const phoneDigits = profilePhone.replace(/\D/g, "");
       const phone = phoneDigits.length >= 10 ? phoneDigits : null;
-      const updated = await fetchApi<UserProfile>("/users/me", {
+      const updated = await fetchApi<
+        UserProfile & { whatsappWelcomeSent?: boolean }
+      >("/users/me", {
         method: "PATCH",
         body: JSON.stringify({ name: profileName, phone }),
       });
       setProfile(updated);
-      toast.success("Perfil atualizado!");
+      // Ao vincular/trocar o número, a API manda as boas-vindas no WhatsApp na
+      // hora — o toast direciona o usuário pra conversa recém-inaugurada.
+      toast.success(
+        updated.whatsappWelcomeSent
+          ? "Perfil atualizado! Te mandei uma mensagem no WhatsApp 👋"
+          : "Perfil atualizado!",
+      );
       // Update session name if changed
       if (updated.name !== session?.user?.name) {
         updateSession({ name: updated.name });
