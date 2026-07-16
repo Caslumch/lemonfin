@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { AuthTokensService } from '../services/auth-tokens.service';
 import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import { buildLinkWelcome } from '../../whatsapp/welcome-message';
 import { VerificationService } from '../../verification/services/verification.service';
 import { MailService } from '../../mail/services/mail.service';
 import { SignUpInput } from '../dtos/auth.dto';
@@ -59,8 +60,8 @@ export class SignUpUseCase {
     const session = await this.authTokens.issueSession(user);
 
     if (normalizedPhone) {
-      this.sendWelcomeWhatsApp(normalizedPhone, input.name).catch((err) =>
-        this.logger.error(`Failed to send welcome WhatsApp: ${err}`),
+      this.sendWelcomeWhatsApp(user.id, normalizedPhone, input.name).catch(
+        (err) => this.logger.error(`Failed to send welcome WhatsApp: ${err}`),
       );
     }
 
@@ -89,25 +90,22 @@ export class SignUpUseCase {
     await this.mail.sendEmailVerificationCode(email, name, code);
   }
 
-  private async sendWelcomeWhatsApp(phone: string, name: string) {
-    const to = phone;
-    const firstName = name.split(' ')[0];
-
+  // Boas-vindas do WhatsApp (texto compartilhado com o vínculo de telefone nas
+  // configurações). Carimba whatsappWelcomedAt quando o envio dá certo — a
+  // primeira mensagem recebida de quem NÃO tem o carimbo ganha a apresentação.
+  private async sendWelcomeWhatsApp(
+    userId: string,
+    phone: string,
+    name: string,
+  ) {
     const result = await this.wmodeClient.sendMessage({
-      to,
-      content:
-        `Ola, ${firstName}! Bem-vindo ao *LemonFin* 🍋\n\n` +
-        `Aqui voce controla suas financas de um jeito simples, direto pelo WhatsApp.\n\n` +
-        `Para registrar um gasto, basta me mandar algo como:\n` +
-        `- "Gastei 50 no mercado"\n` +
-        `- "Uber 18,50"\n` +
-        `- "Almoco 32 no cartao Nubank"\n\n` +
-        `Tambem posso responder perguntas como "Quanto gastei esse mes?" ou "Cancela o ultimo gasto".\n\n` +
-        `Bora comecar?`,
+      to: phone,
+      content: buildLinkWelcome(name),
     });
 
     if (result) {
-      this.logger.log(`Welcome WhatsApp sent to ${to}`);
+      await this.usersRepository.setWhatsappWelcomed(userId, new Date());
+      this.logger.log(`Welcome WhatsApp sent to ${phone}`);
     }
   }
 }

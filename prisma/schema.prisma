@@ -19,6 +19,10 @@ model User {
   phone                String?                @unique
   avatarUrl            String?                @map("avatar_url")
   onboardedAt          DateTime?              @map("onboarded_at")
+  // Boas-vindas do WhatsApp já enviadas (proativas ao vincular o telefone, ou
+  // na primeira mensagem recebida). Limpo quando o telefone é removido — um
+  // novo vínculo deve ser recebido de novo.
+  whatsappWelcomedAt   DateTime?              @map("whatsapp_welcomed_at")
   // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
   // o app só exibe um banner pedindo confirmação enquanto for null.
   emailVerifiedAt      DateTime?              @map("email_verified_at")

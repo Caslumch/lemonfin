@@ -11,9 +11,12 @@ import { ExportUserDataUseCase } from './use-cases/export-user-data.use-case';
 import { RecurringModule } from '../recurring/recurring.module';
 import { BudgetsModule } from '../budgets/budgets.module';
 import { CategoriesModule } from '../categories/categories.module';
+// Só o cliente de envio (WmodeModule é enxuto justamente para isso) — importar
+// o WhatsappModule inteiro criaria ciclo (ele importa UsersModule).
+import { WmodeModule } from '../whatsapp/wmode.module';
 
 @Module({
-  imports: [RecurringModule, BudgetsModule, CategoriesModule],
+  imports: [RecurringModule, BudgetsModule, CategoriesModule, WmodeModule],
   controllers: [UsersController],
   providers: [
     UsersRepository,
