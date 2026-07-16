@@ -69,8 +69,27 @@ model User {
   reminderSetting      ReminderSetting?
   reminderLogs         ReminderLog[]
   refreshTokens        RefreshToken[]
+  advisorMemories      AdvisorMemory[]
 
   @@map("users")
+}
+
+// Memória de longo prazo do assessor: fatos curtos que o usuário contou em
+// conversas (objetivos de vida, contexto, preferências, decisões combinadas).
+// Injetada no system prompt do chat/advice; o PRÓPRIO modelo salva/apaga via
+// tools (rememberFact/forgetFact) — "esquece isso" funciona pela conversa.
+// Por usuário (não por família): é contexto pessoal de quem conversa.
+model AdvisorMemory {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  content   String // 1 fato por linha, frase curta (truncada no repositório)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("advisor_memories")
 }
 
 // Sessão de longa duração (refresh token). O token em si é opaco (random) e
