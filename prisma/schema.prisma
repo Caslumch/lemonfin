@@ -125,6 +125,9 @@ model ReminderSetting {
   // comparativo mensal, assinaturas, anomalias). Opt-out único: são o mesmo
   // "canal" na percepção do usuário.
   alertsEnabled Boolean @default(true) @map("alerts_enabled")
+  // Resumo diário matinal (ontem + acumulado do mês). OPT-IN (default off):
+  // mensagem todo dia só para quem pediu — frequência diária sem pedido é spam.
+  dailySummaryEnabled Boolean @default(false) @map("daily_summary_enabled")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -11,7 +11,7 @@ export class ReminderLogRepository {
   // um restart no horário do cron não duplica a mensagem.
   async claim(params: {
     userId: string;
-    kind: 'bill' | 'card_invoice' | 'trial_ending';
+    kind: 'bill' | 'card_invoice' | 'trial_ending' | 'daily_summary';
     refId: string;
     dedupeKey: string;
     channel: 'whatsapp' | 'email';

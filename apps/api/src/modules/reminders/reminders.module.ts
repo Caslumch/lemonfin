@@ -10,6 +10,7 @@ import { MailModule } from '../mail/mail.module';
 import { ReminderSettingsRepository } from './repositories/reminder-settings.repository';
 import { ReminderLogRepository } from './repositories/reminder-log.repository';
 import { BillRemindersService } from './services/bill-reminders.service';
+import { DailySummaryService } from './services/daily-summary.service';
 import { TrialReminderService } from './services/trial-reminder.service';
 import { ReminderSettingsController } from './controllers/reminder-settings.controller';
 
@@ -31,6 +32,7 @@ import { ReminderSettingsController } from './controllers/reminder-settings.cont
     ReminderSettingsRepository,
     ReminderLogRepository,
     BillRemindersService,
+    DailySummaryService,
     TrialReminderService,
   ],
   // AlertsService usa as preferências (opt-out dos alertas automáticos).

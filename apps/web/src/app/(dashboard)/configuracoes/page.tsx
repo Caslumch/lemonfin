@@ -52,6 +52,7 @@ interface ReminderSettings {
   billsEnabled: boolean;
   daysBefore: number;
   alertsEnabled: boolean;
+  dailySummaryEnabled: boolean;
 }
 
 function phoneToInternational(phone: string | null): string {
@@ -719,6 +720,27 @@ export default function ConfiguracoesPage() {
                   checked={reminders.alertsEnabled}
                   onCheckedChange={(checked) =>
                     handleUpdateReminders({ alertsEnabled: checked })
+                  }
+                />
+              </div>
+
+              <div className="h-px bg-border" />
+
+              {/* Resumo diário (opt-in) */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Resumo diário
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Toda manhã (8h), o que você gastou e recebeu ontem e o
+                    acumulado do mês. Dias sem movimento não geram mensagem.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.dailySummaryEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ dailySummaryEnabled: checked })
                   }
                 />
               </div>

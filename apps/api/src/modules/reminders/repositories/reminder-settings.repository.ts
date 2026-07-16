@@ -8,12 +8,15 @@ export const REMINDER_DEFAULTS = {
   billsEnabled: true,
   daysBefore: 3,
   alertsEnabled: true,
+  // Resumo diário é OPT-IN: mensagem de frequência diária sem pedido é spam.
+  dailySummaryEnabled: false,
 } as const;
 
 export interface EffectiveReminderSettings {
   billsEnabled: boolean;
   daysBefore: number;
   alertsEnabled: boolean;
+  dailySummaryEnabled: boolean;
 }
 
 @Injectable()
@@ -31,6 +34,7 @@ export class ReminderSettingsRepository {
       billsEnabled: row.billsEnabled,
       daysBefore: row.daysBefore,
       alertsEnabled: row.alertsEnabled,
+      dailySummaryEnabled: row.dailySummaryEnabled,
     };
   }
 
@@ -47,6 +51,7 @@ export class ReminderSettingsRepository {
       billsEnabled: row.billsEnabled,
       daysBefore: row.daysBefore,
       alertsEnabled: row.alertsEnabled,
+      dailySummaryEnabled: row.dailySummaryEnabled,
     };
   }
 }
