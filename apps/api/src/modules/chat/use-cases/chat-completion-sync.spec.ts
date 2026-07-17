@@ -10,8 +10,13 @@ function chunk(delta: Record<string, unknown>) {
 
 function streamOf(chunks: unknown[]) {
   return {
+    // O await de verdade (tick de microtask) imita o stream assíncrono da
+    // OpenAI — e satisfaz o require-await do eslint.
     async *[Symbol.asyncIterator]() {
-      for (const c of chunks) yield c;
+      for (const c of chunks) {
+        await Promise.resolve();
+        yield c;
+      }
     },
   };
 }
