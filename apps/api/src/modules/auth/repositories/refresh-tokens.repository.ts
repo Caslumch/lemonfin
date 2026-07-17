@@ -2,10 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 
-// Validade da sessão de longa duração. 60 dias com ROTAÇÃO a cada uso: quem
-// usa o app segue logado indefinidamente; quem some por 60 dias faz login de
-// novo.
+// Validade da SESSÃO de longa duração (refresh token). 60 dias SEM rotação:
+// quem usa o app renova só o access (15min) e segue logado; a sessão em si só
+// cai por revogação explícita (logout, troca/reset de senha) ou 60 dias de
+// inatividade.
 const REFRESH_TTL_MS = 60 * 24 * 60 * 60 * 1000;
+
+// Motivo da revogação — só auditoria (não há mais lógica que dependa dele; a
+// distinção "rotation vs security" existia para a janela de graça, agora
+// removida junto com a rotação).
+export type RevokeReason = 'logout' | 'security';
 
 @Injectable()
 export class RefreshTokensRepository {
@@ -25,25 +31,20 @@ export class RefreshTokensRepository {
     return raw;
   }
 
-  // Busca pelo token cru SEM filtrar revogado/expirado — quem chama decide o
-  // que fazer (reuso de revogado é sinal de roubo, não um simples "não achei").
   async findByToken(raw: string) {
     return this.prisma.refreshToken.findUnique({
       where: { tokenHash: this.hash(raw) },
     });
   }
 
-  // Revoga UM token com o motivo. O motivo importa: reuso de token revogado
-  // por "rotation" dentro da janela de graça é corrida benigna; por
-  // "logout"/"security", nunca.
-  async revoke(id: string, reason: 'rotation' | 'logout') {
+  async revoke(id: string, reason: RevokeReason) {
     await this.prisma.refreshToken.update({
       where: { id },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
   }
 
-  // Derruba TODAS as sessões do usuário (troca/reset de senha, reuso de token).
+  // Derruba TODAS as sessões do usuário (troca/reset de senha).
   async revokeAllForUser(userId: string) {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
@@ -51,8 +52,7 @@ export class RefreshTokensRepository {
     });
   }
 
-  // Limpeza oportunista: remove tokens vencidos/revogados antigos do usuário
-  // (chamada no refresh — evita crescimento sem precisar de cron dedicado).
+  // Limpeza oportunista: remove tokens vencidos/revogados antigos do usuário.
   async pruneForUser(userId: string) {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     await this.prisma.refreshToken.deleteMany({

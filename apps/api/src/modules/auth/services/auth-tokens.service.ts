@@ -2,21 +2,24 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RefreshTokensRepository } from '../repositories/refresh-tokens.repository';
 
-// Validade do ACCESS token. Curta de propósito: com refresh + rotação, o
-// access não precisa viver dias — 15min limita a janela de um token vazado
-// (antes era 7d, sem revogação nenhuma). Deve casar com signOptions.expiresIn
-// do auth.module.
+// Validade do ACCESS token. Curto de propósito: com a sessão de longa duração
+// (refresh token), o access não precisa viver dias — 15min limita a janela de
+// um access vazado. Deve casar com signOptions.expiresIn do auth.module.
 export const ACCESS_TTL_MS = 15 * 60 * 1000;
 
-export interface SessionTokens {
+export interface AccessToken {
   token: string;
-  refreshToken: string;
   // ISO — o cliente usa para saber QUANDO renovar sem decodificar o JWT.
   tokenExpiresAt: string;
 }
 
-// Emissão do par access+refresh — ponto único usado por sign-in, sign-up,
-// verify-2fa e refresh, para os quatro emitirem exatamente a mesma sessão.
+export interface SessionTokens extends AccessToken {
+  refreshToken: string;
+}
+
+// Emissão de tokens. `issueSession` cria uma sessão nova (login: access +
+// refresh); `issueAccessToken` só renova o access de uma sessão já existente,
+// SEM criar/rotacionar refresh — é o que remove a corrida de renovação.
 @Injectable()
 export class AuthTokensService {
   constructor(
@@ -24,20 +27,27 @@ export class AuthTokensService {
     private readonly refreshTokens: RefreshTokensRepository,
   ) {}
 
-  async issueSession(user: {
-    id: string;
-    email: string;
-  }): Promise<SessionTokens> {
+  issueAccessToken(user: { id: string; email: string }): AccessToken {
     const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
       type: 'access',
     });
-    const refreshToken = await this.refreshTokens.issue(user.id);
     return {
       token,
-      refreshToken,
       tokenExpiresAt: new Date(Date.now() + ACCESS_TTL_MS).toISOString(),
     };
+  }
+
+  async issueSession(user: {
+    id: string;
+    email: string;
+  }): Promise<SessionTokens> {
+    const access = this.issueAccessToken(user);
+    const refreshToken = await this.refreshTokens.issue(user.id);
+    // Limpeza oportunista no login (sem rotação, o refresh já não passa por
+    // aqui): remove sessões vencidas/revogadas antigas para não acumular.
+    await this.refreshTokens.pruneForUser(user.id);
+    return { ...access, refreshToken };
   }
 }
