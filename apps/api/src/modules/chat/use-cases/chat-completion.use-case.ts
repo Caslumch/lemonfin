@@ -59,6 +59,14 @@ const SYSTEM_PROMPT = `Voce e o LemonFin, um assistente financeiro inteligente e
 - Pedidos de analise/diagnostico do mes ("como estou indo", "onde estou gastando mais que antes", "me da um panorama") => chame getSpendingInsights e combine com o contexto.
 - Ao aconselhar (ex.: "da pra comprar X?", "como economizo?"), cruze os dados: metas estouradas, previsao de fim de mes, contas fixas ainda por vencer e fatura aberta mudam a resposta. Prefira chamar as funcoes relevantes a supor.
 
+## O que o usuario consegue fazer POR MENSAGEM (fluxo de registro do bot):
+Voce NAO registra nem edita nada (suas funcoes sao somente de consulta e memoria), mas o BOT que conversa com o usuario faz tudo isso por mensagem. NUNCA diga que algo abaixo "nao e possivel" — quando o usuario quiser registrar ou corrigir, ensine a frase exata:
+- Registrar gasto/receita, COM data se quiser: "gastei 50 no mercado ontem", "recebi 3000 dia 5" — tambem por audio e foto de comprovante.
+- Compra parcelada ("tenis de 300 em 3x no Nubank") e varios lancamentos de uma vez ("50 no mercado e 30 no uber").
+- Corrigir a ULTIMA acao registrada: valor ("era 45, nao 50"), cartao ("foi no Nubank" / "tira o cartao"), DATA ("foi ontem", "a data e dia 14") — e cancelar ("cancela").
+- Conta fixa ("todo dia 5 pago 1500 de aluguel"), meta de gasto ("limite de 800 em alimentacao"), reserva ("quero juntar 5000 pra viagem"), aporte ("guardei 200"), pagar fatura ("paguei a fatura do Nubank"). "ajuda" lista tudo.
+- Pergunta sobre um REGISTRO RECENTE ("registrou com a data de ontem?", "em qual cartao entrou?"): consulte HOJE E ONTEM com queryTransactions antes de afirmar qualquer coisa. Diga com qual data/cartao o item esta registrado; se estiver diferente do que o usuario queria, ensine a correcao (ex.: 'e so responder "foi ontem" que eu corrijo'). NUNCA diga "nao ha registro" se o item existir com outra data — diga onde ele esta.
+
 ## Memoria de longo prazo:
 - A secao "O que voce lembra deste usuario" (abaixo) traz fatos salvos de conversas passadas. Use-os com naturalidade para personalizar respostas e conselhos — sem recitar a lista nem citar os ids.
 - Quando o usuario contar algo ESTAVEL e util para conselhos futuros — um objetivo ("quero quitar o cartao ate dezembro"), contexto de vida (profissao, renda variavel, filhos, mudanca, casamento marcado), uma preferencia ("nao abro mao de delivery") ou uma decisao combinada com voce ("vamos limitar lazer a R$ 300") — chame rememberFact com UMA frase curta e autocontida.
@@ -260,19 +268,29 @@ export class ChatCompletionUseCase {
 
   // Consome o stream e devolve a resposta completa de uma vez. Usado por canais
   // sem streaming (ex: WhatsApp), reaproveitando todo o motor (contexto + tools).
+  // finalTurnOnly: numa mensagem única, o preâmbulo que o modelo às vezes gera
+  // antes de chamar funções ("vou verificar, um momento...") ia COLADO na
+  // resposta final — aqui só o texto do turno final interessa.
   async executeSync(
     userId: string,
     input: ChatMessageInput,
     userName?: string,
   ): Promise<string> {
     let full = '';
-    for await (const chunk of this.execute(userId, input, userName)) {
+    for await (const chunk of this.execute(userId, input, userName, {
+      finalTurnOnly: true,
+    })) {
       full += chunk;
     }
     return full.trim();
   }
 
-  async *execute(userId: string, input: ChatMessageInput, userName?: string) {
+  async *execute(
+    userId: string,
+    input: ChatMessageInput,
+    userName?: string,
+    opts?: { finalTurnOnly?: boolean },
+  ) {
     this.logger.log(`Chat request from user ${userId}: "${input.message}"`);
 
     const userIds = await this.familyContext.resolveUserIds(userId);
@@ -346,7 +364,10 @@ export class ChatCompletionUseCase {
           this.logger.debug(
             `Chunk received: "${delta.content.slice(0, 50)}..."`,
           );
-          yield delta.content;
+          // finalTurnOnly: segura o texto até saber se o turno é o FINAL (sem
+          // tool calls). Texto de turno que termina em tool call é preâmbulo
+          // ("vou verificar...") e é descartado.
+          if (!opts?.finalTurnOnly) yield delta.content;
         }
 
         // Tool-call deltas arrive incrementally and must be assembled by index.
@@ -364,7 +385,14 @@ export class ChatCompletionUseCase {
 
       if (toolCalls.length === 0) {
         // No tool calls — the model gave its final answer.
+        if (opts?.finalTurnOnly && content) yield content;
         break;
+      }
+      // finalTurnOnly + turno com tool calls: se este for o ÚLTIMO turno
+      // permitido (MAX_TURNS), o texto acumulado é o que temos — melhor
+      // entregá-lo do que responder vazio.
+      if (opts?.finalTurnOnly && turn === MAX_TURNS - 1 && content) {
+        yield content;
       }
 
       this.logger.log(

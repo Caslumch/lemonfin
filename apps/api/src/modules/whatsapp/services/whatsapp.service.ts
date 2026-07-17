@@ -325,6 +325,14 @@ export class WhatsappService {
           phoneKey,
         );
         break;
+      case 'correction_date':
+        await this.handleCorrectionDate(
+          from,
+          user.id,
+          result.newDate,
+          phoneKey,
+        );
+        break;
       case 'installment':
         await this.handleInstallment(from, user.id, result, phoneKey);
         break;
@@ -986,7 +994,7 @@ export class WhatsappService {
       '🎯 *Metas de gasto:* _"limite de 800 em alimentação por mês"_, _"minhas metas"_',
       '🏦 *Reservas:* _"quero juntar 5000 pra viagem até dezembro"_, _"guardei 200"_',
       '💳 *Cartão:* _"minha fatura do Nubank"_, _"paguei a fatura"_',
-      '✏️ *Corrigir:* _"foi 60 na verdade"_, _"cancela"_, _"foi no Nubank"_',
+      '✏️ *Corrigir:* _"foi 60 na verdade"_, _"cancela"_, _"foi no Nubank"_, _"foi ontem"_',
       '',
       'E pra conselho ou análise, é só perguntar: _"onde dá pra economizar?"_ 😉',
     ].join('\n');
@@ -1834,6 +1842,78 @@ export class WhatsappService {
     await this.wmodeClient.sendMessage({ to: from, content });
     this.logger.log(
       `Card correction: ${updated} tx -> ${cardLabel || 'sem cartão'} by user ${userId}`,
+    );
+  }
+
+  // Corrige a DATA da ÚLTIMA AÇÃO ("foi ontem", "a data é dia 14"). Reancora a
+  // ação inteira: parcelamento/lote deslocam TODAS as transações pelo mesmo
+  // delta (parcelas mantêm o espaçamento). Mesmo padrão de alvo do
+  // handleCorrectionCard: lastAction, com fallback à última transação recente.
+  private async handleCorrectionDate(
+    from: string,
+    userId: string,
+    newDate: string,
+    phoneKey?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+
+    const lastAction = phoneKey
+      ? await this.conversation.getLastAction(phoneKey)
+      : null;
+
+    let ids: string[];
+    let label: string;
+    if (lastAction && lastAction.transactionIds.length > 0) {
+      ids = lastAction.transactionIds;
+      label = lastAction.label;
+    } else {
+      // Sem ação recente na conversa: só aceita a última transação global se
+      // ela for recente — senão um "foi ontem" solto mudava a data de um
+      // lançamento antigo ou feito pelo painel.
+      const last = await this.transactionsRepository.findLastByUser(userId);
+      if (!last || !this.isRecentlyCreated(last.createdAt)) {
+        await this.wmodeClient.sendMessage({
+          to: from,
+          content:
+            'Não encontrei nenhuma transação recente pra corrigir a data. ' +
+            'Pra editar lançamentos antigos, usa o painel de transações 😉',
+        });
+        return;
+      }
+      ids = [last.id];
+      label = last.description || last.category.name;
+    }
+
+    const anchorISO = this.resolveTransactionDate(newDate);
+    const { count, deltaDays } =
+      await this.transactionsRepository.shiftDatesToAnchor(
+        ids,
+        userIds,
+        anchorISO,
+      );
+
+    if (count === 0) {
+      await this.wmodeClient.sendMessage({
+        to: from,
+        content: 'Não consegui corrigir a data dessa transação. Tenta de novo?',
+      });
+      return;
+    }
+
+    const dateLabel = new Date(anchorISO).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'UTC',
+    });
+    const content =
+      deltaDays === 0
+        ? `Já estava com a data de *${dateLabel}* 😉 Nada a mudar.`
+        : count > 1
+          ? `Feito! 📅 Movi as ${count} transações de *${label}* junto — a compra agora tá em *${dateLabel}*.`
+          : `Feito! 📅 *${label}* agora tá com a data de *${dateLabel}*.`;
+    await this.sendAndRecord(from, phoneKey, content);
+    this.logger.log(
+      `Date correction: ${count} tx shifted ${deltaDays}d by user ${userId}`,
     );
   }
 

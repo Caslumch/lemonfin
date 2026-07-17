@@ -401,6 +401,45 @@ export class TransactionsRepository {
     return count;
   }
 
+  // Corrige a DATA de uma ação inteira ("foi ontem"): desloca cada transação do
+  // conjunto pelo MESMO delta de dias (nova data − data da transação mais antiga
+  // do conjunto). Num parcelamento isso preserva o espaçamento entre parcelas
+  // (tudo anda junto); numa transação/lote simples equivale a setar a nova data.
+  // As datas são ancoradas ao meio-dia UTC (convenção do projeto), então somar
+  // dias inteiros mantém a âncora. Escopado aos usuários (isolamento de tenant).
+  async shiftDatesToAnchor(
+    ids: string[],
+    userIds: string[],
+    newAnchorISO: string,
+  ): Promise<{ count: number; deltaDays: number }> {
+    if (ids.length === 0) return { count: 0, deltaDays: 0 };
+    const txs = await this.prisma.transaction.findMany({
+      where: { id: { in: ids }, userId: { in: userIds } },
+      select: { id: true, date: true },
+    });
+    if (txs.length === 0) return { count: 0, deltaDays: 0 };
+
+    const earliest = txs.reduce(
+      (min, t) => (t.date.getTime() < min ? t.date.getTime() : min),
+      txs[0].date.getTime(),
+    );
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const deltaDays = Math.round(
+      (new Date(newAnchorISO).getTime() - earliest) / DAY_MS,
+    );
+    if (deltaDays === 0) return { count: txs.length, deltaDays: 0 };
+
+    await this.prisma.$transaction(
+      txs.map((t) =>
+        this.prisma.transaction.update({
+          where: { id: t.id },
+          data: { date: new Date(t.date.getTime() + deltaDays * DAY_MS) },
+        }),
+      ),
+    );
+    return { count: txs.length, deltaDays };
+  }
+
   // Exclui todas as parcelas de um grupo, escopadas aos usuários (isolamento de
   // tenant: nunca apaga parcela de outra família). Retorna a contagem removida.
   async deleteByInstallmentGroup(

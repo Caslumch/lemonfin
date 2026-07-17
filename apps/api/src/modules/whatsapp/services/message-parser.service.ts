@@ -109,6 +109,9 @@ export type ParseResult =
   | { intent: 'correction'; newAmount: number }
   // Corrige o cartão da última transação. null = remover vínculo; string = trocar.
   | { intent: 'correction_card'; cardName: string | null }
+  // Corrige a DATA da última ação ("foi ontem", "a data é dia 14"). newDate é
+  // ISO já resolvido pelo parser; o handler reancora a ação inteira nessa data.
+  | { intent: 'correction_date'; newDate: string }
   | { intent: 'installment'; data: ParsedInstallment }
   | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'reserve_create'; data: ParsedReserve }
@@ -367,6 +370,14 @@ Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number 
 - invoiceMonth: SÓ quando o usuário cita o MÊS da fatura paga ("paguei a fatura de maio"). Formato "YYYY-MM" = mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Sem menção de mês → null (fatura corrente).
 NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é registrar que PAGOU.
 
+### 16. CORRECTION_DATE — Corrigir a DATA da última ação
+Quando o usuário corrige QUANDO a última transação/compra registrada aconteceu. É SEMPRE sobre algo JÁ REGISTRADO (referência ao passado imediato), sem valor novo na mensagem.
+Exemplos: "foi ontem", "isso foi ontem", "a data é dia 14", "na verdade foi anteontem", "registra com a data de ontem", "muda a data pra segunda", "foi semana passada".
+
+Responda: {"intent": "correction_date", "newDate": string}
+- newDate: a data CORRETA no formato ISO "YYYY-MM-DD". Resolva a expressão relativa ("ontem", "dia 14", "segunda passada") usando a data de HOJE informada acima. Não use datas no futuro.
+IMPORTANTE: só use correction_date quando NÃO há um gasto NOVO com valor na mensagem. "gastei 50 no mercado ontem" é transaction (com purchaseDate), NÃO correction_date. "foi ontem" sozinho, logo após um registro, é correction_date.
+
 ## DESAMBIGUAÇÃO (evite confundir):
 - "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
 - "quero juntar/guardar + valor", "reserva de + valor" ou "objetivo de + valor" → reserve_create (NÃO transaction, NÃO recurring).
@@ -375,6 +386,7 @@ NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é regist
 - "minhas reservas" / "como tá minha reserva" / "quanto juntei pra viagem" → query com queryType "reserves" (objetivo de poupança), NÃO budget, NÃO saudação.
 - "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
+- "foi ontem" / "isso foi ontem" / "a data é dia 14" / "registra com a data de ontem" logo após um registro, SEM valor novo → correction_date (corrige a DATA da última ação), NUNCA uma transação nova. Com valor novo + data ("gastei 50 ontem") → transaction com purchaseDate. Pergunta sobre a data ("registrou com a data de ontem?", "foi registrado hoje?") → advice (consulta, não correção).
 - "como está meu cartão X" / "gastos no X" / "quanto gastei no X" / "quando vence a fatura do X" / "vencimento do cartão X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
 - "minha última compra/transação/gasto" / "o que registrei por último" → query queryType "last_transaction", NUNCA "summary"/"expenses" (que dão totais, não um item).
 - "minha compra mais cara" / "maior gasto do mês" / "transação mais alta" / "maior despesa" → query queryType "top_transaction", NUNCA "expenses" nem "advice" (é um item específico, não análise).
@@ -552,6 +564,21 @@ export class MessageParserService {
 
         case 'correction_card':
           return this.parseCorrectionCard(json);
+
+        case 'correction_date': {
+          // Mesma régua do purchaseDate: aceita passado, descarta inválida/futuro.
+          const newDate = this.normalizePurchaseDate(
+            json.newDate as string | null | undefined,
+          );
+          if (!newDate) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender a data 😅. Tenta algo como _"foi ontem"_ ou _"a data é dia 14"_.',
+            };
+          }
+          return { intent: 'correction_date', newDate };
+        }
 
         case 'installment': {
           const item = this.parseInstallmentItem(json);
