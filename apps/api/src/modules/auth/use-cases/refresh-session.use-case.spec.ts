@@ -1,9 +1,11 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { RefreshSessionUseCase } from './refresh-session.use-case';
 
-// Testa a renovação de sessão: rotação (token usado é revogado), detecção de
-// REUSO (token já rotacionado reapresentado = roubo → derruba todas as
-// sessões do usuário) e expiração.
+// Testa a renovação de sessão ESTÁVEL: o refresh token NÃO rotaciona — o
+// use-case valida que a sessão está viva e emite só um access novo, ecoando o
+// mesmo refresh token. Rejeita sessão revogada (logout/senha), expirada,
+// desconhecida ou de usuário inexistente. Sem rotação = sem corrida = sem
+// deslogamento espontâneo.
 function buildUseCase(overrides: {
   record?: Record<string, unknown> | null;
   user?: Record<string, unknown> | null;
@@ -24,9 +26,8 @@ function buildUseCase(overrides: {
     pruneForUser: jest.fn().mockResolvedValue(undefined),
   };
   const authTokens = {
-    issueSession: jest.fn().mockResolvedValue({
+    issueAccessToken: jest.fn().mockReturnValue({
       token: 'novo-access',
-      refreshToken: 'novo-refresh',
       tokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     }),
   };
@@ -48,76 +49,58 @@ const validRecord = {
 };
 
 describe('RefreshSessionUseCase', () => {
-  it('renova com ROTAÇÃO: revoga o token usado e emite um par novo', async () => {
+  it('renova o access SEM rotacionar: ecoa o mesmo refresh token', async () => {
     const { useCase, refreshTokens, authTokens } = buildUseCase({
       record: validRecord,
     });
 
     const out = await useCase.execute('token-cru');
 
-    expect(refreshTokens.revoke).toHaveBeenCalledWith('rt1', 'rotation');
-    expect(authTokens.issueSession).toHaveBeenCalledWith(
+    expect(authTokens.issueAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'u1' }),
     );
+    // Não rotaciona: nada é revogado no refresh.
+    expect(refreshTokens.revoke).not.toHaveBeenCalled();
     expect(out.token).toBe('novo-access');
-    expect(out.refreshToken).toBe('novo-refresh');
-    // Limpeza oportunista dos tokens mortos.
-    expect(refreshTokens.pruneForUser).toHaveBeenCalledWith('u1');
+    // O mesmo refresh token volta — o cliente mantém a sessão sem trocar segredo.
+    expect(out.refreshToken).toBe('token-cru');
   });
 
-  it('REUSO TARDIO de token revogado (roubo) derruba TODAS as sessões', async () => {
-    const { useCase, refreshTokens } = buildUseCase({
-      record: {
-        ...validRecord,
-        revokedAt: new Date(Date.now() - 5 * 60 * 1000), // 5min atrás
-        revokedReason: 'rotation',
-      },
-    });
+  it('requests concorrentes com o MESMO token: todas renovam, ninguém é punido', async () => {
+    const { useCase, refreshTokens } = buildUseCase({ record: validRecord });
 
-    await expect(useCase.execute('token-roubado')).rejects.toThrow(
-      UnauthorizedException,
-    );
-    expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith('u1');
+    const results = await Promise.all([
+      useCase.execute('token-cru'),
+      useCase.execute('token-cru'),
+      useCase.execute('token-cru'),
+    ]);
+
+    // A corrida que deslogava o usuário some: sem rotação, o token continua
+    // válido para todas as requests paralelas.
+    for (const out of results) {
+      expect(out.token).toBe('novo-access');
+      expect(out.refreshToken).toBe('token-cru');
+    }
+    expect(refreshTokens.revokeAllForUser).not.toHaveBeenCalled();
     expect(refreshTokens.revoke).not.toHaveBeenCalled();
   });
 
-  it('reuso IMEDIATO (corrida de requests paralelas) NÃO derruba: emite sessão nova', async () => {
-    const { useCase, refreshTokens, authTokens } = buildUseCase({
-      record: {
-        ...validRecord,
-        revokedAt: new Date(Date.now() - 2000), // rotacionado há 2s
-        revokedReason: 'rotation',
-      },
-    });
-
-    const out = await useCase.execute('token-da-corrida');
-
-    // Janela de graça: renovações concorrentes no vencimento do access são
-    // normais (auth() roda no proxy a cada navegação) — punir era deslogar
-    // qualquer usuário com 2+ requests simultâneas.
-    expect(refreshTokens.revokeAllForUser).not.toHaveBeenCalled();
-    expect(authTokens.issueSession).toHaveBeenCalled();
-    expect(out.token).toBe('novo-access');
-  });
-
-  it('token revogado por SEGURANÇA não ganha graça, mesmo recém-revogado', async () => {
+  it('sessão REVOGADA (logout/senha) → 401 sem emitir access', async () => {
     const { useCase, authTokens } = buildUseCase({
       record: {
         ...validRecord,
-        revokedAt: new Date(Date.now() - 2000), // 2s atrás, mas...
-        revokedReason: 'security', // ...derrubado por roubo/troca de senha
+        revokedAt: new Date(),
+        revokedReason: 'logout',
       },
     });
 
-    // Sem a distinção de motivo, a graça RESSUSCITAVA sessões que a própria
-    // detecção de roubo (ou logout/troca de senha) tinha acabado de derrubar.
-    await expect(useCase.execute('token-derrubado')).rejects.toThrow(
+    await expect(useCase.execute('token-revogado')).rejects.toThrow(
       UnauthorizedException,
     );
-    expect(authTokens.issueSession).not.toHaveBeenCalled();
+    expect(authTokens.issueAccessToken).not.toHaveBeenCalled();
   });
 
-  it('token expirado → 401 sem emitir sessão', async () => {
+  it('token expirado → 401 sem emitir access', async () => {
     const { useCase, authTokens } = buildUseCase({
       record: {
         ...validRecord,
@@ -128,7 +111,7 @@ describe('RefreshSessionUseCase', () => {
     await expect(useCase.execute('token-velho')).rejects.toThrow(
       UnauthorizedException,
     );
-    expect(authTokens.issueSession).not.toHaveBeenCalled();
+    expect(authTokens.issueAccessToken).not.toHaveBeenCalled();
   });
 
   it('token desconhecido → 401', async () => {

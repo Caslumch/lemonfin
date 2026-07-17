@@ -2,12 +2,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import type { JWT } from "next-auth/jwt";
 
-// Renova a sessão na API (rotação: o refresh token usado é revogado e um novo
-// volta). Só marca a sessão como MORTA (SessionGuard desloga) quando a API
-// responde 401/403 — sessão de fato revogada/expirada. Falha transitória
-// (rede, deploy, cold start do Render) NÃO derruba: mantém o token e tenta na
-// próxima checagem; se o access já venceu, as chamadas à API caem no fluxo de
-// 401 existente (?expired=1) até a renovação passar.
+// Renova o ACCESS token na API. A sessão (refresh token) é estável e NÃO
+// rotaciona — a API valida a sessão e devolve um access novo (e o mesmo
+// refresh token). Só marca a sessão como MORTA (SessionGuard desloga) quando
+// a API responde 401/403 — sessão de fato revogada (logout/senha) ou expirada.
+// Falha transitória (rede, deploy, cold start do Render) NÃO derruba: mantém o
+// token e tenta na próxima checagem; se o access já venceu, as chamadas à API
+// caem no fluxo de 401 existente (?expired=1) até a renovação passar.
 async function refreshSession(token: JWT): Promise<JWT> {
   try {
     const res = await fetch(
@@ -179,10 +180,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    // Vida da SESSÃO = vida do refresh token da API (60d, rotacionado a cada
-    // uso — quem usa o app segue logado). O access token (15min) é renovado
-    // pelo callback jwt acima; se a renovação falhar (revogado/expirado/roubo
-    // detectado), session.error derruba a sessão via SessionGuard.
+    // Vida da SESSÃO = vida do refresh token da API (60d, estável — sem
+    // rotação). O access token (15min) é renovado pelo callback jwt acima; se
+    // a renovação falhar (sessão revogada por logout/senha, ou expirada),
+    // session.error derruba a sessão via SessionGuard.
     maxAge: 60 * 24 * 60 * 60, // 60 dias
   },
 });
