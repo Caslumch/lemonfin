@@ -14,6 +14,7 @@ const categories = [
   { name: 'Freelance', slug: 'freelance', icon: '💻', colorBg: '#EDE7F6', colorText: '#4527A0' },
   { name: 'Reservas', slug: 'reservas', icon: '🏦', colorBg: '#E0F2F1', colorText: '#00695C' },
   { name: 'Pagamento de fatura', slug: 'pagamento-fatura', icon: '💳', colorBg: '#E8EAF6', colorText: '#3F51B5' },
+  { name: 'Ajuste de fatura', slug: 'ajuste-fatura', icon: '🧾', colorBg: '#ECEFF1', colorText: '#455A64' },
   { name: 'Outros', slug: 'outros', icon: '📌', colorBg: '#F5F5F5', colorText: '#6B6B6B' },
 ]
 

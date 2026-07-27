@@ -118,9 +118,9 @@ export class TransactionsController {
     @Body() body: unknown,
   ) {
     if (scope === 'group') {
-      const data = new ZodValidationPipe(updateInstallmentGroupSchema).transform(
-        body,
-      );
+      const data = new ZodValidationPipe(
+        updateInstallmentGroupSchema,
+      ).transform(body);
       return this.updateInstallmentGroup.execute(id, user.id, data);
     }
     const data = new ZodValidationPipe(updateTransactionSchema).transform(body);

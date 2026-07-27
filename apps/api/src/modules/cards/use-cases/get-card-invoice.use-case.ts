@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CardsRepository } from '../repositories/cards.repository';
 import { InvoicePaymentRepository } from '../repositories/invoice-payment.repository';
+import { InvoiceReconciliationRepository } from '../repositories/invoice-reconciliation.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import {
   cardCycleRange,
@@ -15,6 +16,7 @@ export class GetCardInvoiceUseCase {
   constructor(
     private readonly cardsRepository: CardsRepository,
     private readonly invoicePaymentRepository: InvoicePaymentRepository,
+    private readonly reconciliationRepository: InvoiceReconciliationRepository,
     private readonly familyContext: FamilyContextService,
   ) {}
 
@@ -96,6 +98,20 @@ export class GetCardInvoiceUseCase {
         ? nextDueDate(card.dueDay, endDate).toISOString()
         : null;
 
+    // Conferência do ciclo (selo "conferida" + total informado), se já houve.
+    const rec = await this.reconciliationRepository.findByCardCycle(
+      cardId,
+      cycle,
+      userIds,
+    );
+    const reconciliation = rec
+      ? {
+          informedTotal: rec.informedTotal.toNumber(),
+          reconciledAt: rec.reconciledAt.toISOString(),
+          hasAdjustment: rec.adjustmentId != null,
+        }
+      : null;
+
     return {
       card,
       month: cycle,
@@ -108,6 +124,8 @@ export class GetCardInvoiceUseCase {
       dueDate,
       paid,
       paymentStatus: invoicePaymentStatus(total, paid),
+      // null = ainda não conferida; objeto = conferida (base do selo na UI).
+      reconciliation,
       payments: payments.map((p) => ({
         id: p.id,
         amount: p.amount.toNumber(),

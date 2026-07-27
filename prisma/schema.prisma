@@ -12,64 +12,65 @@ datasource db {
 }
 
 model User {
-  id                   String                 @id @default(cuid())
-  email                String                 @unique
-  name                 String
-  passwordHash         String                 @map("password_hash")
-  phone                String?                @unique
-  avatarUrl            String?                @map("avatar_url")
-  onboardedAt          DateTime?              @map("onboarded_at")
+  id                     String                  @id @default(cuid())
+  email                  String                  @unique
+  name                   String
+  passwordHash           String                  @map("password_hash")
+  phone                  String?                 @unique
+  avatarUrl              String?                 @map("avatar_url")
+  onboardedAt            DateTime?               @map("onboarded_at")
   // Boas-vindas do WhatsApp já enviadas (proativas ao vincular o telefone, ou
   // na primeira mensagem recebida). Limpo quando o telefone é removido — um
   // novo vínculo deve ser recebido de novo.
-  whatsappWelcomedAt   DateTime?              @map("whatsapp_welcomed_at")
+  whatsappWelcomedAt     DateTime?               @map("whatsapp_welcomed_at")
   // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
   // o app só exibe um banner pedindo confirmação enquanto for null.
-  emailVerifiedAt      DateTime?              @map("email_verified_at")
+  emailVerifiedAt        DateTime?               @map("email_verified_at")
   // Fim do período de teste grátis (7 dias). Setado no sign-up; explícito (não
   // derivado de createdAt) para permitir estender. Hoje o pós-trial é SOFT: ao
   // expirar, só exibe aviso, não bloqueia. O Stripe endurece isso depois.
-  trialEndsAt          DateTime?              @map("trial_ends_at")
-  twoFactorEnabled     Boolean                @default(false) @map("two_factor_enabled")
-  twoFactorSecret      String?                @map("two_factor_secret") // criptografado
-  backupCodes          String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  trialEndsAt            DateTime?               @map("trial_ends_at")
+  twoFactorEnabled       Boolean                 @default(false) @map("two_factor_enabled")
+  twoFactorSecret        String?                 @map("two_factor_secret") // criptografado
+  backupCodes            String[]                @default([]) @map("backup_codes") // hasheados (bcrypt)
   // Super-admin da PLATAFORMA (dono), não o papel ADMIN de família. Setado
   // manualmente no banco; protege os endpoints /admin/*. Default false.
-  isSuperAdmin         Boolean                @default(false) @map("is_super_admin")
+  isSuperAdmin           Boolean                 @default(false) @map("is_super_admin")
   // Última atividade do usuário (qualquer request autenticado). Atualizado com
   // throttle (no máx 1x a cada 15min) pelo LoggingInterceptor — não é login,
   // é "visto por último". Usado no painel admin p/ ativo vs. abandonado.
-  lastSeenAt           DateTime?              @map("last_seen_at")
+  lastSeenAt             DateTime?               @map("last_seen_at")
   // Assinatura (Stripe). Default TRIALING cobre quem cadastrou antes do billing —
   // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
   // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
   // A fonte da verdade do status é o webhook do Stripe, não a resposta do checkout.
   // Registro auditável de aceite dos termos/política no cadastro (LGPD —
   // accountability). Version = data da versão vigente das páginas legais.
-  termsAcceptedAt      DateTime?              @map("terms_accepted_at")
-  termsVersion         String?                @map("terms_version")
-  stripeCustomerId     String?                @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?                @unique @map("stripe_subscription_id")
-  subscriptionStatus   SubscriptionStatus     @default(TRIALING) @map("subscription_status")
-  currentPeriodEnd     DateTime?              @map("current_period_end") // fim do ciclo pago
-  createdAt            DateTime               @default(now()) @map("created_at")
-  updatedAt            DateTime               @updatedAt @map("updated_at")
-  transactions         Transaction[]
-  cards                Card[]
-  goals                Goal[]
-  reserves             Reserve[]
-  recurring            RecurringTransaction[]
-  invoicePayments      InvoicePayment[]
-  budgets              Budget[]
-  ownedFamilies        Family[]               @relation("FamilyOwner")
-  familyMembers        FamilyMember[]
-  verificationCodes    VerificationCode[]
-  categories           Category[]
-  aiUsage              AiUsage[]
-  reminderSetting      ReminderSetting?
-  reminderLogs         ReminderLog[]
-  refreshTokens        RefreshToken[]
-  advisorMemories      AdvisorMemory[]
+  termsAcceptedAt        DateTime?               @map("terms_accepted_at")
+  termsVersion           String?                 @map("terms_version")
+  stripeCustomerId       String?                 @unique @map("stripe_customer_id")
+  stripeSubscriptionId   String?                 @unique @map("stripe_subscription_id")
+  subscriptionStatus     SubscriptionStatus      @default(TRIALING) @map("subscription_status")
+  currentPeriodEnd       DateTime?               @map("current_period_end") // fim do ciclo pago
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  transactions           Transaction[]
+  cards                  Card[]
+  goals                  Goal[]
+  reserves               Reserve[]
+  recurring              RecurringTransaction[]
+  invoicePayments        InvoicePayment[]
+  invoiceReconciliations InvoiceReconciliation[]
+  budgets                Budget[]
+  ownedFamilies          Family[]                @relation("FamilyOwner")
+  familyMembers          FamilyMember[]
+  verificationCodes      VerificationCode[]
+  categories             Category[]
+  aiUsage                AiUsage[]
+  reminderSetting        ReminderSetting?
+  reminderLogs           ReminderLog[]
+  refreshTokens          RefreshToken[]
+  advisorMemories        AdvisorMemory[]
 
   @@map("users")
 }
@@ -97,17 +98,17 @@ model AdvisorMemory {
 // Rotação a cada uso: o antigo é revogado ao emitir o novo. Reapresentar um
 // token JÁ REVOGADO é sinal de roubo → todas as sessões do usuário caem.
 model RefreshToken {
-  id        String    @id @default(cuid())
-  userId    String    @map("user_id")
-  tokenHash String    @unique @map("token_hash")
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
   // Motivo da revogação: "rotation" (trocado por um novo no refresh) |
   // "logout" | "security" (troca/reset de senha, detecção de roubo). A janela
   // de graça para reuso concorrente SÓ vale para "rotation" — sem o motivo,
   // a graça ressuscitaria sessões derrubadas por segurança.
-  revokedReason String? @map("revoked_reason")
-  createdAt DateTime  @default(now()) @map("created_at")
+  revokedReason String?   @map("revoked_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -134,16 +135,16 @@ model ProcessedStripeEvent {
 // Ausência de linha = defaults (tudo ligado, 3 dias de antecedência) — só é
 // criada quando o usuário mexe nas configurações.
 model ReminderSetting {
-  id            String  @id @default(cuid())
-  userId        String  @unique @map("user_id")
+  id                  String  @id @default(cuid())
+  userId              String  @unique @map("user_id")
   // Lembretes de vencimento (contas fixas + faturas de cartão).
-  billsEnabled  Boolean @default(true) @map("bills_enabled")
+  billsEnabled        Boolean @default(true) @map("bills_enabled")
   // Antecedência do lembrete de vencimento, em dias (1–7).
-  daysBefore    Int     @default(3) @map("days_before")
+  daysBefore          Int     @default(3) @map("days_before")
   // Alertas automáticos já existentes (alerta de gastos, resumo semanal,
   // comparativo mensal, assinaturas, anomalias). Opt-out único: são o mesmo
   // "canal" na percepção do usuário.
-  alertsEnabled Boolean @default(true) @map("alerts_enabled")
+  alertsEnabled       Boolean @default(true) @map("alerts_enabled")
   // Resumo diário matinal (ontem + acumulado do mês). OPT-IN (default off):
   // mensagem todo dia só para quem pediu — frequência diária sem pedido é spam.
   dailySummaryEnabled Boolean @default(false) @map("daily_summary_enabled")
@@ -255,11 +256,12 @@ model Transaction {
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category       Category              @relation(fields: [categoryId], references: [id])
-  card           Card?                 @relation(fields: [cardId], references: [id], onDelete: SetNull)
-  recurring      RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
-  invoicePayment InvoicePayment?
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category               @relation(fields: [categoryId], references: [id])
+  card                  Card?                  @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  recurring             RecurringTransaction?  @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  invoicePayment        InvoicePayment?
+  invoiceReconciliation InvoiceReconciliation?
 
   @@index([userId, date])
   // Breakdown por categoria com filtro/ordenação por data (alerts, chat,
@@ -321,10 +323,11 @@ model Card {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions    Transaction[]
-  recurring       RecurringTransaction[]
-  invoicePayments InvoicePayment[]
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions           Transaction[]
+  recurring              RecurringTransaction[]
+  invoicePayments        InvoicePayment[]
+  invoiceReconciliations InvoiceReconciliation[]
 
   @@index([userId])
   @@map("cards")
@@ -351,6 +354,30 @@ model InvoicePayment {
   @@index([userId])
   @@index([cardId, cycle])
   @@map("invoice_payments")
+}
+
+// Conferência da fatura fechada contra o total real informado pelo usuário (o
+// app não tem conexão com o banco, então o usuário digita o total da fatura). Um
+// registro por cartão+ciclo (o mais recente vale). `informedTotal` é o total que
+// o usuário informou; `adjustmentId` liga à transação de ajuste criada quando o
+// app estava com valor a MENOS (compras esquecidas). Se bateu ou tinha a mais,
+// não há ajuste (adjustmentId null).
+model InvoiceReconciliation {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  cardId        String   @map("card_id")
+  cycle         String
+  informedTotal Decimal  @map("informed_total") @db.Decimal(12, 2)
+  adjustmentId  String?  @unique @map("adjustment_id")
+  reconciledAt  DateTime @default(now()) @map("reconciled_at")
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card       Card         @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  adjustment Transaction? @relation(fields: [adjustmentId], references: [id], onDelete: SetNull)
+
+  @@unique([cardId, cycle])
+  @@index([userId])
+  @@map("invoice_reconciliations")
 }
 
 enum TransactionType {
