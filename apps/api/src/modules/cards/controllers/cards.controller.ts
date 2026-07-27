@@ -20,17 +20,20 @@ import { DeleteCardUseCase } from '../use-cases/delete-card.use-case';
 import { GetCardInvoiceUseCase } from '../use-cases/get-card-invoice.use-case';
 import { PayInvoiceUseCase } from '../use-cases/pay-invoice.use-case';
 import { UndoInvoicePaymentUseCase } from '../use-cases/undo-invoice-payment.use-case';
+import { ReconcileInvoiceUseCase } from '../use-cases/reconcile-invoice.use-case';
 import {
   createCardSchema,
   updateCardSchema,
   invoiceQuerySchema,
   payInvoiceSchema,
+  reconcileInvoiceSchema,
 } from '../dtos/card.dto';
 import type {
   CreateCardInput,
   UpdateCardInput,
   InvoiceQuery,
   PayInvoiceInput,
+  ReconcileInvoiceInput,
 } from '../dtos/card.dto';
 
 @Controller('cards')
@@ -44,6 +47,7 @@ export class CardsController {
     private readonly getCardInvoice: GetCardInvoiceUseCase,
     private readonly payInvoice: PayInvoiceUseCase,
     private readonly undoInvoicePayment: UndoInvoicePaymentUseCase,
+    private readonly reconcileInvoice: ReconcileInvoiceUseCase,
   ) {}
 
   @Post()
@@ -75,6 +79,18 @@ export class CardsController {
     @Body(new ZodValidationPipe(payInvoiceSchema)) body: PayInvoiceInput,
   ) {
     return this.payInvoice.execute(id, user.id, body);
+  }
+
+  // Confere a fatura fechada contra o total real informado pelo usuário e cria
+  // o ajuste quando faltam compras (ver ReconcileInvoiceUseCase).
+  @Post(':id/invoice/reconcile')
+  reconcile(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(reconcileInvoiceSchema))
+    body: ReconcileInvoiceInput,
+  ) {
+    return this.reconcileInvoice.execute(id, user.id, body);
   }
 
   // Rota específica ANTES de @Delete(':id') — senão "invoice-payments" casaria

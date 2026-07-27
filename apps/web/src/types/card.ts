@@ -52,6 +52,13 @@ export interface CardInvoice {
   paid: number;
   paymentStatus: InvoicePaymentStatus;
   payments: InvoicePayment[];
+  // Conferência do ciclo contra o total real da fatura (o app não conecta ao
+  // banco — o usuário digita o total). null = ainda não conferida.
+  reconciliation: {
+    informedTotal: number;
+    reconciledAt: string;
+    hasAdjustment: boolean;
+  } | null;
   meta: {
     total: number;
     page: number;

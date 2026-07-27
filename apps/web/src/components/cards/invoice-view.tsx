@@ -131,6 +131,10 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
+  // Conferência da fatura: campo do total informado + resultado da comparação.
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileTotal, setReconcileTotal] = useState("");
+  const [reconcileSubmitting, setReconcileSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => {
     // Mês em UTC (não local): o backend deriva o ciclo em UTC e as transações
@@ -252,6 +256,47 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     } catch (error) {
       logApiError("undo:invoice-payment", error);
       toast.error("Erro ao desfazer pagamento");
+    }
+  }
+
+  // Confere a fatura contra o total real que o usuário digitou. O backend cria
+  // o ajuste se faltar, avisa se sobra, ou só marca conferida se bater — e
+  // devolve o status para a gente dar o feedback certo.
+  async function handleReconcile() {
+    const informedTotal = Number(reconcileTotal.replace(/\./g, "").replace(",", "."));
+    if (!informedTotal || informedTotal < 0) {
+      toast.error("Informe o total da fatura");
+      return;
+    }
+    setReconcileSubmitting(true);
+    try {
+      const res = await fetchApi<{
+        status: "matched" | "adjusted" | "over";
+        difference?: number;
+      }>(`/cards/${cardId}/invoice/reconcile`, {
+        method: "POST",
+        body: JSON.stringify({ cycle: month, informedTotal }),
+      });
+      if (res.status === "adjusted") {
+        toast.success(
+          `Faltavam ${formatBRL(res.difference ?? 0)} — lancei um ajuste. Fatura conferida ✅`,
+        );
+      } else if (res.status === "over") {
+        toast.warning(
+          `Você tem ${formatBRL(res.difference ?? 0)} a mais que a fatura. Confira se registrou algo duplicado.`,
+        );
+      } else {
+        toast.success("Tudo certo! Fatura conferida ✅");
+      }
+      setReconcileOpen(false);
+      setReconcileTotal("");
+      await fetchInvoice();
+      invalidateTransactionData(queryClient);
+    } catch (error) {
+      logApiError("reconcile:invoice", error);
+      toast.error("Erro ao conferir a fatura");
+    } finally {
+      setReconcileSubmitting(false);
     }
   }
 
@@ -539,6 +584,90 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Conferir com o banco — só em fatura FECHADA, sem filtros. O app não
+          conecta ao banco, então o usuário digita o total da fatura e a gente
+          compara / lança o ajuste do que faltou. */}
+      {invoice && !hasActiveFilters && invoice.isClosed && (
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-fg">
+                {invoice.reconciliation
+                  ? "Fatura conferida ✅"
+                  : "Confira com o banco"}
+              </p>
+              <p className="text-xs text-fg-muted">
+                {invoice.reconciliation
+                  ? `Bateu com ${formatBRL(invoice.reconciliation.informedTotal)} em ${new Date(
+                      invoice.reconciliation.reconciledAt,
+                    ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}${
+                      invoice.reconciliation.hasAdjustment
+                        ? " (com ajuste)"
+                        : ""
+                    }`
+                  : "O total no app bateu com sua fatura do banco? Confira e eu lanço o que faltou."}
+              </p>
+            </div>
+            {!reconcileOpen && (
+              <Button
+                size="sm"
+                variant={invoice.reconciliation ? "outline" : "primary"}
+                onClick={() => {
+                  setReconcileOpen(true);
+                  setReconcileTotal("");
+                }}
+              >
+                {invoice.reconciliation ? "Conferir de novo" : "Conferir fatura"}
+              </Button>
+            )}
+          </div>
+
+          {reconcileOpen && (
+            <div className="space-y-2">
+              <p className="text-xs text-fg-muted">
+                No app somei{" "}
+                <span className="font-semibold text-fg">
+                  {formatBRL(invoice.total)}
+                </span>
+                . Qual o total da fatura no banco?
+              </p>
+              <div className="flex items-end gap-2">
+                <label className="flex-1 text-xs text-fg-muted">
+                  Total da fatura
+                  <div className="mt-1 flex items-center rounded-md border-[1.5px] border-border bg-surface px-3 py-1.5 focus-within:border-fg">
+                    <span className="text-sm text-fg-muted mr-1">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={reconcileTotal}
+                      onChange={(e) => setReconcileTotal(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full bg-transparent text-sm text-fg focus:outline-none"
+                      autoFocus
+                    />
+                  </div>
+                </label>
+                <Button
+                  size="sm"
+                  onClick={handleReconcile}
+                  disabled={reconcileSubmitting}
+                >
+                  {reconcileSubmitting ? "Conferindo..." : "Conferir"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReconcileOpen(false)}
+                  disabled={reconcileSubmitting}
+                >
+                  Cancelar
+                </Button>
+              </div>
             </div>
           )}
         </div>

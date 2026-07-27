@@ -36,7 +36,10 @@ export class MaterializeRecurringUseCase {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12),
     );
 
-    const { created } = await this.materializer.materializeOne(recurring, today);
+    const { created } = await this.materializer.materializeOne(
+      recurring,
+      today,
+    );
     if (!created) {
       throw new ConflictException('Essa recorrencia ja foi lancada este mes');
     }
