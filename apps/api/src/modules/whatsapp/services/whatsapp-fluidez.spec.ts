@@ -84,6 +84,7 @@ function buildService(overrides: {
     {} as never, // premiumAccess
     {} as never, // billingConfig
     {} as never, // payInvoice
+    {} as never, // tts
   );
 
   return {

@@ -50,7 +50,7 @@ export class UsersRepository {
   async findAllWithPhone() {
     return this.prisma.user.findMany({
       where: { phone: { not: null } },
-      select: { id: true, name: true, phone: true },
+      select: { id: true, name: true, phone: true, ttsEnabled: true },
     });
   }
 

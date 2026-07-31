@@ -49,6 +49,7 @@ function buildService(overrides: {
     {} as never, // recurring
     premiumAccess as never,
     reminderSettings as never,
+    {} as never, // tts
   );
 
   return { service, familyContext, premiumAccess, reminderSettings };

@@ -4,6 +4,7 @@ import { TransactionsRepository } from '../transactions/repositories/transaction
 import { UsersRepository } from '../users/repositories/users.repository';
 import { FamilyContextService } from '../families/services/family-context.service';
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
+import { TtsService } from '../whatsapp/services/tts.service';
 import { GoalsRepository } from '../goals/repositories/goals.repository';
 import { ReservesRepository } from '../reserves/repositories/reserves.repository';
 import { computeReserveProgress } from '../reserves/reserve-progress';
@@ -29,6 +30,7 @@ export class AlertsService {
     private readonly recurringRepository: RecurringRepository,
     private readonly premiumAccess: PremiumAccessService,
     private readonly reminderSettings: ReminderSettingsRepository,
+    private readonly tts: TtsService,
   ) {}
 
   // Destinatários dos alertas automáticos: telefone cadastrado + acesso
@@ -61,7 +63,11 @@ export class AlertsService {
 
     for (const user of users) {
       try {
-        await this.sendSpendingAlertsForUser(user.id, user.phone!);
+        await this.sendSpendingAlertsForUser(
+          user.id,
+          user.phone!,
+          user.ttsEnabled,
+        );
       } catch (error) {
         this.logger.error(`Alert failed for user ${user.id}: ${error}`);
       }
@@ -235,7 +241,11 @@ export class AlertsService {
 
     for (const user of users) {
       try {
-        await this.detectAnomaliesForUser(user.id, user.phone!);
+        await this.detectAnomaliesForUser(
+          user.id,
+          user.phone!,
+          user.ttsEnabled,
+        );
       } catch (error) {
         this.logger.error(
           `Anomaly detection failed for user ${user.id}: ${error}`,
@@ -244,7 +254,11 @@ export class AlertsService {
     }
   }
 
-  private async detectAnomaliesForUser(userId: string, phone: string) {
+  private async detectAnomaliesForUser(
+    userId: string,
+    phone: string,
+    ttsEnabled = false,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const year = now.getFullYear();
@@ -308,11 +322,21 @@ export class AlertsService {
       'Vale dar uma olhada! 👀',
     ].join('\n');
 
-    await this.wmodeClient.sendMessage({ to: phone, content: message });
+    // Aviso proativo: com TTS liberado na conta, sai como mensagem de voz
+    // (speakOrText cai para texto sozinho se o áudio falhar).
+    if (ttsEnabled) {
+      await this.tts.speakOrText(phone, message, userId);
+    } else {
+      await this.wmodeClient.sendMessage({ to: phone, content: message });
+    }
     this.logger.log(`Sent ${anomalies.length} anomaly alert(s) to ${phone}`);
   }
 
-  private async sendSpendingAlertsForUser(userId: string, phone: string) {
+  private async sendSpendingAlertsForUser(
+    userId: string,
+    phone: string,
+    ttsEnabled = false,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     // Janelas de mês em UTC (casam com a gravação noon-UTC). Ver get-insights.
@@ -396,7 +420,13 @@ export class AlertsService {
         'Fique de olho! 👀',
       ].join('\n');
 
-      await this.wmodeClient.sendMessage({ to: phone, content: message });
+      // Aviso proativo: com TTS liberado na conta, sai como mensagem de voz
+      // (speakOrText cai para texto sozinho se o áudio falhar).
+      if (ttsEnabled) {
+        await this.tts.speakOrText(phone, message, userId);
+      } else {
+        await this.wmodeClient.sendMessage({ to: phone, content: message });
+      }
       this.logger.log(`Sent ${alerts.length} alert(s) to ${phone}`);
     }
   }
