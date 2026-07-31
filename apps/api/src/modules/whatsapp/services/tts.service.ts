@@ -8,10 +8,11 @@ import { WmodeClientService } from './wmode-client.service';
 // (masculina) se preferir. Lista completa: MsEdgeTTS.getVoices().
 const VOICE = 'pt-BR-FranciscaNeural';
 
-// Opus dentro de contêiner WebM — é o que a lib entrega. O WhatsApp/Baileys quer
-// opus em contêiner OGG para virar mensagem de voz (PTT); o remux WebM→OGG (mesmo
-// codec, sem reencode) é feito no WMode com ffmpeg. Aqui só geramos o buffer.
-const FORMAT = OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS;
+// MP3 (não webm/opus). O WMode reconverte para OGG/Opus com ffmpeg antes de
+// enviar como voz (PTT), aceitando qualquer formato que o ffmpeg leia — e o MP3 é
+// o mais universalmente demuxável. O webm/opus da lib fazia o ffmpeg do WMode
+// estourar (500 na conversão); o MP3 evita esse caso de borda do contêiner.
+const FORMAT = OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3;
 
 // Não estouramos o áudio à toa: acima disso a "voz" vira um textão falado,
 // cansativo de ouvir. O chamador decide o fallback (mandar só texto).
@@ -54,7 +55,7 @@ export class TtsService {
   }
 
   /**
-   * Sintetiza `text` em voz (pt-BR) e devolve o buffer de áudio (webm/opus), ou
+   * Sintetiza `text` em voz (pt-BR) e devolve o buffer de áudio (MP3), ou
    * null se falhar/texto vazio/longo demais — o chamador cai para texto.
    */
   async synthesize(
