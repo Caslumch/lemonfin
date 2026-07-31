@@ -138,31 +138,39 @@ describe('ChatCompletionUseCase — tools do assessor', () => {
   });
 
   it('getReserves calcula progresso/aporte sugerido a partir do alvo e prazo', async () => {
-    const inTwoMonths = new Date();
-    inTwoMonths.setMonth(inTwoMonths.getMonth() + 2);
+    // Datas FIXAS (não relativas a hoje): monthsRemaining conta só a diferença
+    // de mês do calendário, então `hoje + 2 meses` via setMonth estourava no dia
+    // 31 (31/07 → 01/10 = 3 meses) e o teste ficava flaky por dia/fuso no CI.
+    // Ancorar "agora" no dia 15 e o prazo 2 meses adiante mantém 2 meses cravado.
+    jest.useFakeTimers().setSystemTime(new Date('2026-01-15T12:00:00Z').getTime());
+    const deadline = new Date('2026-03-15T12:00:00Z'); // 2 meses depois
     const { useCase } = buildUseCase({
       reserves: [
         {
           name: 'viagem',
           targetAmount: decimal(5000),
           savedAmount: decimal(2000),
-          deadline: inTwoMonths,
+          deadline,
           active: true,
         },
       ],
     });
 
-    const out = await callTool(useCase, 'getReserves');
-    const [reserve] = out.reserves as Array<Record<string, unknown>>;
+    try {
+      const out = await callTool(useCase, 'getReserves');
+      const [reserve] = out.reserves as Array<Record<string, unknown>>;
 
-    expect(reserve.name).toBe('viagem');
-    expect(reserve.target).toBe('5000.00');
-    expect(reserve.saved).toBe('2000.00');
-    expect(reserve.percentage).toBe(40);
-    expect(reserve.remaining).toBe('3000.00');
-    expect(reserve.completed).toBe(false);
-    // 3000 restantes em 2 meses → 1500/mês.
-    expect(reserve.suggestedMonthly).toBe('1500.00');
+      expect(reserve.name).toBe('viagem');
+      expect(reserve.target).toBe('5000.00');
+      expect(reserve.saved).toBe('2000.00');
+      expect(reserve.percentage).toBe(40);
+      expect(reserve.remaining).toBe('3000.00');
+      expect(reserve.completed).toBe(false);
+      // 3000 restantes em 2 meses → 1500/mês.
+      expect(reserve.suggestedMonthly).toBe('1500.00');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('getRecurringTransactions soma totais fixos de despesa e receita', async () => {

@@ -12,6 +12,7 @@ import {
   ParsedTransaction,
 } from './message-parser.service';
 import { TranscriptionService } from './transcription.service';
+import { TtsService } from './tts.service';
 import { ReceiptExtractionService } from './receipt-extraction.service';
 import { WmodeClientService } from './wmode-client.service';
 import { phoneCandidates } from './phone-candidates';
@@ -79,6 +80,7 @@ export class WhatsappService {
     private readonly premiumAccess: PremiumAccessService,
     private readonly billingConfig: BillingConfigService,
     private readonly payInvoiceUseCase: PayInvoiceUseCase,
+    private readonly tts: TtsService,
   ) {}
 
   async handleIncomingMessage({
@@ -1719,7 +1721,7 @@ export class WhatsappService {
   // O nome (primeiro nome) entra no contexto para um tom mais pessoal.
   private async handleAdvisor(
     from: string,
-    user: { id: string; name: string },
+    user: { id: string; name: string; ttsEnabled?: boolean },
     message: string,
     history: HistoryEntry[],
     phoneKey: string,
@@ -1750,10 +1752,33 @@ export class WhatsappService {
         'achar onde dá pra economizar e organizar suas metas.';
     }
 
-    await this.wmodeClient.sendMessage({ to: from, content: reply });
+    // Voz é SELETIVA (não toda resposta): só quando a conta tem TTS liberado
+    // (flag) E o usuário PEDIU resposta em áudio nesta mensagem ("me responde em
+    // áudio", "manda por voz"). Fora isso, texto. speakOrText já cai para texto
+    // sozinho se o áudio falhar; quando não é pedido, mandamos texto direto.
+    if (user.ttsEnabled && this.wantsVoiceReply(message)) {
+      await this.tts.speakOrText(from, reply, user.id);
+    } else {
+      await this.wmodeClient.sendMessage({ to: from, content: reply });
+    }
+
     await this.conversation.appendHistory(phoneKey, [
       { role: 'bot', text: reply },
     ]);
+  }
+
+  // O usuário pediu a resposta em ÁUDIO? Heurística barata (sem chamar IA), no
+  // texto normalizado. Cobre as formas comuns: "responde em áudio", "manda um
+  // áudio", "me fala", "por voz", "manda por voz".
+  private wantsVoiceReply(message: string): boolean {
+    const t = this.normalizeText(message);
+    if (
+      /\b(audio|voz)\b/.test(t) &&
+      /\b(responde|manda|envia|quero|em|por|me)\b/.test(t)
+    ) {
+      return true;
+    }
+    return /\bme (fala|responde falando)\b/.test(t);
   }
 
   // Corrige o cartão da ÚLTIMA AÇÃO. cardName=null remove o vínculo; string troca
