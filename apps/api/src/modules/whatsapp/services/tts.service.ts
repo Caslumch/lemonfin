@@ -17,13 +17,6 @@ const FORMAT = OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS;
 // cansativo de ouvir. O chamador decide o fallback (mandar só texto).
 const MAX_CHARS = 1200;
 
-export interface TtsResult {
-  // buffer de áudio (webm/opus).
-  buffer: Buffer;
-  // mimetype para o WMode remuxar e enviar como PTT.
-  mimetype: string;
-}
-
 // O edge-tts é a API interna de TTS do navegador Edge (Azure Speech), sem chave e
 // sem custo, mas NÃO-OFICIAL: pode mudar/cair sem aviso. Por isso o recurso vive
 // atrás da flag por conta (User.ttsEnabled) — uso interno/teste. Falha graciosa:
@@ -48,12 +41,11 @@ export class TtsService {
     text: string,
     userId: string | null,
   ): Promise<boolean> {
-    const voice = await this.synthesize(text, userId);
-    if (voice) {
+    const buffer = await this.synthesize(text, userId);
+    if (buffer) {
       const sent = await this.wmodeClient.sendAudio({
         to,
-        audio: voice.buffer.toString('base64'),
-        mimetype: voice.mimetype,
+        audio: buffer.toString('base64'),
       });
       if (sent != null) return true;
     }
@@ -62,13 +54,13 @@ export class TtsService {
   }
 
   /**
-   * Sintetiza `text` em voz (pt-BR). Retorna o buffer de áudio + mimetype, ou
+   * Sintetiza `text` em voz (pt-BR) e devolve o buffer de áudio (webm/opus), ou
    * null se falhar/texto vazio/longo demais — o chamador cai para texto.
    */
   async synthesize(
     text: string,
     userId: string | null,
-  ): Promise<TtsResult | null> {
+  ): Promise<Buffer | null> {
     const clean = text?.trim() ?? '';
     if (!clean) return null;
     if (clean.length > MAX_CHARS) {
@@ -101,7 +93,7 @@ export class TtsService {
         completionTokens: 0,
       });
 
-      return { buffer, mimetype: 'audio/webm; codecs=opus' };
+      return buffer;
     } catch (err) {
       this.logger.error(`Erro ao sintetizar áudio (TTS): ${String(err)}`);
       return null;

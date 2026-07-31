@@ -8,10 +8,10 @@ interface SendMessageParams {
 
 interface SendAudioParams {
   to: string;
-  // áudio em base64 (webm/opus). O WMode remuxa p/ ogg/opus e envia como PTT.
+  // áudio em base64 (qualquer formato legível pelo ffmpeg — mandamos webm/opus).
+  // O WMode converte p/ OGG/Opus e envia como mensagem de voz (PTT).
   audio: string;
-  mimetype: string;
-  // legenda opcional (não é PTT-friendly em todo cliente; default sem legenda).
+  // legenda opcional (vira descrição no painel do WMode; o áudio é a mensagem).
   caption?: string;
 }
 
@@ -61,11 +61,13 @@ export class WmodeClientService {
   }
 
   /**
-   * Envia uma mensagem de VOZ (PTT). O WMode recebe o áudio em base64, remuxa
-   * para ogg/opus (contêiner que o WhatsApp usa para voz) e envia via Baileys
-   * com `ptt: true`. Falha graciosa: retorna null (o chamador cai para texto).
+   * Envia uma mensagem de VOZ (PTT). O WMode recebe o áudio em base64, converte
+   * para OGG/Opus (formato do WhatsApp para voz) e envia via Baileys como PTT —
+   * ele mesmo força o ptt, então não mandamos mimetype/ptt aqui. Contrato:
+   * type='AUDIO' (enum, MAIÚSCULO) + media.data. Falha graciosa: retorna null
+   * (o chamador cai para texto).
    */
-  async sendAudio({ to, audio, mimetype, caption }: SendAudioParams) {
+  async sendAudio({ to, audio, caption }: SendAudioParams) {
     const url = `${this.baseUrl}/api/v1/messages/send`;
 
     try {
@@ -78,9 +80,8 @@ export class WmodeClientService {
         body: JSON.stringify({
           sessionId: this.sessionId,
           to,
-          type: 'audio',
-          ptt: true,
-          media: { data: audio, mimetype },
+          type: 'AUDIO',
+          media: { data: audio },
           ...(caption ? { content: caption } : {}),
         }),
       });
