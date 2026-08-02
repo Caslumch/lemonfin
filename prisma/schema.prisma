@@ -40,6 +40,14 @@ model User {
   // manualmente (admin/banco) — hoje é uso interno/teste. Default false: o
   // assessor responde em texto como sempre; com true, também manda a voz.
   ttsEnabled             Boolean                 @default(false) @map("tts_enabled")
+  // Preferências de voz do TTS (prosódia SSML do edge-tts). Guardadas como string
+  // porque o edge-tts aceita tanto nominais ("fast") quanto relativos ("+20%") —
+  // a validação dos valores fica no DTO do admin. Voz: uma das 3 pt-BR
+  // (Francisca/Antonio/Thalita). rate/pitch/volume: "default" = sem alteração.
+  ttsVoice               String                  @default("pt-BR-FranciscaNeural") @map("tts_voice")
+  ttsRate                String                  @default("default") @map("tts_rate")
+  ttsPitch               String                  @default("default") @map("tts_pitch")
+  ttsVolume              String                  @default("default") @map("tts_volume")
   // Última atividade do usuário (qualquer request autenticado). Atualizado com
   // throttle (no máx 1x a cada 15min) pelo LoggingInterceptor — não é login,
   // é "visto por último". Usado no painel admin p/ ativo vs. abandonado.
