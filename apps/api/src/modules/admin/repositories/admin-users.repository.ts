@@ -14,6 +14,11 @@ export interface AdminUserRow {
   emailVerifiedAt: Date | null;
   lastSeenAt: Date | null;
   createdAt: Date;
+  ttsEnabled: boolean;
+  ttsVoice: string;
+  ttsRate: string;
+  ttsPitch: string;
+  ttsVolume: string;
 }
 
 const PAGE_SIZE = 20;
@@ -57,6 +62,11 @@ export class AdminUsersRepository {
           emailVerifiedAt: true,
           lastSeenAt: true,
           createdAt: true,
+          ttsEnabled: true,
+          ttsVoice: true,
+          ttsRate: true,
+          ttsPitch: true,
+          ttsVolume: true,
         },
       }),
       this.prisma.user.count({ where }),

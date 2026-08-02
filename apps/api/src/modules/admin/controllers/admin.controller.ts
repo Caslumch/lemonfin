@@ -19,8 +19,10 @@ import { AdminUserActionsUseCase } from '../use-cases/admin-user-actions.use-cas
 import {
   extendTrialSchema,
   grantPremiumSchema,
+  setTtsSettingsSchema,
   type ExtendTrialInput,
   type GrantPremiumInput,
+  type SetTtsSettingsInput,
 } from '../dtos/admin.dto';
 
 // Área do super-admin da plataforma. JwtAuthGuard popula req.user; o
@@ -93,6 +95,16 @@ export class AdminController {
   @Post('users/:id/revoke-premium')
   async revokePremium(@Param('id') id: string) {
     await this.actions.revokePremium(id);
+    return { ok: true };
+  }
+
+  // Configuração de voz (TTS) da conta: habilitar + voz + rate/pitch/volume.
+  @Post('users/:id/tts')
+  async setTts(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(setTtsSettingsSchema)) body: SetTtsSettingsInput,
+  ) {
+    await this.actions.setTtsSettings(id, body);
     return { ok: true };
   }
 }
