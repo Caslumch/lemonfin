@@ -38,6 +38,12 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
     UndoInvoicePaymentUseCase,
     ReconcileInvoiceUseCase,
   ],
-  exports: [CardsRepository, InvoicePaymentRepository, PayInvoiceUseCase],
+  exports: [
+    CardsRepository,
+    InvoicePaymentRepository,
+    PayInvoiceUseCase,
+    // Consumido pelo GatewayModule (/v1).
+    ListCardsUseCase,
+  ],
 })
 export class CardsModule {}

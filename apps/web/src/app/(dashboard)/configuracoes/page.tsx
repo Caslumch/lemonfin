@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell, Download, Trash2 } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell, Download, Trash2, Terminal } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TwoFactorSetupModal } from "@/components/settings/two-factor-setup-modal";
 import { Disable2FAModal } from "@/components/settings/disable-2fa-modal";
+import { ApiKeyCreatedModal } from "@/components/settings/api-key-created-modal";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
@@ -53,6 +54,16 @@ interface ReminderSettings {
   daysBefore: number;
   alertsEnabled: boolean;
   dailySummaryEnabled: boolean;
+}
+
+// Metadados seguros de uma chave de API (o valor cru só existe na criação).
+interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 function phoneToInternational(phone: string | null): string {
@@ -124,6 +135,19 @@ export default function ConfiguracoesPage() {
   const [loadingReminders, setLoadingReminders] = useState(true);
   const [remindersError, setRemindersError] = useState(false);
 
+  // Chaves de API (gateway p/ agentes de IA e integrações)
+  const [apiKeys, setApiKeys] = useState<ApiKey[] | null>(null);
+  const [loadingApiKeys, setLoadingApiKeys] = useState(true);
+  const [apiKeysError, setApiKeysError] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  // Chave recém-criada — mostrada UMA vez no modal (o backend só guarda o hash).
+  const [createdKey, setCreatedKey] = useState<{
+    key: string;
+    name: string;
+  } | null>(null);
+
   // Subscription (billing)
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(true);
@@ -189,12 +213,27 @@ export default function ConfiguracoesPage() {
     }
   }, [fetchApi]);
 
+  const fetchApiKeys = useCallback(async () => {
+    setLoadingApiKeys(true);
+    setApiKeysError(false);
+    try {
+      const data = await fetchApi<ApiKey[]>("/api-keys");
+      setApiKeys(data);
+    } catch (error) {
+      logApiError("load:api-keys", error);
+      setApiKeysError(true);
+    } finally {
+      setLoadingApiKeys(false);
+    }
+  }, [fetchApi]);
+
   useEffect(() => {
     fetchProfile();
     fetchFamily();
     fetchBilling();
     fetchReminders();
-  }, [fetchProfile, fetchFamily, fetchBilling, fetchReminders]);
+    fetchApiKeys();
+  }, [fetchProfile, fetchFamily, fetchBilling, fetchReminders, fetchApiKeys]);
 
   // Toggles/select salvam na hora (sem botão "Salvar"): atualização otimista
   // com rollback + toast no erro.
@@ -212,6 +251,44 @@ export default function ConfiguracoesPage() {
     } catch {
       setReminders(previous);
       toast.error("Erro ao salvar preferências");
+    }
+  }
+
+  async function handleCreateApiKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newKeyName.trim()) return;
+    setCreatingKey(true);
+    try {
+      const created = await fetchApi<{
+        id: string;
+        name: string;
+        prefix: string;
+        key: string;
+      }>("/api-keys", {
+        method: "POST",
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      // Guarda o valor cru para o modal (única exibição) e recarrega a lista.
+      setCreatedKey({ key: created.key, name: created.name });
+      setNewKeyName("");
+      fetchApiKeys();
+    } catch {
+      toast.error("Erro ao criar a chave");
+    } finally {
+      setCreatingKey(false);
+    }
+  }
+
+  async function handleRevokeApiKey(id: string) {
+    setRevokingKeyId(id);
+    try {
+      await fetchApi(`/api-keys/${id}`, { method: "DELETE" });
+      toast.success("Chave revogada");
+      setApiKeys((prev) => prev?.filter((k) => k.id !== id) ?? null);
+    } catch {
+      toast.error("Erro ao revogar a chave");
+    } finally {
+      setRevokingKeyId(null);
     }
   }
 
@@ -449,6 +526,7 @@ export default function ConfiguracoesPage() {
               { value: "assinatura", label: "Assinatura" },
               { value: "seguranca", label: "Segurança" },
               { value: "familia", label: "Família" },
+              { value: "api", label: "API" },
             ]}
           />
         </div>
@@ -1206,6 +1284,112 @@ export default function ConfiguracoesPage() {
         </div>
         </div>
         )}
+
+        {activeTab === "api" && (
+        <div className="space-y-6">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Terminal size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Chaves de API
+            </h2>
+          </div>
+
+          <p className="text-sm text-fg-secondary mb-5">
+            Crie chaves para conectar o LemonFin a agentes de IA e integrações
+            externas. Cada chave age em nome da sua conta — trate-a como uma
+            senha e revogue se suspeitar de vazamento.
+          </p>
+
+          {/* Criar nova chave */}
+          <form onSubmit={handleCreateApiKey} className="flex gap-2 mb-6">
+            <Input
+              id="newKeyName"
+              placeholder="Nome da chave (ex: meu agente)"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value.slice(0, 60))}
+              required
+            />
+            <Button
+              type="submit"
+              disabled={creatingKey || !newKeyName.trim()}
+              className="shrink-0"
+            >
+              {creatingKey ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <>
+                  <Plus size={16} className="mr-1" />
+                  Criar
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* Lista de chaves */}
+          {loadingApiKeys ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : apiKeysError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar suas chaves.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchApiKeys}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : !apiKeys || apiKeys.length === 0 ? (
+            <p className="text-sm text-fg-muted text-center py-6">
+              Você ainda não tem nenhuma chave.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {apiKeys.map((key) => (
+                <div
+                  key={key.id}
+                  className="flex items-center gap-3 rounded-[12px] border border-border bg-page px-4 py-3"
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <KeyRound size={14} className="text-fg-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-fg font-medium truncate">
+                      {key.name}
+                    </p>
+                    <p className="text-xs text-fg-muted truncate font-[family-name:var(--font-mono)]">
+                      {key.prefix}••••
+                    </p>
+                    <p className="text-xs text-fg-muted mt-0.5">
+                      {key.lastUsedAt
+                        ? `Usada por último em ${formatDate(key.lastUsedAt)}`
+                        : "Nunca usada"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRevokeApiKey(key.id)}
+                    disabled={revokingKeyId === key.id}
+                    className="shrink-0"
+                  >
+                    {revokingKeyId === key.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 size={14} className="mr-1.5" />
+                        Revogar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        </div>
+        )}
       </div>
 
       {setup2fa && (
@@ -1223,6 +1407,15 @@ export default function ConfiguracoesPage() {
         onClose={() => setDisable2faOpen(false)}
         onDisabled={handle2faDisabled}
       />
+
+      {createdKey && (
+        <ApiKeyCreatedModal
+          open
+          apiKey={createdKey.key}
+          name={createdKey.name}
+          onClose={() => setCreatedKey(null)}
+        />
+      )}
     </>
   );
 }

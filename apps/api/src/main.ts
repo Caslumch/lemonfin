@@ -5,7 +5,9 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
+import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
+import { setupSwagger } from './setup-swagger';
 
 async function bootstrap() {
   // rawBody: true expõe req.rawBody preservando o parse JSON normal das demais
@@ -21,9 +23,23 @@ async function bootstrap() {
   app.useBodyParser('json', { limit: '5mb' });
   app.useBodyParser('urlencoded', { limit: '5mb', extended: true });
 
-  // Headers de segurança (CSP, HSTS, etc.) e gzip nas respostas.
-  app.use(helmet());
+  // Headers de segurança (CSP, HSTS, etc.) e gzip nas respostas. O Swagger UI
+  // (/v1/docs) usa scripts/estilos inline e carrega assets próprios; a CSP
+  // padrão do helmet os bloquearia. Como é uma página estática de documentação
+  // (sem dados do usuário no corpo), desligamos a CSP SÓ nessa rota — o resto do
+  // app mantém a política estrita.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/v1/docs')) return next();
+    return helmet()(req, res, next);
+  });
+  app.use(
+    '/v1/docs',
+    helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }),
+  );
   app.use(compression());
+
+  // Contrato OpenAPI do gateway: /v1/docs (UI) e /v1/openapi.json (spec p/ LLMs).
+  setupSwagger(app);
 
   // Origens permitidas: a do front em produção (FRONTEND_URL) + dev local.
   const allowedOrigins = [

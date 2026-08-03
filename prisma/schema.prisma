@@ -83,6 +83,7 @@ model User {
   reminderLogs           ReminderLog[]
   refreshTokens          RefreshToken[]
   advisorMemories        AdvisorMemory[]
+  apiKeys                ApiKey[]
 
   @@map("users")
 }
@@ -126,6 +127,32 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// Chave de API por conta — autenticação de MÁQUINA para o gateway (/v1) e o
+// servidor MCP. Diferente do JWT (sessão de browser), a key não expira sozinha:
+// vive até ser revogada. Guardamos só o HASH do segredo (nunca o valor cru —
+// ele é exibido uma única vez na criação). O `prefix` é o começo legível da
+// chave (ex. "lmn_live_a1b2"), guardado em claro só para o usuário identificar
+// qual key é qual no painel. A key resolve o userId e HERDA o status premium do
+// dono (o ApiKeyGuard não afrouxa o PremiumGuard).
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String // rótulo dado pelo usuário ("agente do WhatsApp", "n8n"…)
+  keyHash    String    @unique @map("key_hash")
+  prefix     String    @map("prefix") // início legível, ex. "lmn_live_a1b2"
+  // Escopos de acesso. Default read+write; permite emitir keys só-leitura para
+  // integrações que apenas consultam (dashboards, agentes de análise).
+  scopes     String[]  @default(["read", "write"])
+  lastUsedAt DateTime? @map("last_used_at") // atualizado com throttle pelo guard
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
 }
 
 // Idempotência do webhook do Stripe: o Stripe reenvia eventos (retry por até
