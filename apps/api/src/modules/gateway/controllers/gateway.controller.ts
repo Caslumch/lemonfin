@@ -22,6 +22,11 @@ import { GetCategoryBreakdownUseCase } from '../../transactions/use-cases/get-ca
 import { GetInsightsUseCase } from '../../transactions/use-cases/get-insights.use-case';
 import { GetForecastUseCase } from '../../transactions/use-cases/get-forecast.use-case';
 import { ListCardsUseCase } from '../../cards/use-cases/list-cards.use-case';
+import { ListGoalsUseCase } from '../../goals/use-cases/list-goals.use-case';
+import { ReservesRepository } from '../../reserves/repositories/reserves.repository';
+import { computeReserveProgress } from '../../reserves/reserve-progress';
+import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
+import { FamilyContextService } from '../../families/services/family-context.service';
 import {
   createTransactionSchema,
   listTransactionsQuerySchema,
@@ -56,6 +61,10 @@ export class GatewayController {
     private readonly getInsights: GetInsightsUseCase,
     private readonly getForecast: GetForecastUseCase,
     private readonly listCards: ListCardsUseCase,
+    private readonly listGoals: ListGoalsUseCase,
+    private readonly reservesRepository: ReservesRepository,
+    private readonly recurringRepository: RecurringRepository,
+    private readonly familyContext: FamilyContextService,
   ) {}
 
   // Resumo financeiro do período. As chaves de gasto são a maior fonte de
@@ -176,5 +185,79 @@ export class GatewayController {
   @Get('cards')
   cards(@CurrentUser() user: { id: string }) {
     return this.listCards.execute(user.id);
+  }
+
+  // Metas de gasto (teto por categoria). O ListGoalsUseCase já calcula o
+  // progresso (limite/gasto/%/estourou). Formatamos como o assessor do chat.
+  @ApiOperation({
+    summary: 'Metas de gasto',
+    description:
+      'Metas de gasto (teto por categoria) com progresso: limite, gasto, % e se estourou.',
+  })
+  @Get('goals')
+  async goals(@CurrentUser() user: { id: string }) {
+    const goals = await this.listGoals.execute(user.id);
+    return {
+      goals: goals.map((g) => ({
+        category: g.category?.name ?? 'Geral',
+        period: g.period,
+        limit: g.progress.limit,
+        spent: g.progress.spent,
+        percentage: g.progress.percentage,
+        remaining: g.progress.remaining,
+        exceeded: g.progress.exceeded,
+      })),
+    };
+  }
+
+  // Reservas (poupança com valor-alvo/prazo). O progresso é derivado aqui via
+  // computeReserveProgress — mesma fonte usada pelo assessor do chat.
+  @ApiOperation({
+    summary: 'Reservas',
+    description:
+      'Reservas (poupança): valor-alvo, já guardado, %, prazo e aporte mensal sugerido.',
+  })
+  @Get('reserves')
+  async reserves(@CurrentUser() user: { id: string }) {
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const reserves = await this.reservesRepository.findMany(userIds);
+    return {
+      reserves: reserves.map((r) => {
+        const target = r.targetAmount.toNumber();
+        const saved = r.savedAmount.toNumber();
+        const progress = computeReserveProgress(target, saved, r.deadline);
+        return {
+          name: r.name,
+          target,
+          saved,
+          percentage: progress.percentage,
+          remaining: progress.remaining,
+          deadline: r.deadline.toISOString().slice(0, 10),
+          suggestedMonthly: progress.suggestedMonthly,
+          completed: !r.active && saved >= target,
+        };
+      }),
+    };
+  }
+
+  // Contas fixas / assinaturas (transações recorrentes ativas).
+  @ApiOperation({
+    summary: 'Contas fixas / recorrências',
+    description:
+      'Transações recorrentes ativas (contas fixas, assinaturas): descrição, valor, tipo, dia do mês, categoria.',
+  })
+  @Get('recurring')
+  async recurring(@CurrentUser() user: { id: string }) {
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const recurrings = await this.recurringRepository.findMany(userIds, true);
+    return {
+      recurring: recurrings.map((r) => ({
+        description: r.description,
+        amount: r.amount.toNumber(),
+        type: r.type,
+        dayOfMonth: r.dayOfMonth,
+        category: r.category?.name ?? null,
+      })),
+    };
   }
 }
