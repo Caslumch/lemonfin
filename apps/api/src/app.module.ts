@@ -22,6 +22,8 @@ import { RecurringModule } from './modules/recurring/recurring.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { GatewayModule } from './modules/gateway/gateway.module';
 import { HealthController } from './health.controller';
 import { KeepAliveService } from './keep-alive.service';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -44,6 +46,8 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
+    ApiKeysModule,
+    GatewayModule,
     UsersModule,
     CategoriesModule,
     TransactionsModule,
