@@ -44,18 +44,19 @@ function isoDay(v: string | undefined): string | undefined {
   return m ? m[0] : undefined;
 }
 
-// Primeiro e último dia do mês corrente (YYYY-MM-DD), em horário do Brasil. O
-// backend interpreta o range no fuso BR; ancoramos no fuso local do servidor
-// deslocado para UTC-3 para "mês atual" bater com o mês civil do usuário.
+// Período do mês corrente (YYYY-MM-DD), em horário do Brasil: do 1º dia do mês
+// até HOJE — não até o fim do mês. Espelha o resolvePeriodBR do WhatsApp: "esse
+// mês" significa o que já foi gasto até agora, senão a janela incluiria dias
+// futuros vazios (e confundiria "quanto gastei" com "quanto vou gastar"). O
+// backend interpreta o range no fuso BR; deslocamos UTC-3 para o dia civil bater.
 function currentMonthRange(): { startDate: string; endDate: string } {
   const now = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
   const first = new Date(Date.UTC(y, m, 1));
-  const last = new Date(Date.UTC(y, m + 1, 0));
   return {
     startDate: first.toISOString().slice(0, 10),
-    endDate: last.toISOString().slice(0, 10),
+    endDate: now.toISOString().slice(0, 10),
   };
 }
 
@@ -136,7 +137,7 @@ export function registerTools(server: McpServer, api: ApiClient): void {
     {
       title: 'Resumo financeiro',
       description:
-        'Totais do período (receita, gasto, saldo, fatura). Período: use `startDate` e `endDate` no formato ISO YYYY-MM-DD (ex: startDate=2026-08-01, endDate=2026-08-31). SEM datas, assume o MÊS ATUAL (não o histórico inteiro). IMPORTANTE: gasto no cartão NÃO entra em `expense` (que é só consumo pix/débito) — está em `cardExpense` (no mês) e `cardInvoice` (fatura do ciclo). Para "quanto gastei", some `expense` + `cardExpense`, ou use `cardInvoice` para a fatura. A resposta traz `_meta` com o período usado e a explicação de cada campo.',
+        'Totais do período. Período: use `startDate` e `endDate` no formato ISO YYYY-MM-DD (ex: startDate=2026-08-01, endDate=2026-08-31). SEM datas, assume o MÊS ATUAL (1º até hoje). Para "quanto gastei", use o campo `totalSpent` — ele JÁ soma consumo (fora-cartão) + cartão. `expenseOnCard`/`expenseOutOfCard` mostram a divisão; `cardInvoice` é a fatura do ciclo (≠ gasto do mês). Cada campo é explicado no `_meta` da resposta.',
       inputSchema: {
         startDate: z
           .string()
@@ -160,23 +161,45 @@ export function registerTools(server: McpServer, api: ApiClient): void {
     async (args) => {
       try {
         const { startDate, endDate, defaulted } = resolvePeriod(args);
-        const result = await api.get(
+        const raw = (await api.get(
           `/v1/summary${qs({ startDate, endDate })}`,
-        );
-        // Anexa o período efetivamente consultado ao _meta, para o agente nunca
-        // reportar um total sem saber a que intervalo ele se refere.
-        const withPeriod =
-          result && typeof result === 'object'
-            ? {
-                ...(result as Record<string, unknown>),
-                _period: {
-                  startDate,
-                  endDate,
-                  defaultedToCurrentMonth: defaulted,
-                },
-              }
-            : result;
-        return ok(withPeriod);
+        )) as Record<string, number | undefined>;
+
+        // AGREGAÇÃO NO SERVIDOR — não delegar a soma ao modelo. O `expense` do
+        // backend é SÓ consumo fora-cartão; num mês "só cartão" vale 0. O gasto
+        // real = expense + cardExpense. Espelha o getSummaryByPeriod do assessor
+        // do chat (chat-completion.use-case.ts): entrega campos INEQUÍVOCOS já
+        // somados, para o agente nunca subcontar por não somar sozinho.
+        const expenseOutOfCard = Number(raw.expense ?? 0);
+        const expenseOnCard = Number(raw.cardExpense ?? 0);
+        const totalSpent = expenseOutOfCard + expenseOnCard;
+
+        return ok({
+          period: `${startDate} a ${endDate}`,
+          income: Number(raw.income ?? 0),
+          // "quanto gastei" = ESTE campo (consumo + cartão). Já vem somado.
+          totalSpent,
+          expenseOnCard, // gasto no cartão no período (mês civil)
+          expenseOutOfCard, // consumo pix/débito fora do cartão
+          cardInvoice: raw.cardInvoice, // fatura do CICLO de fechamento (≠ mês)
+          invoicePayment: raw.invoicePayment, // quitação de fatura (saída de caixa)
+          balance: raw.balance,
+          incomeCount: raw.incomeCount,
+          expenseCount: raw.expenseCount,
+          _period: { startDate, endDate, defaultedToCurrentMonth: defaulted },
+          _meta: {
+            totalSpent:
+              'GASTO TOTAL do período (consumo fora-cartão + cartão). Use este para "quanto gastei".',
+            expenseOnCard: 'Parte do gasto que foi no cartão (mês civil).',
+            expenseOutOfCard: 'Parte do gasto em pix/débito, fora do cartão.',
+            cardInvoice:
+              'Fatura do CICLO de fechamento do cartão (número da tela de cartões). Diferente de expenseOnCard, que é o mês civil.',
+            invoicePayment:
+              'Quanto foi pago de fatura no período. Saída de caixa, mas NÃO é gasto novo (as compras já contaram no cartão).',
+            balance:
+              'Fluxo de caixa: income − expenseOutOfCard − invoicePayment.',
+          },
+        });
       } catch (err) {
         return fail(err);
       }
@@ -286,10 +309,10 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         );
         return ok({
           categories: result,
-          _period: {
-            startDate,
-            endDate,
-            defaultedToCurrentMonth: defaulted,
+          _period: { startDate, endDate, defaultedToCurrentMonth: defaulted },
+          _meta: {
+            total:
+              'Este breakdown INCLUI gasto no cartão (ao contrário do campo `expenseOutOfCard` de get_summary, que é só fora-cartão). A soma dos `total` das categorias corresponde ao `totalSpent` de get_summary no mesmo período.',
           },
         });
       } catch (err) {
@@ -343,6 +366,57 @@ export function registerTools(server: McpServer, api: ApiClient): void {
     async () => {
       try {
         return ok(await api.get('/v1/cards'));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_goals',
+    {
+      title: 'Metas de gasto',
+      description:
+        'Metas de gasto (teto por categoria) com progresso: limite, gasto no período, % usado, quanto resta e se estourou (`exceeded`). Use para "como estão minhas metas", "estou dentro da meta de X", "posso gastar mais em Y".',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return ok(await api.get('/v1/goals'));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_reserves',
+    {
+      title: 'Reservas / poupança',
+      description:
+        'Reservas (objetivos de poupança): valor-alvo, quanto já foi guardado, % concluído, prazo e aporte mensal sugerido. Use para "quanto já juntei", "quando completo a reserva da viagem".',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return ok(await api.get('/v1/reserves'));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_recurring',
+    {
+      title: 'Contas fixas / assinaturas',
+      description:
+        'Transações recorrentes ativas (contas fixas, assinaturas): descrição, valor, tipo, dia do mês e categoria. Use para "quais minhas assinaturas", "quanto pago de contas fixas por mês".',
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return ok(await api.get('/v1/recurring'));
       } catch (err) {
         return fail(err);
       }
