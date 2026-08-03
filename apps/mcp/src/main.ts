@@ -100,3 +100,19 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 server.listen(PORT, () => {
   console.log(`[mcp] LemonFin MCP server ouvindo em :${PORT} (POST /mcp)`);
 });
+
+// Keep-alive: no plano free do Render o serviço hiberna após ~15min sem tráfego,
+// e a PRIMEIRA tool call do agente pegaria o servidor dormindo (30-50s, alguns
+// clientes MCP dão timeout antes). Um self-ping no próprio /health a cada 10min
+// mantém o serviço acordado. Ativado só quando SELF_URL está setado (a URL
+// pública do serviço no Render) — em dev fica desligado. Mesmo padrão do
+// KeepAliveService da API.
+const SELF_URL = process.env.SELF_URL?.replace(/\/$/, '');
+if (SELF_URL) {
+  const TEN_MIN = 10 * 60 * 1000;
+  setInterval(() => {
+    fetch(`${SELF_URL}/health`)
+      .then((res) => console.log(`[mcp] keep-alive ping: ${res.status}`))
+      .catch((err) => console.warn(`[mcp] keep-alive falhou: ${err}`));
+  }, TEN_MIN).unref();
+}
