@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,12 +12,15 @@ import {
   AuthUser,
   clearSession,
   loadSession,
+  logoutRequest,
   persistSession,
+  persistTokens,
+  refreshRequest,
   signInRequest,
   signUpRequest,
   verifyTotpRequest,
 } from "@/lib/auth";
-import { setOnUnauthorized, setToken } from "@/lib/token-store";
+import { setOnRefresh, setOnUnauthorized, setToken } from "@/lib/token-store";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -41,18 +45,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+type Session = { token: string; refreshToken: string; user: AuthUser };
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const queryClient = useQueryClient();
+  // Refresh token fora do state (o api client o consome fora do React).
+  const refreshTokenRef = useRef<string | null>(null);
 
-  const applySession = useCallback((token: string, nextUser: AuthUser) => {
-    setToken(token);
-    setUser(nextUser);
+  const applySession = useCallback((session: Session) => {
+    setToken(session.token);
+    refreshTokenRef.current = session.refreshToken;
+    setUser(session.user);
     setStatus("authenticated");
   }, []);
 
   const signOut = useCallback(async () => {
+    const rt = refreshTokenRef.current;
+    if (rt) void logoutRequest(rt).catch(() => {}); // revoga no servidor, best-effort
+    refreshTokenRef.current = null;
     await clearSession();
     setToken(null);
     setUser(null);
@@ -60,19 +72,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
-  // Hidrata a sessão do SecureStore no boot e liga o handler de 401.
+  // Renova o access com o refresh token (chamado pelo api client no 401).
+  const doRefresh = useCallback(async (): Promise<boolean> => {
+    const rt = refreshTokenRef.current;
+    if (!rt) return false;
+    try {
+      const next = await refreshRequest(rt);
+      refreshTokenRef.current = next.refreshToken;
+      setToken(next.token);
+      await persistTokens(next.token, next.refreshToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Hidrata a sessão do SecureStore no boot e liga os handlers de refresh/401.
   useEffect(() => {
     setOnUnauthorized(() => {
       void signOut();
     });
+    setOnRefresh(doRefresh);
     loadSession()
       .then((session) => {
-        if (session) applySession(session.token, session.user);
+        if (session) applySession(session);
         else setStatus("unauthenticated");
       })
       .catch(() => setStatus("unauthenticated"));
-    return () => setOnUnauthorized(null);
-  }, [applySession, signOut]);
+    return () => {
+      setOnUnauthorized(null);
+      setOnRefresh(null);
+    };
+  }, [applySession, signOut, doRefresh]);
 
   const signIn = useCallback<AuthContextValue["signIn"]>(
     async (email, password) => {
@@ -81,8 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.status === "TOTP_REQUIRED") {
           return { ok: false, totp: { tempToken: res.tempToken } };
         }
-        await persistSession(res.token, res.user);
-        applySession(res.token, res.user);
+        const session: Session = {
+          token: res.token,
+          refreshToken: res.refreshToken,
+          user: res.user,
+        };
+        await persistSession(session);
+        applySession(session);
         return { ok: true };
       } catch (err) {
         return { ok: false, error: (err as Error).message };
@@ -95,8 +131,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (tempToken, code) => {
       try {
         const res = await verifyTotpRequest(tempToken, code);
-        await persistSession(res.token, res.user);
-        applySession(res.token, res.user);
+        const session: Session = {
+          token: res.token,
+          refreshToken: res.refreshToken,
+          user: res.user,
+        };
+        await persistSession(session);
+        applySession(session);
         return true;
       } catch {
         return false;
@@ -109,8 +150,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (input) => {
       try {
         const res = await signUpRequest(input);
-        await persistSession(res.token, res.user);
-        applySession(res.token, res.user);
+        const session: Session = {
+          token: res.token,
+          refreshToken: res.refreshToken,
+          user: res.user,
+        };
+        await persistSession(session);
+        applySession(session);
         return true;
       } catch {
         return false;
