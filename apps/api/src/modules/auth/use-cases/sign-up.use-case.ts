@@ -1,11 +1,16 @@
 import { Injectable, ConflictException, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
+import { AuthTokensService } from '../services/auth-tokens.service';
 import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import { buildLinkWelcome } from '../../whatsapp/welcome-message';
 import { VerificationService } from '../../verification/services/verification.service';
 import { MailService } from '../../mail/services/mail.service';
 import { SignUpInput } from '../dtos/auth.dto';
+
+// Versão vigente dos Termos/Política ("Última atualização" das páginas
+// legais). Atualizar aqui quando as páginas mudarem de forma relevante.
+const TERMS_VERSION = '2026-07-07';
 
 @Injectable()
 export class SignUpUseCase {
@@ -13,7 +18,7 @@ export class SignUpUseCase {
 
   constructor(
     private readonly usersRepository: UsersRepository,
-    private readonly jwtService: JwtService,
+    private readonly authTokens: AuthTokensService,
     private readonly wmodeClient: WmodeClientService,
     private readonly verification: VerificationService,
     private readonly mail: MailService,
@@ -44,18 +49,19 @@ export class SignUpUseCase {
       email: input.email,
       passwordHash,
       trialEndsAt,
+      // Registro auditável do aceite (LGPD): criar a conta implica concordar
+      // com os termos/política vigentes — a tela de cadastro deixa isso
+      // explícito com links. A versão é a data publicada nas páginas legais.
+      termsAcceptedAt: new Date(),
+      termsVersion: TERMS_VERSION,
       ...(normalizedPhone && { phone: normalizedPhone }),
     });
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      type: 'access',
-    });
+    const session = await this.authTokens.issueSession(user);
 
     if (normalizedPhone) {
-      this.sendWelcomeWhatsApp(normalizedPhone, input.name).catch((err) =>
-        this.logger.error(`Failed to send welcome WhatsApp: ${err}`),
+      this.sendWelcomeWhatsApp(user.id, normalizedPhone, input.name).catch(
+        (err) => this.logger.error(`Failed to send welcome WhatsApp: ${err}`),
       );
     }
 
@@ -67,7 +73,7 @@ export class SignUpUseCase {
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
-      token,
+      ...session,
     };
   }
 
@@ -84,25 +90,22 @@ export class SignUpUseCase {
     await this.mail.sendEmailVerificationCode(email, name, code);
   }
 
-  private async sendWelcomeWhatsApp(phone: string, name: string) {
-    const to = phone;
-    const firstName = name.split(' ')[0];
-
+  // Boas-vindas do WhatsApp (texto compartilhado com o vínculo de telefone nas
+  // configurações). Carimba whatsappWelcomedAt quando o envio dá certo — a
+  // primeira mensagem recebida de quem NÃO tem o carimbo ganha a apresentação.
+  private async sendWelcomeWhatsApp(
+    userId: string,
+    phone: string,
+    name: string,
+  ) {
     const result = await this.wmodeClient.sendMessage({
-      to,
-      content:
-        `Ola, ${firstName}! Bem-vindo ao *LemonFin* 🍋\n\n` +
-        `Aqui voce controla suas financas de um jeito simples, direto pelo WhatsApp.\n\n` +
-        `Para registrar um gasto, basta me mandar algo como:\n` +
-        `- "Gastei 50 no mercado"\n` +
-        `- "Uber 18,50"\n` +
-        `- "Almoco 32 no cartao Nubank"\n\n` +
-        `Tambem posso responder perguntas como "Quanto gastei esse mes?" ou "Cancela o ultimo gasto".\n\n` +
-        `Bora comecar?`,
+      to: phone,
+      content: buildLinkWelcome(name),
     });
 
     if (result) {
-      this.logger.log(`Welcome WhatsApp sent to ${to}`);
+      await this.usersRepository.setWhatsappWelcomed(userId, new Date());
+      this.logger.log(`Welcome WhatsApp sent to ${phone}`);
     }
   }
 }

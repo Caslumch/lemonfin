@@ -18,8 +18,8 @@ const COLS: { h: string; links: { label: string; href: string }[] }[] = [
     links: [
       { label: "Entrar", href: LOGIN_URL },
       { label: "Assinar plano", href: CTA_URL },
-      { label: "Privacidade", href: "#" },
-      { label: "Termos de uso", href: "#" },
+      { label: "Privacidade", href: "/privacidade" },
+      { label: "Termos de uso", href: "/termos" },
     ],
   },
   {
@@ -31,7 +31,7 @@ const COLS: { h: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-const TAGS = ["IA no WhatsApp", "Open Finance", "LGPD"];
+const TAGS = ["IA no WhatsApp", "Criptografia"];
 
 export function Footer() {
   return (

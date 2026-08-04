@@ -1,0 +1,21 @@
+{
+  "name": "mcp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Servidor MCP remoto do LemonFin — expõe o gateway /v1 como tools para agentes de IA.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^22"
+  }
+}

@@ -1,5 +1,43 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import type { JWT } from "next-auth/jwt";
+
+// Renova o ACCESS token na API. A sessão (refresh token) é estável e NÃO
+// rotaciona — a API valida a sessão e devolve um access novo (e o mesmo
+// refresh token). Só marca a sessão como MORTA (SessionGuard desloga) quando
+// a API responde 401/403 — sessão de fato revogada (logout/senha) ou expirada.
+// Falha transitória (rede, deploy, cold start do Render) NÃO derruba: mantém o
+// token e tenta na próxima checagem; se o access já venceu, as chamadas à API
+// caem no fluxo de 401 existente (?expired=1) até a renovação passar.
+async function refreshSession(token: JWT): Promise<JWT> {
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: token.refreshToken }),
+      }
+    );
+
+    if (res.status === 401 || res.status === 403) {
+      return { ...token, error: "RefreshTokenError" as const };
+    }
+    if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
+
+    const data = await res.json();
+    return {
+      ...token,
+      accessToken: data.token as string,
+      refreshToken: data.refreshToken as string,
+      accessTokenExpires: new Date(data.tokenExpiresAt as string).getTime(),
+      error: undefined,
+    };
+  } catch {
+    // Transitório: preserva a sessão e deixa a próxima checagem tentar.
+    return token;
+  }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -8,6 +46,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: {},
         password: {},
         directToken: {},
+        refreshToken: {},
+        tokenExpiresAt: {},
         userId: {},
         name: {},
       },
@@ -17,6 +57,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // sent by the client — anyone could forge a session with an arbitrary
         // identity. Validate the token against the API and derive identity from
         // /users/me. An invalid/expired token makes the call 401 → login fails.
+        // The refreshToken passes through unvalidated here — it's validated by
+        // the API on the first /auth/refresh (worst case: session dies in 15m).
         if (credentials?.directToken) {
           const token = credentials.directToken as string;
           const meRes = await fetch(
@@ -34,6 +76,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: (me.name as string) ?? null,
             email: (me.email as string) ?? null,
             accessToken: token,
+            refreshToken: (credentials.refreshToken as string) ?? null,
+            accessTokenExpires: credentials.tokenExpiresAt
+              ? new Date(credentials.tokenExpiresAt as string).getTime()
+              : Date.now(),
           };
         }
 
@@ -63,23 +109,70 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: data.user.name,
           email: data.user.email,
           accessToken: data.token,
+          refreshToken: data.refreshToken ?? null,
+          accessTokenExpires: data.tokenExpiresAt
+            ? new Date(data.tokenExpiresAt).getTime()
+            : Date.now(),
         };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // Login inicial: semeia o token NextAuth com a sessão da API.
       if (user) {
-        token.id = user.id;
-        token.accessToken = (user as { accessToken: string }).accessToken;
+        const u = user as {
+          id: string;
+          accessToken: string;
+          refreshToken: string | null;
+          accessTokenExpires: number;
+        };
+        token.id = u.id;
+        token.accessToken = u.accessToken;
+        token.refreshToken = u.refreshToken;
+        token.accessTokenExpires = u.accessTokenExpires;
+        return token;
       }
-      return token;
+
+      // Access ainda válido (folga de 60s para não expirar em voo).
+      const expires = (token.accessTokenExpires as number) ?? 0;
+      if (Date.now() < expires - 60_000) return token;
+
+      // Sem refresh token (sessão criada antes do deploy do refresh): não há
+      // como renovar — marca o erro e o SessionGuard leva ao login.
+      if (!token.refreshToken) {
+        return { ...token, error: "RefreshTokenError" as const };
+      }
+
+      return refreshSession(token);
     },
     async session({ session, token }) {
       session.user.id = token.id as string;
       (session as unknown as { accessToken: string }).accessToken =
         token.accessToken as string;
+      // Exposto para o SessionGuard derrubar a sessão quando o refresh morrer.
+      (session as unknown as { error?: string }).error = token.error as
+        | string
+        | undefined;
       return session;
+    },
+  },
+  events: {
+    // Logout também revoga a sessão de longa duração na API (best-effort: se
+    // falhar, o token expira sozinho e o lado local já foi limpo).
+    async signOut(message) {
+      const token = "token" in message ? message.token : null;
+      const refreshToken = token?.refreshToken as string | undefined;
+      if (!refreshToken) return;
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+      } catch {
+        // best-effort
+      }
     },
   },
   pages: {
@@ -87,11 +180,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    // Alinhado ao token da API (7d, ver auth.module.ts). Sem isto a sessão
-    // NextAuth durava o default (30d) e sobrevivia ao token: entre o 7º e o 30º
-    // dia o proxy deixava navegar (sessão válida) mas TODA request à API dava
-    // 401 (token expirado) — app "logado mas quebrado". Igualando as durações,
-    // a sessão expira junto com o token e o usuário é levado ao login.
-    maxAge: 7 * 24 * 60 * 60, // 7 dias
+    // Vida da SESSÃO = vida do refresh token da API (60d, estável — sem
+    // rotação). O access token (15min) é renovado pelo callback jwt acima; se
+    // a renovação falhar (sessão revogada por logout/senha, ou expirada),
+    // session.error derruba a sessão via SessionGuard.
+    maxAge: 60 * 24 * 60 * 60, // 60 dias
   },
 });

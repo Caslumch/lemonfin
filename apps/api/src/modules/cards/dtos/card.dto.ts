@@ -76,3 +76,13 @@ export const payInvoiceSchema = z.object({
 });
 
 export type PayInvoiceInput = z.infer<typeof payInvoiceSchema>;
+
+// Conferência da fatura: cycle = "YYYY-MM", informedTotal = total real da fatura
+// que o usuário leu no app do banco. O backend compara com o total do ciclo e
+// cria um ajuste se faltar (ver ReconcileInvoiceUseCase).
+export const reconcileInvoiceSchema = z.object({
+  cycle: z.string().regex(/^\d{4}-\d{2}$/, 'Ciclo deve ser YYYY-MM'),
+  informedTotal: z.number().nonnegative('O total não pode ser negativo'),
+});
+
+export type ReconcileInvoiceInput = z.infer<typeof reconcileInvoiceSchema>;

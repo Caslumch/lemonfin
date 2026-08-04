@@ -3,14 +3,8 @@
 import { Wallet, Pencil, TrendingUp, Check, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatBRL as formatCurrency } from "@/lib/format";
 import type { BudgetStatus } from "@/types/budget";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
 
 interface BudgetCardProps {
   budget: BudgetStatus | null;
@@ -133,7 +127,10 @@ export function BudgetCard({ budget, loading, onEdit }: BudgetCardProps) {
       {/* Barra de progresso */}
       <div className="w-full h-2.5 bg-subtle rounded-full overflow-hidden">
         <div
-          className={cn("h-full rounded-full transition-all duration-500", barColor)}
+          className={cn(
+            "h-full rounded-full transition-all duration-500",
+            barColor,
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>

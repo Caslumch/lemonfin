@@ -4,8 +4,17 @@ import { TransactionsRepository } from '../transactions/repositories/transaction
 import { UsersRepository } from '../users/repositories/users.repository';
 import { FamilyContextService } from '../families/services/family-context.service';
 import { WmodeClientService } from '../whatsapp/services/wmode-client.service';
+import { TtsService } from '../whatsapp/services/tts.service';
 import { GoalsRepository } from '../goals/repositories/goals.repository';
+import { ReservesRepository } from '../reserves/repositories/reserves.repository';
+import { computeReserveProgress } from '../reserves/reserve-progress';
 import { RecurringRepository } from '../recurring/repositories/recurring.repository';
+import { PremiumAccessService } from '../billing/services/premium-access.service';
+import { ReminderSettingsRepository } from '../reminders/repositories/reminder-settings.repository';
+
+// Horários dos crons são de Brasília — sem o timeZone, a hora era a do
+// servidor (Render roda em UTC: "20:00" chegava às 17:00 no Brasil).
+const TZ = { timeZone: 'America/Sao_Paulo' };
 
 @Injectable()
 export class AlertsService {
@@ -17,19 +26,48 @@ export class AlertsService {
     private readonly familyContext: FamilyContextService,
     private readonly wmodeClient: WmodeClientService,
     private readonly goalsRepository: GoalsRepository,
+    private readonly reservesRepository: ReservesRepository,
     private readonly recurringRepository: RecurringRepository,
+    private readonly premiumAccess: PremiumAccessService,
+    private readonly reminderSettings: ReminderSettingsRepository,
+    private readonly tts: TtsService,
   ) {}
 
+  // Destinatários dos alertas automáticos: telefone cadastrado + acesso
+  // premium efetivo (trial conta) + opt-out respeitado. Antes disparava para
+  // TODO usuário com telefone, sem gate nem preferência.
+  private async eligibleUsers() {
+    const users = await this.usersRepository.findAllWithPhone();
+    const eligible: typeof users = [];
+    for (const user of users) {
+      try {
+        if (!(await this.premiumAccess.hasAccess(user.id))) continue;
+        const setting = await this.reminderSettings.getEffective(user.id);
+        if (!setting.alertsEnabled) continue;
+        eligible.push(user);
+      } catch (error) {
+        this.logger.error(
+          `Eligibility check failed for user ${user.id}: ${error}`,
+        );
+      }
+    }
+    return eligible;
+  }
+
   // Run daily at 20:00 — check spending alerts
-  @Cron('0 20 * * *')
+  @Cron('0 20 * * *', TZ)
   async checkSpendingAlerts() {
     this.logger.log('Running spending alerts check...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
-        await this.sendSpendingAlertsForUser(user.id, user.phone!);
+        await this.sendSpendingAlertsForUser(
+          user.id,
+          user.phone!,
+          user.ttsEnabled,
+        );
       } catch (error) {
         this.logger.error(`Alert failed for user ${user.id}: ${error}`);
       }
@@ -37,11 +75,11 @@ export class AlertsService {
   }
 
   // Run every Sunday at 21:00 — weekly summary
-  @Cron('0 21 * * 0')
+  @Cron('0 21 * * 0', TZ)
   async sendWeeklySummaries() {
     this.logger.log('Running weekly summary...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -55,11 +93,11 @@ export class AlertsService {
   }
 
   // Run on 1st of every month at 10:00 — monthly comparison
-  @Cron('0 10 1 * *')
+  @Cron('0 10 1 * *', TZ)
   async sendMonthlyComparisons() {
     this.logger.log('Running monthly comparisons...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -76,12 +114,31 @@ export class AlertsService {
     }
   }
 
+  // Dia 2 às 10:00 — check-in mensal das reservas (dia 2 para não empilhar
+  // com o comparativo do dia 1 nem com a detecção de assinaturas do dia 3).
+  @Cron('0 10 2 * *', TZ)
+  async sendReserveCheckins() {
+    this.logger.log('Running reserve check-ins...');
+
+    const users = await this.eligibleUsers();
+
+    for (const user of users) {
+      try {
+        await this.sendReserveCheckinForUser(user.id, user.name, user.phone!);
+      } catch (error) {
+        this.logger.error(
+          `Reserve check-in failed for user ${user.id}: ${error}`,
+        );
+      }
+    }
+  }
+
   // Run on 3rd of every month at 11:00 — detect possible subscriptions
-  @Cron('0 11 3 * *')
+  @Cron('0 11 3 * *', TZ)
   async detectSubscriptions() {
     this.logger.log('Running subscription detection...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
@@ -176,15 +233,19 @@ export class AlertsService {
   }
 
   // Run every Wednesday at 19:00 — detect spending out of pattern
-  @Cron('0 19 * * 3')
+  @Cron('0 19 * * 3', TZ)
   async detectAnomalies() {
     this.logger.log('Running anomaly detection...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.eligibleUsers();
 
     for (const user of users) {
       try {
-        await this.detectAnomaliesForUser(user.id, user.phone!);
+        await this.detectAnomaliesForUser(
+          user.id,
+          user.phone!,
+          user.ttsEnabled,
+        );
       } catch (error) {
         this.logger.error(
           `Anomaly detection failed for user ${user.id}: ${error}`,
@@ -193,7 +254,11 @@ export class AlertsService {
     }
   }
 
-  private async detectAnomaliesForUser(userId: string, phone: string) {
+  private async detectAnomaliesForUser(
+    userId: string,
+    phone: string,
+    ttsEnabled = false,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     const year = now.getFullYear();
@@ -257,11 +322,21 @@ export class AlertsService {
       'Vale dar uma olhada! 👀',
     ].join('\n');
 
-    await this.wmodeClient.sendMessage({ to: phone, content: message });
+    // Aviso proativo: com TTS liberado na conta, sai como mensagem de voz
+    // (speakOrText cai para texto sozinho se o áudio falhar).
+    if (ttsEnabled) {
+      await this.tts.speakOrText(phone, message, userId);
+    } else {
+      await this.wmodeClient.sendMessage({ to: phone, content: message });
+    }
     this.logger.log(`Sent ${anomalies.length} anomaly alert(s) to ${phone}`);
   }
 
-  private async sendSpendingAlertsForUser(userId: string, phone: string) {
+  private async sendSpendingAlertsForUser(
+    userId: string,
+    phone: string,
+    ttsEnabled = false,
+  ) {
     const userIds = await this.familyContext.resolveUserIds(userId);
     const now = new Date();
     // Janelas de mês em UTC (casam com a gravação noon-UTC). Ver get-insights.
@@ -345,7 +420,13 @@ export class AlertsService {
         'Fique de olho! 👀',
       ].join('\n');
 
-      await this.wmodeClient.sendMessage({ to: phone, content: message });
+      // Aviso proativo: com TTS liberado na conta, sai como mensagem de voz
+      // (speakOrText cai para texto sozinho se o áudio falhar).
+      if (ttsEnabled) {
+        await this.tts.speakOrText(phone, message, userId);
+      } else {
+        await this.wmodeClient.sendMessage({ to: phone, content: message });
+      }
       this.logger.log(`Sent ${alerts.length} alert(s) to ${phone}`);
     }
   }
@@ -410,6 +491,85 @@ export class AlertsService {
     this.logger.log(`Sent weekly summary to ${phone}`);
   }
 
+  // Check-in mensal das reservas ativas: progresso, quanto falta, aporte
+  // sugerido e se o ritmo dá conta do prazo. Fecha o ciclo da reserva criada
+  // no WhatsApp — sem isto, quem criou um objetivo nunca mais ouvia falar dele.
+  private async sendReserveCheckinForUser(
+    userId: string,
+    name: string | null,
+    phone: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(userId);
+    const reserves = await this.reservesRepository.findManyActive(userIds);
+    if (reserves.length === 0) return; // sem reservas → silêncio
+
+    const now = new Date();
+    const lines: string[] = [];
+
+    for (const reserve of reserves) {
+      const target = reserve.targetAmount.toNumber();
+      const saved = reserve.savedAmount.toNumber();
+      const progress = computeReserveProgress(
+        target,
+        saved,
+        reserve.deadline,
+        now,
+      );
+
+      // Objetivo batido (ainda ativo): só celebra.
+      if (target > 0 && saved >= target) {
+        lines.push(
+          `🎉 *${reserve.name}*: ${formatBRL(target)} completos — objetivo alcançado, parabéns!`,
+        );
+        continue;
+      }
+
+      // Prazo já passou sem completar: convite a reajustar, sem bronca.
+      if (reserve.deadline.getTime() < now.getTime()) {
+        lines.push(
+          `⏰ *${reserve.name}*: ${formatBRL(saved)} de ${formatBRL(target)} (${progress.percentage}%) — o prazo passou. Que tal ajustar o prazo ou o valor?`,
+        );
+        continue;
+      }
+
+      // Ritmo: compara o % guardado com o % do TEMPO já decorrido (linear
+      // entre a criação e o prazo). À frente da linha do tempo = no ritmo.
+      const totalSpan =
+        reserve.deadline.getTime() - reserve.createdAt.getTime();
+      const elapsed = now.getTime() - reserve.createdAt.getTime();
+      const expectedPct =
+        totalSpan > 0 ? Math.min((elapsed / totalSpan) * 100, 100) : 100;
+      const onTrack = progress.percentage >= expectedPct;
+
+      const deadlineLabel = new Intl.DateTimeFormat('pt-BR', {
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(reserve.deadline);
+
+      lines.push(
+        `${onTrack ? '✅' : '⏳'} *${reserve.name}*: ${formatBRL(saved)} de ${formatBRL(target)} (${progress.percentage}%) — ${onTrack ? 'no ritmo!' : 'vale acelerar'}`,
+      );
+      lines.push(
+        `  Faltam ${formatBRL(progress.remaining)} • ${formatBRL(progress.suggestedMonthly)}/mês até ${deadlineLabel}`,
+      );
+    }
+
+    const greeting = name ? `Oi, ${name.split(' ')[0]}!` : 'Oi!';
+    const message = [
+      '🏦 *Check-in das reservas*',
+      '',
+      greeting,
+      '',
+      ...lines,
+      '',
+      'Pra aportar é só me dizer: _"guardei 200"_ 💪',
+    ].join('\n');
+
+    await this.wmodeClient.sendMessage({ to: phone, content: message });
+    this.logger.log(`Sent reserve check-in to ${phone}`);
+  }
+
   private async sendMonthlyComparisonForUser(
     userId: string,
     name: string | null,
@@ -427,29 +587,35 @@ export class AlertsService {
     const twoMonthsStart = new Date(Date.UTC(y, m - 2, 1));
     const twoMonthsEnd = new Date(Date.UTC(y, m - 1, 0, 23, 59, 59));
 
-    const [prevSummary, twoMonthsSummary, prevCategories, twoMonthsCategories] =
-      await Promise.all([
-        this.transactionsRepository.getSummary(
-          userIds,
-          prevStart.toISOString(),
-          prevEnd.toISOString(),
-        ),
-        this.transactionsRepository.getSummary(
-          userIds,
-          twoMonthsStart.toISOString(),
-          twoMonthsEnd.toISOString(),
-        ),
-        this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          prevStart.toISOString(),
-          prevEnd.toISOString(),
-        ),
-        this.transactionsRepository.getCategoryBreakdown(
-          userIds,
-          twoMonthsStart.toISOString(),
-          twoMonthsEnd.toISOString(),
-        ),
-      ]);
+    const [
+      prevSummary,
+      twoMonthsSummary,
+      prevCategories,
+      twoMonthsCategories,
+      goals,
+    ] = await Promise.all([
+      this.transactionsRepository.getSummary(
+        userIds,
+        prevStart.toISOString(),
+        prevEnd.toISOString(),
+      ),
+      this.transactionsRepository.getSummary(
+        userIds,
+        twoMonthsStart.toISOString(),
+        twoMonthsEnd.toISOString(),
+      ),
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        prevStart.toISOString(),
+        prevEnd.toISOString(),
+      ),
+      this.transactionsRepository.getCategoryBreakdown(
+        userIds,
+        twoMonthsStart.toISOString(),
+        twoMonthsEnd.toISOString(),
+      ),
+      this.goalsRepository.findMany(userIds, true),
+    ]);
 
     const twoMonthsMap = new Map(
       twoMonthsCategories.map((c) => [c.categoryId, c]),
@@ -526,6 +692,36 @@ export class AlertsService {
         lines.push(
           `  ${icon} ${catName}: ${Math.round(c.variation)}% (${formatBRL(c.total)})`,
         );
+      }
+    }
+
+    // Fechamento das METAS do mês que acabou — fecha o ciclo dos alertas: o
+    // usuário que segurou o gasto recebe o "fechou dentro", não só o "estourou"
+    // do cron diário. Só metas MONTHLY (semanais não fecham no mês).
+    const prevMap = new Map(prevCategories.map((c) => [c.categoryId, c]));
+    const monthlyGoals = goals.filter((g) => g.period === 'MONTHLY');
+    if (monthlyGoals.length > 0) {
+      lines.push('', `🎯 *Suas metas em ${prevMonth}:*`);
+      let allWithin = true;
+      for (const goal of monthlyGoals) {
+        const limit = goal.amount.toNumber();
+        const spent = prevMap.get(goal.categoryId)?.total ?? 0;
+        const icon = goal.category?.icon ?? '';
+        const catName = goal.category?.name ?? goal.name;
+        const percent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+        if (spent > limit) {
+          allWithin = false;
+          lines.push(
+            `  🚨 ${icon} ${catName}: ${formatBRL(spent)} de ${formatBRL(limit)} — estourou por ${formatBRL(spent - limit)}`,
+          );
+        } else {
+          lines.push(
+            `  ✅ ${icon} ${catName}: ${formatBRL(spent)} de ${formatBRL(limit)} (${percent}%) — fechou dentro!`,
+          );
+        }
+      }
+      if (allWithin) {
+        lines.push('  Todas dentro do limite — mandou muito! 👏');
       }
     }
 

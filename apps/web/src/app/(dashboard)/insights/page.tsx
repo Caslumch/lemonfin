@@ -12,7 +12,10 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CategoryIcon, CategoryIconWithBg } from "@/components/ui/category-icon";
+import {
+  CategoryIcon,
+  CategoryIconWithBg,
+} from "@/components/ui/category-icon";
 import { ContentHeader } from "@/components/layout/content-header";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { ErrorState } from "@/components/ui/error-state";
@@ -20,18 +23,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useInsights } from "@/hooks/use-resource-queries";
 import { useRouter } from "next/navigation";
 import { logApiError } from "@/lib/log-error";
+import { formatBRL as formatCurrency } from "@/lib/format";
 import type {
   InsightsData,
   CategoryComparison,
   SpendingAlert,
 } from "@/types/transaction";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
 
 export default function InsightsPage() {
   const router = useRouter();
@@ -86,30 +83,30 @@ export default function InsightsPage() {
             {/* Month comparison header */}
             <MonthComparisonCards data={data} loading={loading} />
 
-        {/* Alerts section */}
-        {!loading && data && data.alerts.length > 0 && (
-          <AlertsSection alerts={data.alerts} />
-        )}
+            {/* Alerts section */}
+            {!loading && data && data.alerts.length > 0 && (
+              <AlertsSection alerts={data.alerts} />
+            )}
 
-        {/* Category comparisons */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <TrendSection
-            title="Categorias que mais cresceram"
-            icon={TrendingUp}
-            items={data?.topGrowing ?? []}
-            loading={loading}
-            emptyText="Nenhuma categoria com aumento significativo."
-            color="text-danger"
-          />
-          <TrendSection
-            title="Categorias que mais diminuíram"
-            icon={TrendingDown}
-            items={data?.topShrinking ?? []}
-            loading={loading}
-            emptyText="Nenhuma categoria com redução significativa."
-            color="text-success"
-          />
-        </div>
+            {/* Category comparisons */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <TrendSection
+                title="Categorias que mais cresceram"
+                icon={TrendingUp}
+                items={data?.topGrowing ?? []}
+                loading={loading}
+                emptyText="Nenhuma categoria com aumento significativo."
+                color="text-danger"
+              />
+              <TrendSection
+                title="Categorias que mais diminuíram"
+                icon={TrendingDown}
+                items={data?.topShrinking ?? []}
+                loading={loading}
+                emptyText="Nenhuma categoria com redução significativa."
+                color="text-success"
+              />
+            </div>
 
             {/* Full comparison table */}
             <ComparisonTable
@@ -423,7 +420,11 @@ function ComparisonTable({
             style={{ animationDelay: `${index * 40}ms` }}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <CategoryIcon slug={item.category?.slug} icon={item.category?.icon} size={14} />
+              <CategoryIcon
+                slug={item.category?.slug}
+                icon={item.category?.icon}
+                size={14}
+              />
               <span className="text-sm text-fg truncate">
                 {item.category?.name ?? "Outros"}
               </span>
@@ -455,13 +456,16 @@ function VariationBadge({
   const isNegative = variation < 0;
 
   let colorClass = "text-fg-muted";
-  if (isPositive)
-    colorClass = invertColor ? "text-danger" : "text-success";
-  if (isNegative)
-    colorClass = invertColor ? "text-success" : "text-danger";
+  if (isPositive) colorClass = invertColor ? "text-danger" : "text-success";
+  if (isNegative) colorClass = invertColor ? "text-success" : "text-danger";
 
   return (
-    <span className={cn("flex items-center gap-0.5 text-xs font-medium", colorClass)}>
+    <span
+      className={cn(
+        "flex items-center gap-0.5 text-xs font-medium",
+        colorClass,
+      )}
+    >
       {isPositive ? (
         <ArrowUpRight size={12} />
       ) : isNegative ? (

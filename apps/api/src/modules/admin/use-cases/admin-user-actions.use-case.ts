@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { SetTtsSettingsInput } from '../dtos/admin.dto';
 
 // Mesma chave do UsersRepository (findById tem cache 5min) — invalidar após
 // mexer no acesso, senão o paywall vê status velho.
@@ -61,6 +62,27 @@ export class AdminUserActionsUseCase {
     });
     await this.invalidate(userId);
     this.logger.log(`Admin: premium revogado de ${userId}`);
+  }
+
+  /**
+   * Configura a voz (TTS) da conta: habilitar + voz + rate/pitch/volume. Só
+   * grava os campos enviados (patch parcial). Invalida o cache do usuário.
+   */
+  async setTtsSettings(
+    userId: string,
+    input: SetTtsSettingsInput,
+  ): Promise<void> {
+    await this.requireUser(userId);
+    const data: Record<string, unknown> = {};
+    if (input.enabled !== undefined) data.ttsEnabled = input.enabled;
+    if (input.voice !== undefined) data.ttsVoice = input.voice;
+    if (input.rate !== undefined) data.ttsRate = input.rate;
+    if (input.pitch !== undefined) data.ttsPitch = input.pitch;
+    if (input.volume !== undefined) data.ttsVolume = input.volume;
+    if (Object.keys(data).length === 0) return;
+    await this.prisma.user.update({ where: { id: userId }, data });
+    await this.invalidate(userId);
+    this.logger.log(`Admin: TTS de ${userId} atualizado (${Object.keys(data).join(', ')})`);
   }
 
   private async requireUser(userId: string) {

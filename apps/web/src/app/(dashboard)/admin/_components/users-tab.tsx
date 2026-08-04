@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Search, Crown, Clock, Ban } from "lucide-react";
+import { Loader2, Search, Crown, Clock, Ban, AudioLines } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
 import { logApiError } from "@/lib/log-error";
 
@@ -18,7 +19,38 @@ interface AdminUser {
   isSuperAdmin: boolean;
   lastSeenAt: string | null;
   createdAt: string;
+  ttsEnabled: boolean;
+  ttsVoice: string;
+  ttsRate: string;
+  ttsPitch: string;
+  ttsVolume: string;
 }
+
+// Configuração de voz enviada ao /admin/users/:id/tts (patch parcial).
+interface TtsSettings {
+  enabled?: boolean;
+  voice?: string;
+  rate?: string;
+  pitch?: string;
+  volume?: string;
+}
+
+// Opções das 3 vozes pt-BR e das escalas de prosódia (espelham o DTO do backend).
+const VOICE_OPTIONS: { value: string; label: string }[] = [
+  { value: "pt-BR-FranciscaNeural", label: "Francisca (feminina)" },
+  { value: "pt-BR-AntonioNeural", label: "Antônio (masculina)" },
+  { value: "pt-BR-ThalitaMultilingualNeural", label: "Thalita (feminina)" },
+];
+const RATE_OPTIONS = ["default", "x-slow", "slow", "medium", "fast", "x-fast"];
+const PITCH_OPTIONS = ["default", "x-low", "low", "medium", "high", "x-high"];
+const VOLUME_OPTIONS = [
+  "default",
+  "x-soft",
+  "soft",
+  "medium",
+  "loud",
+  "x-loud",
+];
 
 interface UsersResponse {
   rows: AdminUser[];
@@ -64,6 +96,8 @@ export function UsersTab() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  // Card com o painel de voz (TTS) aberto.
+  const [ttsOpenId, setTtsOpenId] = useState<string | null>(null);
 
   const load = useCallback(
     async (q: string, p: number) => {
@@ -110,6 +144,24 @@ export function UsersTab() {
     } catch (e) {
       logApiError(`admin:action:${action}`, e);
       toast.error("Não foi possível aplicar a ação");
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  // Salva a configuração de voz (patch parcial) e recarrega para refletir.
+  async function saveTts(user: AdminUser, patch: TtsSettings) {
+    setActingId(user.id);
+    try {
+      await fetchApi(`/admin/users/${user.id}/tts`, {
+        method: "POST",
+        body: JSON.stringify(patch),
+      });
+      toast.success("Voz atualizada");
+      await load(search, page);
+    } catch (e) {
+      logApiError("admin:action:tts", e);
+      toast.error("Não foi possível salvar a voz");
     } finally {
       setActingId(null);
     }
@@ -206,10 +258,32 @@ export function UsersTab() {
                       Conceder 30d
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={actingId === u.id}
+                    onClick={() =>
+                      setTtsOpenId((cur) => (cur === u.id ? null : u.id))
+                    }
+                  >
+                    <AudioLines size={13} className="mr-1.5" />
+                    Voz
+                    {u.ttsEnabled && (
+                      <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-lima" />
+                    )}
+                  </Button>
                   {actingId === u.id && (
                     <Loader2 size={16} className="animate-spin text-fg-muted self-center" />
                   )}
                 </div>
+
+                {ttsOpenId === u.id && (
+                  <TtsPanel
+                    user={u}
+                    busy={actingId === u.id}
+                    onSave={(patch) => saveTts(u, patch)}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -218,6 +292,7 @@ export function UsersTab() {
             <span className="text-fg-muted">
               {data.total} usuário(s) · página {data.page}/{totalPages}
             </span>
+            {/* paginação abaixo */}
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -239,6 +314,103 @@ export function UsersTab() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Painel de configuração de voz (TTS) de uma conta. Estado local inicia dos
+// valores do usuário; "Salvar" envia só o patch. O toggle de habilitar salva na
+// hora (é a ação mais comum); voz/velocidade/tom/volume vão juntos no Salvar.
+function TtsPanel({
+  user,
+  busy,
+  onSave,
+}: {
+  user: AdminUser;
+  busy: boolean;
+  onSave: (patch: TtsSettings) => void;
+}) {
+  const [voice, setVoice] = useState(user.ttsVoice);
+  const [rate, setRate] = useState(user.ttsRate);
+  const [pitch, setPitch] = useState(user.ttsPitch);
+  const [volume, setVolume] = useState(user.ttsVolume);
+
+  const dirty =
+    voice !== user.ttsVoice ||
+    rate !== user.ttsRate ||
+    pitch !== user.ttsPitch ||
+    volume !== user.ttsVolume;
+
+  const opts = (values: string[]) =>
+    values.map((v) => ({ value: v, label: v === "default" ? "padrão" : v }));
+
+  return (
+    <div className="mt-3 space-y-3 rounded-[12px] border border-border bg-muted/30 p-3">
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-fg">
+          Resposta em áudio (assessor)
+        </span>
+        <input
+          type="checkbox"
+          checked={user.ttsEnabled}
+          disabled={busy}
+          onChange={(e) => onSave({ enabled: e.target.checked })}
+          className="h-4 w-4 accent-lima"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[11px] text-fg-muted">
+          Voz
+          <Select
+            value={voice}
+            onChange={setVoice}
+            disabled={busy}
+            size="sm"
+            options={VOICE_OPTIONS}
+          />
+        </label>
+        <label className="text-[11px] text-fg-muted">
+          Velocidade
+          <Select
+            value={rate}
+            onChange={setRate}
+            disabled={busy}
+            size="sm"
+            options={opts(RATE_OPTIONS)}
+          />
+        </label>
+        <label className="text-[11px] text-fg-muted">
+          Tom
+          <Select
+            value={pitch}
+            onChange={setPitch}
+            disabled={busy}
+            size="sm"
+            options={opts(PITCH_OPTIONS)}
+          />
+        </label>
+        <label className="text-[11px] text-fg-muted">
+          Volume
+          <Select
+            value={volume}
+            onChange={setVolume}
+            disabled={busy}
+            size="sm"
+            options={opts(VOLUME_OPTIONS)}
+          />
+        </label>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          disabled={busy || !dirty}
+          onClick={() => onSave({ voice, rate, pitch, volume })}
+        >
+          Salvar voz
+        </Button>
+      </div>
     </div>
   );
 }

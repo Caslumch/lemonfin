@@ -12,54 +12,205 @@ datasource db {
 }
 
 model User {
-  id                   String                 @id @default(cuid())
-  email                String                 @unique
-  name                 String
-  passwordHash         String                 @map("password_hash")
-  phone                String?                @unique
-  avatarUrl            String?                @map("avatar_url")
-  onboardedAt          DateTime?              @map("onboarded_at")
+  id                     String                  @id @default(cuid())
+  email                  String                  @unique
+  name                   String
+  passwordHash           String                  @map("password_hash")
+  phone                  String?                 @unique
+  avatarUrl              String?                 @map("avatar_url")
+  onboardedAt            DateTime?               @map("onboarded_at")
+  // Boas-vindas do WhatsApp já enviadas (proativas ao vincular o telefone, ou
+  // na primeira mensagem recebida). Limpo quando o telefone é removido — um
+  // novo vínculo deve ser recebido de novo.
+  whatsappWelcomedAt     DateTime?               @map("whatsapp_welcomed_at")
   // Null = email ainda não confirmado. NÃO bloqueia login (decisão de produto):
   // o app só exibe um banner pedindo confirmação enquanto for null.
-  emailVerifiedAt      DateTime?              @map("email_verified_at")
+  emailVerifiedAt        DateTime?               @map("email_verified_at")
   // Fim do período de teste grátis (7 dias). Setado no sign-up; explícito (não
   // derivado de createdAt) para permitir estender. Hoje o pós-trial é SOFT: ao
   // expirar, só exibe aviso, não bloqueia. O Stripe endurece isso depois.
-  trialEndsAt          DateTime?              @map("trial_ends_at")
-  twoFactorEnabled     Boolean                @default(false) @map("two_factor_enabled")
-  twoFactorSecret      String?                @map("two_factor_secret") // criptografado
-  backupCodes          String[]               @default([]) @map("backup_codes") // hasheados (bcrypt)
+  trialEndsAt            DateTime?               @map("trial_ends_at")
+  twoFactorEnabled       Boolean                 @default(false) @map("two_factor_enabled")
+  twoFactorSecret        String?                 @map("two_factor_secret") // criptografado
+  backupCodes            String[]                @default([]) @map("backup_codes") // hasheados (bcrypt)
   // Super-admin da PLATAFORMA (dono), não o papel ADMIN de família. Setado
   // manualmente no banco; protege os endpoints /admin/*. Default false.
-  isSuperAdmin         Boolean                @default(false) @map("is_super_admin")
+  isSuperAdmin           Boolean                 @default(false) @map("is_super_admin")
+  // Resposta em ÁUDIO (TTS) do assessor no WhatsApp. Flag por conta, ligada
+  // manualmente (admin/banco) — hoje é uso interno/teste. Default false: o
+  // assessor responde em texto como sempre; com true, também manda a voz.
+  ttsEnabled             Boolean                 @default(false) @map("tts_enabled")
+  // Preferências de voz do TTS (prosódia SSML do edge-tts). Guardadas como string
+  // porque o edge-tts aceita tanto nominais ("fast") quanto relativos ("+20%") —
+  // a validação dos valores fica no DTO do admin. Voz: uma das 3 pt-BR
+  // (Francisca/Antonio/Thalita). rate/pitch/volume: "default" = sem alteração.
+  ttsVoice               String                  @default("pt-BR-FranciscaNeural") @map("tts_voice")
+  ttsRate                String                  @default("default") @map("tts_rate")
+  ttsPitch               String                  @default("default") @map("tts_pitch")
+  ttsVolume              String                  @default("default") @map("tts_volume")
   // Última atividade do usuário (qualquer request autenticado). Atualizado com
   // throttle (no máx 1x a cada 15min) pelo LoggingInterceptor — não é login,
   // é "visto por último". Usado no painel admin p/ ativo vs. abandonado.
-  lastSeenAt           DateTime?              @map("last_seen_at")
+  lastSeenAt             DateTime?               @map("last_seen_at")
   // Assinatura (Stripe). Default TRIALING cobre quem cadastrou antes do billing —
   // junto com trialEndsAt já existente. O acesso premium NÃO é lido só daqui: é
   // derivado por hasPremiumAccess() = ACTIVE OU (TRIALING e trialEndsAt no futuro).
   // A fonte da verdade do status é o webhook do Stripe, não a resposta do checkout.
-  stripeCustomerId     String?                @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?                @unique @map("stripe_subscription_id")
-  subscriptionStatus   SubscriptionStatus     @default(TRIALING) @map("subscription_status")
-  currentPeriodEnd     DateTime?              @map("current_period_end") // fim do ciclo pago
-  createdAt            DateTime               @default(now()) @map("created_at")
-  updatedAt            DateTime               @updatedAt @map("updated_at")
-  transactions         Transaction[]
-  cards                Card[]
-  goals                Goal[]
-  reserves             Reserve[]
-  recurring            RecurringTransaction[]
-  invoicePayments      InvoicePayment[]
-  budgets              Budget[]
-  ownedFamilies        Family[]               @relation("FamilyOwner")
-  familyMembers        FamilyMember[]
-  verificationCodes    VerificationCode[]
-  categories           Category[]
-  aiUsage              AiUsage[]
+  // Registro auditável de aceite dos termos/política no cadastro (LGPD —
+  // accountability). Version = data da versão vigente das páginas legais.
+  termsAcceptedAt        DateTime?               @map("terms_accepted_at")
+  termsVersion           String?                 @map("terms_version")
+  stripeCustomerId       String?                 @unique @map("stripe_customer_id")
+  stripeSubscriptionId   String?                 @unique @map("stripe_subscription_id")
+  subscriptionStatus     SubscriptionStatus      @default(TRIALING) @map("subscription_status")
+  currentPeriodEnd       DateTime?               @map("current_period_end") // fim do ciclo pago
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  transactions           Transaction[]
+  cards                  Card[]
+  goals                  Goal[]
+  reserves               Reserve[]
+  recurring              RecurringTransaction[]
+  invoicePayments        InvoicePayment[]
+  invoiceReconciliations InvoiceReconciliation[]
+  budgets                Budget[]
+  ownedFamilies          Family[]                @relation("FamilyOwner")
+  familyMembers          FamilyMember[]
+  verificationCodes      VerificationCode[]
+  categories             Category[]
+  aiUsage                AiUsage[]
+  reminderSetting        ReminderSetting?
+  reminderLogs           ReminderLog[]
+  refreshTokens          RefreshToken[]
+  advisorMemories        AdvisorMemory[]
+  apiKeys                ApiKey[]
 
   @@map("users")
+}
+
+// Memória de longo prazo do assessor: fatos curtos que o usuário contou em
+// conversas (objetivos de vida, contexto, preferências, decisões combinadas).
+// Injetada no system prompt do chat/advice; o PRÓPRIO modelo salva/apaga via
+// tools (rememberFact/forgetFact) — "esquece isso" funciona pela conversa.
+// Por usuário (não por família): é contexto pessoal de quem conversa.
+model AdvisorMemory {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  content   String // 1 fato por linha, frase curta (truncada no repositório)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("advisor_memories")
+}
+
+// Sessão de longa duração (refresh token). O token em si é opaco (random) e
+// NUNCA é armazenado — só o hash SHA-256 (vazamento do banco não vaza sessões).
+// Rotação a cada uso: o antigo é revogado ao emitir o novo. Reapresentar um
+// token JÁ REVOGADO é sinal de roubo → todas as sessões do usuário caem.
+model RefreshToken {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  // Motivo da revogação: "rotation" (trocado por um novo no refresh) |
+  // "logout" | "security" (troca/reset de senha, detecção de roubo). A janela
+  // de graça para reuso concorrente SÓ vale para "rotation" — sem o motivo,
+  // a graça ressuscitaria sessões derrubadas por segurança.
+  revokedReason String?   @map("revoked_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Chave de API por conta — autenticação de MÁQUINA para o gateway (/v1) e o
+// servidor MCP. Diferente do JWT (sessão de browser), a key não expira sozinha:
+// vive até ser revogada. Guardamos só o HASH do segredo (nunca o valor cru —
+// ele é exibido uma única vez na criação). O `prefix` é o começo legível da
+// chave (ex. "lmn_live_a1b2"), guardado em claro só para o usuário identificar
+// qual key é qual no painel. A key resolve o userId e HERDA o status premium do
+// dono (o ApiKeyGuard não afrouxa o PremiumGuard).
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String // rótulo dado pelo usuário ("agente do WhatsApp", "n8n"…)
+  keyHash    String    @unique @map("key_hash")
+  prefix     String    @map("prefix") // início legível, ex. "lmn_live_a1b2"
+  // Escopos de acesso. Default read+write; permite emitir keys só-leitura para
+  // integrações que apenas consultam (dashboards, agentes de análise).
+  scopes     String[]  @default(["read", "write"])
+  lastUsedAt DateTime? @map("last_used_at") // atualizado com throttle pelo guard
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// Idempotência do webhook do Stripe: o Stripe reenvia eventos (retry por até
+// 3 dias), e o dedupe anterior era cache em memória — não sobrevivia a restart
+// do Render, então um retry pós-restart reprocessava o evento (e-mail de
+// billing duplicado). Claim atômico por event.id único, mesmo padrão do
+// ProcessedMessage (WhatsApp).
+model ProcessedStripeEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique @map("event_id")
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("processed_stripe_events")
+}
+
+// Preferências de mensagens proativas (lembretes + alertas automáticos).
+// Ausência de linha = defaults (tudo ligado, 3 dias de antecedência) — só é
+// criada quando o usuário mexe nas configurações.
+model ReminderSetting {
+  id                  String  @id @default(cuid())
+  userId              String  @unique @map("user_id")
+  // Lembretes de vencimento (contas fixas + faturas de cartão).
+  billsEnabled        Boolean @default(true) @map("bills_enabled")
+  // Antecedência do lembrete de vencimento, em dias (1–7).
+  daysBefore          Int     @default(3) @map("days_before")
+  // Alertas automáticos já existentes (alerta de gastos, resumo semanal,
+  // comparativo mensal, assinaturas, anomalias). Opt-out único: são o mesmo
+  // "canal" na percepção do usuário.
+  alertsEnabled       Boolean @default(true) @map("alerts_enabled")
+  // Resumo diário matinal (ontem + acumulado do mês). OPT-IN (default off):
+  // mensagem todo dia só para quem pediu — frequência diária sem pedido é spam.
+  dailySummaryEnabled Boolean @default(false) @map("daily_summary_enabled")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reminder_settings")
+}
+
+// Auditoria + idempotência de mensagens proativas: o cron marca o envio ANTES
+// de mandar (claim via dedupeKey único) — um restart no horário do cron não
+// duplica a mensagem.
+model ReminderLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String // "bill" | "card_invoice" (futuro: "reminder")
+  refId     String?  @map("ref_id") // recurringId / cardId
+  // Chave natural do envio, ex. "bill:<recurringId>:2026-07-10" (data do
+  // vencimento). Única = claim atômico.
+  dedupeKey String   @unique @map("dedupe_key")
+  sentAt    DateTime @default(now()) @map("sent_at")
+  channel   String // "whatsapp"
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, sentAt])
+  @@map("reminder_logs")
 }
 
 enum SubscriptionStatus {
@@ -144,11 +295,12 @@ model Transaction {
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category       Category              @relation(fields: [categoryId], references: [id])
-  card           Card?                 @relation(fields: [cardId], references: [id], onDelete: SetNull)
-  recurring      RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
-  invoicePayment InvoicePayment?
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category               @relation(fields: [categoryId], references: [id])
+  card                  Card?                  @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  recurring             RecurringTransaction?  @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  invoicePayment        InvoicePayment?
+  invoiceReconciliation InvoiceReconciliation?
 
   @@index([userId, date])
   // Breakdown por categoria com filtro/ordenação por data (alerts, chat,
@@ -210,10 +362,11 @@ model Card {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions    Transaction[]
-  recurring       RecurringTransaction[]
-  invoicePayments InvoicePayment[]
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions           Transaction[]
+  recurring              RecurringTransaction[]
+  invoicePayments        InvoicePayment[]
+  invoiceReconciliations InvoiceReconciliation[]
 
   @@index([userId])
   @@map("cards")
@@ -240,6 +393,30 @@ model InvoicePayment {
   @@index([userId])
   @@index([cardId, cycle])
   @@map("invoice_payments")
+}
+
+// Conferência da fatura fechada contra o total real informado pelo usuário (o
+// app não tem conexão com o banco, então o usuário digita o total da fatura). Um
+// registro por cartão+ciclo (o mais recente vale). `informedTotal` é o total que
+// o usuário informou; `adjustmentId` liga à transação de ajuste criada quando o
+// app estava com valor a MENOS (compras esquecidas). Se bateu ou tinha a mais,
+// não há ajuste (adjustmentId null).
+model InvoiceReconciliation {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  cardId        String   @map("card_id")
+  cycle         String
+  informedTotal Decimal  @map("informed_total") @db.Decimal(12, 2)
+  adjustmentId  String?  @unique @map("adjustment_id")
+  reconciledAt  DateTime @default(now()) @map("reconciled_at")
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card       Card         @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  adjustment Transaction? @relation(fields: [adjustmentId], references: [id], onDelete: SetNull)
+
+  @@unique([cardId, cycle])
+  @@index([userId])
+  @@map("invoice_reconciliations")
 }
 
 enum TransactionType {
@@ -356,6 +533,7 @@ enum AiFeature {
   WHATSAPP_PARSER
   WHATSAPP_TRANSCRIPTION
   WHATSAPP_RECEIPT
+  WHATSAPP_TTS
 }
 
 model AiUsage {

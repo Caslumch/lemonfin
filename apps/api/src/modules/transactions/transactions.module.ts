@@ -45,7 +45,14 @@ import { BillingEnforcementModule } from '../../common/billing/billing-enforceme
   exports: [
     TransactionsRepository,
     GetForecastUseCase,
+    GetInsightsUseCase,
     CreateInstallmentsUseCase,
+    // Consumidos pelo GatewayModule (/v1) — reaproveita a MESMA lógica do
+    // controller de browser, sem duplicar regra de negócio.
+    GetSummaryUseCase,
+    ListTransactionsUseCase,
+    CreateTransactionUseCase,
+    GetCategoryBreakdownUseCase,
   ],
 })
 export class TransactionsModule {}

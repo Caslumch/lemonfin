@@ -7,12 +7,16 @@ import { SetupTwoFactorUseCase } from './use-cases/setup-2fa.use-case';
 import { EnableTwoFactorUseCase } from './use-cases/enable-2fa.use-case';
 import { DisableTwoFactorUseCase } from './use-cases/disable-2fa.use-case';
 import { DeleteAccountUseCase } from './use-cases/delete-account.use-case';
+import { ExportUserDataUseCase } from './use-cases/export-user-data.use-case';
 import { RecurringModule } from '../recurring/recurring.module';
 import { BudgetsModule } from '../budgets/budgets.module';
 import { CategoriesModule } from '../categories/categories.module';
+// Só o cliente de envio (WmodeModule é enxuto justamente para isso) — importar
+// o WhatsappModule inteiro criaria ciclo (ele importa UsersModule).
+import { WmodeModule } from '../whatsapp/wmode.module';
 
 @Module({
-  imports: [RecurringModule, BudgetsModule, CategoriesModule],
+  imports: [RecurringModule, BudgetsModule, CategoriesModule, WmodeModule],
   controllers: [UsersController],
   providers: [
     UsersRepository,
@@ -22,6 +26,7 @@ import { CategoriesModule } from '../categories/categories.module';
     EnableTwoFactorUseCase,
     DisableTwoFactorUseCase,
     DeleteAccountUseCase,
+    ExportUserDataUseCase,
   ],
   exports: [UsersRepository],
 })

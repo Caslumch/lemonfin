@@ -8,6 +8,7 @@ import {
   UseGuards,
   ConflictException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { hasPremiumAccess } from '../../../common/billing/premium-access';
@@ -20,6 +21,7 @@ import { SetupTwoFactorUseCase } from '../use-cases/setup-2fa.use-case';
 import { EnableTwoFactorUseCase } from '../use-cases/enable-2fa.use-case';
 import { DisableTwoFactorUseCase } from '../use-cases/disable-2fa.use-case';
 import { DeleteAccountUseCase } from '../use-cases/delete-account.use-case';
+import { ExportUserDataUseCase } from '../use-cases/export-user-data.use-case';
 import { onboardingSchema } from '../dtos/onboarding.dto';
 import type { OnboardingInput } from '../dtos/onboarding.dto';
 import { changePasswordSchema } from '../dtos/change-password.dto';
@@ -34,6 +36,8 @@ import type {
 } from '../dtos/two-factor.dto';
 import { deleteAccountSchema } from '../dtos/delete-account.dto';
 import type { DeleteAccountInput } from '../dtos/delete-account.dto';
+import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import { buildLinkWelcome } from '../../whatsapp/welcome-message';
 
 // Gestão de conta (perfil, senha, 2FA, onboarding) continua acessível mesmo
 // sem assinatura — não são features premium e o usuário pode precisar delas.
@@ -49,6 +53,8 @@ export class UsersController {
     private readonly enableTwoFactor: EnableTwoFactorUseCase,
     private readonly disableTwoFactor: DisableTwoFactorUseCase,
     private readonly deleteAccount: DeleteAccountUseCase,
+    private readonly exportUserData: ExportUserDataUseCase,
+    private readonly wmodeClient: WmodeClientService,
   ) {}
 
   @Get('me')
@@ -94,10 +100,33 @@ export class UsersController {
       }
     }
 
-    return this.usersRepository.update(user.id, {
+    const before = await this.usersRepository.findById(user.id);
+    const updated = await this.usersRepository.update(user.id, {
       ...(body.name !== undefined && { name: body.name }),
       ...(body.phone !== undefined && { phone: body.phone || null }),
     });
+
+    // Boas-vindas no WhatsApp ao vincular/trocar o número: confirma na hora
+    // que o número cadastrado está certo e inaugura a conversa sem o usuário
+    // precisar dar o primeiro passo. Falha de envio NÃO falha o PATCH — a
+    // primeira mensagem recebida cobre (welcome de primeiro contato). Remover
+    // o número limpa o carimbo, para um novo vínculo ser recebido de novo.
+    let whatsappWelcomeSent = false;
+    const newPhone = body.phone === undefined ? undefined : body.phone || null;
+    if (newPhone === null && before?.phone) {
+      await this.usersRepository.setWhatsappWelcomed(user.id, null);
+    } else if (newPhone && newPhone !== before?.phone) {
+      const sent = await this.wmodeClient.sendMessage({
+        to: newPhone,
+        content: buildLinkWelcome(updated.name),
+      });
+      if (sent) {
+        await this.usersRepository.setWhatsappWelcomed(user.id, new Date());
+        whatsappWelcomeSent = true;
+      }
+    }
+
+    return { ...updated, whatsappWelcomeSent };
   }
 
   @Post('me/change-password')
@@ -107,6 +136,14 @@ export class UsersController {
     body: ChangePasswordInput,
   ) {
     return this.changePassword.execute(user.id, body);
+  }
+
+  // Exportação dos dados do titular (LGPD — portabilidade). Consulta pesada:
+  // throttle apertado para não virar vetor de carga.
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Get('me/export')
+  async exportDataHandler(@CurrentUser() user: { id: string }) {
+    return this.exportUserData.execute(user.id);
   }
 
   // Exclusão de conta (LGPD). Re-autentica por senha e apaga tudo.

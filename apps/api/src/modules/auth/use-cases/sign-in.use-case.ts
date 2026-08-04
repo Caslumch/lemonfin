@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../../users/repositories/users.repository';
+import { AuthTokensService } from '../services/auth-tokens.service';
 import { SignInInput } from '../dtos/auth.dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class SignInUseCase {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly jwtService: JwtService,
+    private readonly authTokens: AuthTokensService,
   ) {}
 
   async execute(input: SignInInput) {
@@ -33,16 +35,12 @@ export class SignInUseCase {
       return { status: 'TOTP_REQUIRED' as const, tempToken };
     }
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      type: 'access',
-    });
+    const session = await this.authTokens.issueSession(user);
 
     return {
       status: 'SUCCESS' as const,
       user: { id: user.id, name: user.name, email: user.email },
-      token,
+      ...session,
     };
   }
 }

@@ -11,7 +11,7 @@ function buildService(overrides: { user?: unknown }) {
     findByPhoneCandidates: jest.fn().mockResolvedValue(overrides.user ?? null),
   };
   const wmodeClient = {
-    sendMessage: jest.fn().mockImplementation((msg: typeof sent[number]) => {
+    sendMessage: jest.fn().mockImplementation((msg: (typeof sent)[number]) => {
       sent.push(msg);
       return Promise.resolve();
     }),
@@ -37,6 +37,8 @@ function buildService(overrides: { user?: unknown }) {
     {} as never, // conversation
     {} as never, // premiumAccess
     {} as never, // billingConfig
+    {} as never, // payInvoice
+    {} as never, // tts
   );
 
   return { service, usersRepository, wmodeClient, sent };
@@ -49,6 +51,7 @@ describe('WhatsappService.handleIncomingMessage — número não-cadastrado', ()
     await service.handleIncomingMessage({
       from: '5511999999999@c.us',
       content: 'gastei 50 no mercado',
+      sessionId: 'sess-1',
     });
 
     expect(wmodeClient.sendMessage).toHaveBeenCalledTimes(1);

@@ -102,18 +102,31 @@ export type ParseResult =
       // da fatura (não só o total).
       wantItems?: boolean;
     }
-  | { intent: 'cancel' }
+  // Cancelar o último registro. target: o que o usuário NOMEOU ("cancela a
+  // netflix" → "netflix"); null quando pediu genericamente ("cancela isso").
+  // O handler usa o target para não apagar a coisa errada.
+  | { intent: 'cancel'; target: string | null }
   | { intent: 'correction'; newAmount: number }
   // Corrige o cartão da última transação. null = remover vínculo; string = trocar.
   | { intent: 'correction_card'; cardName: string | null }
+  // Corrige a DATA da última ação ("foi ontem", "a data é dia 14"). newDate é
+  // ISO já resolvido pelo parser; o handler reancora a ação inteira nessa data.
+  | { intent: 'correction_date'; newDate: string }
   | { intent: 'installment'; data: ParsedInstallment }
   | { intent: 'recurring'; data: ParsedRecurring }
   | { intent: 'reserve_create'; data: ParsedReserve }
   | { intent: 'reserve_contribution'; amount: number }
   // Registrar o pagamento da fatura de um cartão. cardName: nome do cartão na
   // mensagem, "cartao" se genérico, ou null. amount: valor pago se mencionado
-  // (senão usa o total da fatura aberta).
-  | { intent: 'pay_invoice'; cardName: string | null; amount: number | null }
+  // (senão usa o total da fatura aberta). invoiceMonth: mês da fatura paga
+  // ("paguei a fatura de maio"), "YYYY-MM" = mês em que o ciclo FECHA; null =
+  // fatura corrente.
+  | {
+      intent: 'pay_invoice';
+      cardName: string | null;
+      amount: number | null;
+      invoiceMonth: string | null;
+    }
   | { intent: 'goal_create'; data: ParsedGoal }
   | { intent: 'batch'; items: BatchItem[]; skipped: SkippedItem[] }
   // Refaz a ÚLTIMA AÇÃO de outro jeito: o bot exclui o que registrou por último
@@ -230,7 +243,7 @@ Responda: {"intent": "query", "queryType": "summary" | "expenses" | "income" | "
 - invoiceMonth: SÓ quando queryType="card" E o usuário cita o MÊS de uma fatura específica ("fatura de junho", "fatura do Bradesco de maio", "o que fechou em junho"). Formato "YYYY-MM" = o mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Se NÃO citar mês, ou disser "fatura aberta"/"fatura atual"/"esse mês", retorne null (= fatura aberta corrente). Nos outros queryTypes, null.
 - wantItems: SÓ quando queryType="card". true se o usuário pede as COMPRAS/itens/parcelas/lançamentos da fatura ("as parcelas da fatura", "o que tem na fatura", "quais compras", "me lista a fatura"); false se pede só o total/vencimento ("qual minha fatura", "quanto devo no cartão"). Nos outros queryTypes, false.
 - categorySlug: SÓ quando queryType="category". O slug EXATO da categoria perguntada, da lista de TRANSACTION (ex: "comida"/"mercado"/"ifood" → "alimentacao"; "ônibus"/"uber"/"gasolina" → "transporte"; "farmácia"/"academia" → "saude"). Nos outros queryTypes, null.
-- memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com qualquer queryType de gasto/resumo.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
+- memberName: PRIMEIRO NOME de um membro da família, SÓ se a pergunta cita uma pessoa específica ("o que a Danielle gastou?", "quanto o João comprou essa semana?", "gastos do Pedro"). Use EXATAMENTE um nome da lista de membros da família informada acima; se não houver lista ou o nome não bater, null. "eu/meu/minha" NÃO é memberName (null — é o próprio usuário). Funciona com os queryTypes de gasto/resumo: summary, expenses, income, balance, category, last_transaction e top_transaction. Nos demais (forecast, budget, reserves, recurring, card) a visão é sempre da família inteira — retorne memberName null.${'\n'}- period: janela de tempo SÓ se mencionada — "hoje"/"agora" → "today"; "essa semana"/"últimos dias"/"semana" → "week"; "esse mês"/"no mês" → "month". Sem menção de tempo → null (o padrão é o mês corrente).
 IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
 - "METAS" no LemonFin = teto/limite de GASTO do mês → queryType "budget". "minhas metas", "minhas metas de economia", "quais minhas metas" são budget.
 - "RESERVAS" = juntar dinheiro para um objetivo (viagem, carro) → queryType "reserves". SÓ use reserves quando o usuário fala explicitamente de "reserva", "juntar", "guardar" ou um objetivo nomeado. NUNCA classifique "metas" como reserves.
@@ -238,11 +251,12 @@ IMPORTANTE — DOIS conceitos que parecem iguais mas NÃO são:
 - Pergunta que cita UMA categoria de gasto ("comida", "transporte", "mercado", "saúde", "lazer"...) → queryType "category" com o categorySlug, NUNCA "expenses". "expenses" é SÓ o total geral de despesas, sem categoria citada.
 - "como está meu cartão X" / "gastos no X" → queryType "card", NUNCA o resumo geral.
 
-### 3. CANCEL — Cancelar última transação
-Quando o usuário quer cancelar, desfazer ou apagar a última transação registrada.
-Exemplos: "cancela o último gasto", "apaga a última transação", "desfaz o último", "remove o último registro"
+### 3. CANCEL — Cancelar/apagar um registro
+Quando o usuário quer cancelar, desfazer ou apagar algo que foi registrado.
+Exemplos: "cancela o último gasto", "apaga a última transação", "desfaz o último", "remove o último registro", "cancela a netflix", "apaga o uber"
 
-Responda: {"intent": "cancel"}
+Responda: {"intent": "cancel", "target": string | null}
+- target: o NOME do que o usuário quer apagar, SÓ se ele nomeou algo específico ("cancela a netflix" → "netflix"; "apaga o uber" → "uber"; "remove o gasto do mercado" → "mercado"). Referências genéricas ao último registro ("cancela", "apaga isso", "desfaz o último", "cancela essa que criou") → null. Não invente target.
 
 ### 4. CORRECTION — Corrigir valor da última transação
 Quando o usuário quer corrigir o VALOR da última transação registrada.
@@ -350,10 +364,19 @@ Escreva a mensagem em tom humano e conversacional (máx 400 caracteres), sem soa
 Quando o usuário diz que PAGOU (ou está pagando) a fatura de um cartão.
 Exemplos: "paguei a fatura do Bradesco", "quitei o cartão Nubank", "paguei 3000 da fatura", "paguei minha fatura".
 
-Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number | null}
+Responda: {"intent": "pay_invoice", "cardName": string | null, "amount": number | null, "invoiceMonth": string | null}
 - cardName: nome do cartão na mensagem (ex: "Bradesco"), "cartao" se disser só "minha fatura/meu cartão" sem nome, ou null.
 - amount: valor pago SÓ se mencionado (ex: "paguei 3000 da fatura" → 3000). Senão null (o bot usa o total da fatura).
+- invoiceMonth: SÓ quando o usuário cita o MÊS da fatura paga ("paguei a fatura de maio"). Formato "YYYY-MM" = mês em que a fatura FECHA (use o ano de HOJE informado acima; se o mês citado for depois do mês atual, use o ano anterior). Sem menção de mês → null (fatura corrente).
 NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é registrar que PAGOU.
+
+### 16. CORRECTION_DATE — Corrigir a DATA da última ação
+Quando o usuário corrige QUANDO a última transação/compra registrada aconteceu. É SEMPRE sobre algo JÁ REGISTRADO (referência ao passado imediato), sem valor novo na mensagem.
+Exemplos: "foi ontem", "isso foi ontem", "a data é dia 14", "na verdade foi anteontem", "registra com a data de ontem", "muda a data pra segunda", "foi semana passada".
+
+Responda: {"intent": "correction_date", "newDate": string}
+- newDate: a data CORRETA no formato ISO "YYYY-MM-DD". Resolva a expressão relativa ("ontem", "dia 14", "segunda passada") usando a data de HOJE informada acima. Não use datas no futuro.
+IMPORTANTE: só use correction_date quando NÃO há um gasto NOVO com valor na mensagem. "gastei 50 no mercado ontem" é transaction (com purchaseDate), NÃO correction_date. "foi ontem" sozinho, logo após um registro, é correction_date.
 
 ## DESAMBIGUAÇÃO (evite confundir):
 - "guardei/separei/juntei/depositei + valor" → reserve_contribution (NÃO transaction).
@@ -363,6 +386,7 @@ NÃO confunda com query "card" (consultar quanto deve) — pay_invoice é regist
 - "minhas reservas" / "como tá minha reserva" / "quanto juntei pra viagem" → query com queryType "reserves" (objetivo de poupança), NÃO budget, NÃO saudação.
 - "minhas recorrências" / "minhas contas fixas" / "minhas assinaturas" (consulta, sem valor novo) → query com queryType "recurring".
 - "não foi no <cartão>" / "tira o cartão" / "foi no <outro cartão>" logo após um registro → correction_card (corrige o cartão da ÚLTIMA transação), NUNCA uma transação nova.
+- "foi ontem" / "isso foi ontem" / "a data é dia 14" / "registra com a data de ontem" logo após um registro, SEM valor novo → correction_date (corrige a DATA da última ação), NUNCA uma transação nova. Com valor novo + data ("gastei 50 ontem") → transaction com purchaseDate. Pergunta sobre a data ("registrou com a data de ontem?", "foi registrado hoje?") → advice (consulta, não correção).
 - "como está meu cartão X" / "gastos no X" / "quanto gastei no X" / "quando vence a fatura do X" / "vencimento do cartão X" → query queryType "card" com cardName, NUNCA o resumo geral (summary).
 - "minha última compra/transação/gasto" / "o que registrei por último" → query queryType "last_transaction", NUNCA "summary"/"expenses" (que dão totais, não um item).
 - "minha compra mais cara" / "maior gasto do mês" / "transação mais alta" / "maior despesa" → query queryType "top_transaction", NUNCA "expenses" nem "advice" (é um item específico, não análise).
@@ -520,7 +544,13 @@ export class MessageParserService {
         }
 
         case 'cancel':
-          return { intent: 'cancel' };
+          return {
+            intent: 'cancel',
+            target:
+              typeof json.target === 'string' && json.target.trim()
+                ? json.target.trim()
+                : null,
+          };
 
         case 'correction':
           if (!json.newAmount || typeof json.newAmount !== 'number') {
@@ -534,6 +564,21 @@ export class MessageParserService {
 
         case 'correction_card':
           return this.parseCorrectionCard(json);
+
+        case 'correction_date': {
+          // Mesma régua do purchaseDate: aceita passado, descarta inválida/futuro.
+          const newDate = this.normalizePurchaseDate(
+            json.newDate as string | null | undefined,
+          );
+          if (!newDate) {
+            return {
+              intent: 'unknown',
+              message:
+                'Não consegui entender a data 😅. Tenta algo como _"foi ontem"_ ou _"a data é dia 14"_.',
+            };
+          }
+          return { intent: 'correction_date', newDate };
+        }
 
         case 'installment': {
           const item = this.parseInstallmentItem(json);
@@ -591,6 +636,11 @@ export class MessageParserService {
             amount:
               typeof json.amount === 'number' && json.amount > 0
                 ? Number(json.amount)
+                : null,
+            invoiceMonth:
+              typeof json.invoiceMonth === 'string' &&
+              /^\d{4}-\d{2}$/.test(json.invoiceMonth)
+                ? json.invoiceMonth
                 : null,
           };
 

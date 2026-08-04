@@ -7,6 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import * as Sentry from '@sentry/nestjs';
 import { WebhookSignatureGuard } from '../guards/webhook-signature.guard';
 import { WhatsappService } from '../services/whatsapp.service';
 import { ProcessedMessageRepository } from '../repositories/processed-message.repository';
@@ -96,11 +97,33 @@ export class WebhookController {
       }
     }
 
-    // Process async to respond to webhook quickly
+    // Process async to respond to webhook quickly. O claim acontece ANTES do
+    // processamento (prioriza não-duplicar sobre não-perder): se
+    // handleIncomingMessage falhar depois do claim, o messageId segue marcado e
+    // o retry do WMode é rejeitado como duplicado. NÃO revertemos o claim aqui
+    // porque o processamento tem efeitos colaterais no meio do fluxo (cria
+    // transação, envia resposta, grava pendência) — um retry cego reprocessaria
+    // e poderia registrar 2x. Em vez disso, capturamos a falha pós-claim como
+    // dead-letter no Sentry (com messageId/from) para reprocessamento manual e
+    // alerta — a mensagem não some sem rastro.
     this.whatsappService
       .handleIncomingMessage({ from, content, sessionId, audio, image })
-      .catch((error) => {
-        this.logger.error(`Error processing message: ${error}`);
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Error processing message ${messageId} from ${from}: ${String(error)}`,
+        );
+        Sentry.captureException(error, {
+          tags: { area: 'whatsapp-webhook', kind: 'post_claim_failure' },
+          extra: {
+            messageId,
+            from,
+            sessionId,
+            type: type ?? 'TEXT',
+            // Marca que o claim foi consumido e o retry do WMode será
+            // rejeitado — este evento precisa de reprocessamento manual.
+            claimConsumed: Boolean(messageId),
+          },
+        });
       });
 
     return { received: true, processed: true };

@@ -50,7 +50,25 @@ export class UsersRepository {
   async findAllWithPhone() {
     return this.prisma.user.findMany({
       where: { phone: { not: null } },
-      select: { id: true, name: true, phone: true },
+      select: { id: true, name: true, phone: true, ttsEnabled: true },
+    });
+  }
+
+  // Usuários em TRIAL cujo teste termina dentro da janela — para o aviso de
+  // fim de trial. Só TRIALING: quem já assinou (ACTIVE) não recebe.
+  async findTrialsEndingBetween(start: Date, end: Date) {
+    return this.prisma.user.findMany({
+      where: {
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: { gte: start, lte: end },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        trialEndsAt: true,
+      },
     });
   }
 
@@ -60,6 +78,8 @@ export class UsersRepository {
     passwordHash: string;
     phone?: string;
     trialEndsAt?: Date;
+    termsAcceptedAt?: Date;
+    termsVersion?: string;
   }) {
     return this.prisma.user.create({ data });
   }
@@ -69,6 +89,18 @@ export class UsersRepository {
       where: { id },
       data,
       select: { id: true, name: true, email: true, phone: true },
+    });
+    await this.cache.del(byIdKey(id));
+    return user;
+  }
+
+  // Carimba (ou limpa, com null) o envio das boas-vindas do WhatsApp. Limpa-se
+  // quando o telefone é removido, para um novo vínculo ser recebido de novo.
+  async setWhatsappWelcomed(id: string, when: Date | null) {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { whatsappWelcomedAt: when },
+      select: { id: true, whatsappWelcomedAt: true },
     });
     await this.cache.del(byIdKey(id));
     return user;

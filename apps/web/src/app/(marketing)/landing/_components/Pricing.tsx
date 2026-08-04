@@ -103,7 +103,7 @@ export function Pricing() {
                   letterSpacing: "-0.03em",
                 }}
               >
-                14,99
+                14,90
               </span>
               <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.7 }}>/mês</span>
             </div>

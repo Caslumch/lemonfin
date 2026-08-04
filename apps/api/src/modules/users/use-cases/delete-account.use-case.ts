@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import Stripe from 'stripe';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { phoneCandidates } from '../../whatsapp/services/phone-candidates';
 
 // Exclusão de conta (LGPD — direito de eliminação). Re-autentica por senha,
 // cancela a assinatura no Stripe (best-effort) e apaga o usuário + todos os
@@ -32,19 +33,29 @@ export class DeleteAccountUseCase {
       throw new UnauthorizedException('Senha incorreta');
     }
 
-    // Cancela a assinatura no Stripe — best-effort: a exclusão prossegue mesmo
-    // se falhar (Stripe pode estar sem chave, em test mode, ou o usuário sem
-    // assinatura).
-    if (user.stripeSubscriptionId) {
-      const key = this.config.get<string>('STRIPE_SECRET_KEY');
-      if (key) {
-        try {
-          await new Stripe(key).subscriptions.cancel(user.stripeSubscriptionId);
-        } catch (err) {
-          this.logger.warn(
-            `Falha ao cancelar assinatura ${user.stripeSubscriptionId} na exclusao: ${err}`,
-          );
-        }
+    // Stripe — best-effort: a exclusão prossegue mesmo se falhar (Stripe pode
+    // estar sem chave, em test mode, ou o usuário sem assinatura). Além de
+    // cancelar a assinatura, DELETA o customer: o direito de eliminação (LGPD)
+    // alcança as cópias nos operadores, e o customer guarda nome/e-mail.
+    const stripeKey = this.config.get<string>('STRIPE_SECRET_KEY');
+    if (stripeKey && user.stripeSubscriptionId) {
+      try {
+        await new Stripe(stripeKey).subscriptions.cancel(
+          user.stripeSubscriptionId,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao cancelar assinatura ${user.stripeSubscriptionId} na exclusao: ${err}`,
+        );
+      }
+    }
+    if (stripeKey && user.stripeCustomerId) {
+      try {
+        await new Stripe(stripeKey).customers.del(user.stripeCustomerId);
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao deletar customer ${user.stripeCustomerId} na exclusao: ${err}`,
+        );
       }
     }
 
@@ -53,7 +64,20 @@ export class DeleteAccountUseCase {
     // família cascateia os FamilyMember. Em seguida deleta o usuário, cujo
     // cascade cuida de transações, cartões, metas, reservas, recorrentes,
     // categorias, orçamentos, membros de outras famílias, etc.
+    //
+    // ConversationState (estado/histórico da conversa do WhatsApp) é chaveado
+    // por PHONE, sem FK — sem a limpeza explícita, a conversa sobreviveria à
+    // exclusão da conta. Apaga por todas as formas equivalentes do número
+    // (com/sem 9º dígito, com/sem 55).
+    const phones = user.phone ? phoneCandidates(user.phone) : [];
     await this.prisma.$transaction([
+      ...(phones.length > 0
+        ? [
+            this.prisma.conversationState.deleteMany({
+              where: { phone: { in: phones } },
+            }),
+          ]
+        : []),
       this.prisma.family.deleteMany({ where: { ownerId: userId } }),
       this.prisma.user.delete({ where: { id: userId } }),
     ]);

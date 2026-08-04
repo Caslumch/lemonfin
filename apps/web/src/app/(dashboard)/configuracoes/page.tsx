@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
-import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink } from "lucide-react";
+import { Users, Copy, LogOut, Plus, KeyRound, Loader2, Crown, UserCheck, User, Save, ShieldCheck, ShieldOff, Lock, Sparkles, ExternalLink, Bell, Download, Trash2, Terminal } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { Select } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TwoFactorSetupModal } from "@/components/settings/two-factor-setup-modal";
 import { Disable2FAModal } from "@/components/settings/disable-2fa-modal";
+import { ApiKeyCreatedModal } from "@/components/settings/api-key-created-modal";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useApi } from "@/hooks/use-api";
@@ -44,6 +47,23 @@ interface UserProfile {
   email: string;
   phone: string | null;
   twoFactorEnabled: boolean;
+}
+
+interface ReminderSettings {
+  billsEnabled: boolean;
+  daysBefore: number;
+  alertsEnabled: boolean;
+  dailySummaryEnabled: boolean;
+}
+
+// Metadados seguros de uma chave de API (o valor cru só existe na criação).
+interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 function phoneToInternational(phone: string | null): string {
@@ -104,6 +124,30 @@ export default function ConfiguracoesPage() {
   // Leave
   const [leaving, setLeaving] = useState(false);
 
+  // Meus dados (LGPD): exportação + exclusão de conta
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  // Notificações proativas (lembretes de vencimento + alertas automáticos)
+  const [reminders, setReminders] = useState<ReminderSettings | null>(null);
+  const [loadingReminders, setLoadingReminders] = useState(true);
+  const [remindersError, setRemindersError] = useState(false);
+
+  // Chaves de API (gateway p/ agentes de IA e integrações)
+  const [apiKeys, setApiKeys] = useState<ApiKey[] | null>(null);
+  const [loadingApiKeys, setLoadingApiKeys] = useState(true);
+  const [apiKeysError, setApiKeysError] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  // Chave recém-criada — mostrada UMA vez no modal (o backend só guarda o hash).
+  const [createdKey, setCreatedKey] = useState<{
+    key: string;
+    name: string;
+  } | null>(null);
+
   // Subscription (billing)
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(true);
@@ -155,11 +199,98 @@ export default function ConfiguracoesPage() {
     }
   }, [fetchApi]);
 
+  const fetchReminders = useCallback(async () => {
+    setLoadingReminders(true);
+    setRemindersError(false);
+    try {
+      const data = await fetchApi<ReminderSettings>("/reminders/settings");
+      setReminders(data);
+    } catch (error) {
+      logApiError("load:reminder-settings", error);
+      setRemindersError(true);
+    } finally {
+      setLoadingReminders(false);
+    }
+  }, [fetchApi]);
+
+  const fetchApiKeys = useCallback(async () => {
+    setLoadingApiKeys(true);
+    setApiKeysError(false);
+    try {
+      const data = await fetchApi<ApiKey[]>("/api-keys");
+      setApiKeys(data);
+    } catch (error) {
+      logApiError("load:api-keys", error);
+      setApiKeysError(true);
+    } finally {
+      setLoadingApiKeys(false);
+    }
+  }, [fetchApi]);
+
   useEffect(() => {
     fetchProfile();
     fetchFamily();
     fetchBilling();
-  }, [fetchProfile, fetchFamily, fetchBilling]);
+    fetchReminders();
+    fetchApiKeys();
+  }, [fetchProfile, fetchFamily, fetchBilling, fetchReminders, fetchApiKeys]);
+
+  // Toggles/select salvam na hora (sem botão "Salvar"): atualização otimista
+  // com rollback + toast no erro.
+  async function handleUpdateReminders(patch: Partial<ReminderSettings>) {
+    if (!reminders) return;
+    const previous = reminders;
+    setReminders({ ...reminders, ...patch });
+    try {
+      const updated = await fetchApi<ReminderSettings>("/reminders/settings", {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      });
+      setReminders(updated);
+      toast.success("Preferências salvas!");
+    } catch {
+      setReminders(previous);
+      toast.error("Erro ao salvar preferências");
+    }
+  }
+
+  async function handleCreateApiKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newKeyName.trim()) return;
+    setCreatingKey(true);
+    try {
+      const created = await fetchApi<{
+        id: string;
+        name: string;
+        prefix: string;
+        key: string;
+      }>("/api-keys", {
+        method: "POST",
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      // Guarda o valor cru para o modal (única exibição) e recarrega a lista.
+      setCreatedKey({ key: created.key, name: created.name });
+      setNewKeyName("");
+      fetchApiKeys();
+    } catch {
+      toast.error("Erro ao criar a chave");
+    } finally {
+      setCreatingKey(false);
+    }
+  }
+
+  async function handleRevokeApiKey(id: string) {
+    setRevokingKeyId(id);
+    try {
+      await fetchApi(`/api-keys/${id}`, { method: "DELETE" });
+      toast.success("Chave revogada");
+      setApiKeys((prev) => prev?.filter((k) => k.id !== id) ?? null);
+    } catch {
+      toast.error("Erro ao revogar a chave");
+    } finally {
+      setRevokingKeyId(null);
+    }
+  }
 
   async function handleCheckout(cycle: BillingCycle) {
     setRedirecting(cycle);
@@ -194,12 +325,20 @@ export default function ConfiguracoesPage() {
     try {
       const phoneDigits = profilePhone.replace(/\D/g, "");
       const phone = phoneDigits.length >= 10 ? phoneDigits : null;
-      const updated = await fetchApi<UserProfile>("/users/me", {
+      const updated = await fetchApi<
+        UserProfile & { whatsappWelcomeSent?: boolean }
+      >("/users/me", {
         method: "PATCH",
         body: JSON.stringify({ name: profileName, phone }),
       });
       setProfile(updated);
-      toast.success("Perfil atualizado!");
+      // Ao vincular/trocar o número, a API manda as boas-vindas no WhatsApp na
+      // hora — o toast direciona o usuário pra conversa recém-inaugurada.
+      toast.success(
+        updated.whatsappWelcomeSent
+          ? "Perfil atualizado! Te mandei uma mensagem no WhatsApp 👋"
+          : "Perfil atualizado!",
+      );
       // Update session name if changed
       if (updated.name !== session?.user?.name) {
         updateSession({ name: updated.name });
@@ -323,6 +462,49 @@ export default function ConfiguracoesPage() {
     toast.success("Código copiado!");
   }
 
+  // Exportação dos dados (LGPD — portabilidade): baixa o JSON completo.
+  async function handleExportData() {
+    setExporting(true);
+    try {
+      const data = await fetchApi<Record<string, unknown>>("/users/me/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lemonfin-dados-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Dados exportados!");
+    } catch {
+      toast.error("Não foi possível exportar seus dados. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // Exclusão de conta (LGPD): re-autentica por senha; irreversível.
+  async function handleDeleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleting(true);
+    try {
+      await fetchApi("/users/me/delete", {
+        method: "POST",
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      toast.success("Conta excluída. Sentiremos sua falta 🍋");
+      await signOut({ callbackUrl: "/login" });
+    } catch (err) {
+      toast.error(
+        err instanceof Error && err.message.includes("Senha")
+          ? "Senha incorreta"
+          : "Não foi possível excluir a conta. Tente novamente.",
+      );
+      setDeleting(false);
+    }
+  }
+
   const roleLabel: Record<string, string> = {
     OWNER: "Dono",
     ADMIN: "Admin",
@@ -340,9 +522,11 @@ export default function ConfiguracoesPage() {
             onValueChange={setActiveTab}
             items={[
               { value: "perfil", label: "Perfil" },
+              { value: "notificacoes", label: "Notificações" },
               { value: "assinatura", label: "Assinatura" },
               { value: "seguranca", label: "Segurança" },
               { value: "familia", label: "Família" },
+              { value: "api", label: "API" },
             ]}
           />
         </div>
@@ -432,6 +616,216 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
+        {/* Meus dados (LGPD): exportação + exclusão de conta */}
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Download size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Meus dados
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm text-fg-secondary">
+              Baixe uma cópia de tudo que você registrou no LemonFin
+              (transações, cartões, metas, reservas e mais), em formato JSON.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportData}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                  Exportando...
+                </>
+              ) : (
+                <>
+                  <Download size={14} className="mr-2" />
+                  Exportar meus dados
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="h-px bg-border my-6" />
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-fg">Excluir conta</h3>
+            <p className="text-sm text-fg-secondary">
+              Apaga permanentemente sua conta e todos os seus dados —
+              transações, cartões, metas, reservas, histórico do WhatsApp e
+              assinatura. Essa ação não pode ser desfeita.
+            </p>
+
+            {!deleteOpen ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={14} className="mr-2" />
+                Excluir minha conta
+              </Button>
+            ) : (
+              <form onSubmit={handleDeleteAccount} className="space-y-3">
+                <PasswordInput
+                  id="deletePassword"
+                  label="Confirme sua senha para excluir"
+                  placeholder="Sua senha"
+                  autoComplete="current-password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  required
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    variant="danger"
+                    size="sm"
+                    disabled={deleting || deletePassword.length === 0}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin mr-2" />
+                        Excluindo...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={14} className="mr-2" />
+                        Excluir definitivamente
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDeleteOpen(false);
+                      setDeletePassword("");
+                    }}
+                    disabled={deleting}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+
+        </div>
+        )}
+
+        {activeTab === "notificacoes" && (
+        <div className="space-y-6">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Bell size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Notificações no WhatsApp
+            </h2>
+          </div>
+
+          {loadingReminders ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : remindersError || !reminders ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar suas preferências.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchReminders}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Lembretes de vencimento */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Lembrar contas a vencer
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Aviso quando uma conta fixa ou fatura de cartão estiver
+                    perto de vencer.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.billsEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ billsEnabled: checked })
+                  }
+                />
+              </div>
+
+              {reminders.billsEnabled && (
+                <div className="max-w-xs">
+                  <Select
+                    id="daysBefore"
+                    label="Antecedência do aviso"
+                    value={String(reminders.daysBefore)}
+                    onChange={(value) =>
+                      handleUpdateReminders({ daysBefore: Number(value) })
+                    }
+                    options={[1, 2, 3, 4, 5, 6, 7].map((d) => ({
+                      value: String(d),
+                      label: d === 1 ? "1 dia antes" : `${d} dias antes`,
+                    }))}
+                  />
+                </div>
+              )}
+
+              <div className="h-px bg-border" />
+
+              {/* Alertas automáticos */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Alertas automáticos
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Alerta de gastos, resumo semanal, comparativo mensal (com
+                    fechamento das metas), check-in das reservas, assinaturas
+                    detectadas e gastos fora do padrão.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.alertsEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ alertsEnabled: checked })
+                  }
+                />
+              </div>
+
+              <div className="h-px bg-border" />
+
+              {/* Resumo diário (opt-in) */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-fg">
+                    Resumo diário
+                  </p>
+                  <p className="text-sm text-fg-secondary mt-0.5">
+                    Toda manhã (8h), o que você gastou e recebeu ontem e o
+                    acumulado do mês. Dias sem movimento não geram mensagem.
+                  </p>
+                </div>
+                <Toggle
+                  checked={reminders.dailySummaryEnabled}
+                  onCheckedChange={(checked) =>
+                    handleUpdateReminders({ dailySummaryEnabled: checked })
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </div>
         </div>
         )}
 
@@ -890,6 +1284,112 @@ export default function ConfiguracoesPage() {
         </div>
         </div>
         )}
+
+        {activeTab === "api" && (
+        <div className="space-y-6">
+        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-6 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-5">
+            <Terminal size={18} className="text-lima" />
+            <h2 className="font-[family-name:var(--font-display)] text-base font-bold text-fg">
+              Chaves de API
+            </h2>
+          </div>
+
+          <p className="text-sm text-fg-secondary mb-5">
+            Crie chaves para conectar o LemonFin a agentes de IA e integrações
+            externas. Cada chave age em nome da sua conta — trate-a como uma
+            senha e revogue se suspeitar de vazamento.
+          </p>
+
+          {/* Criar nova chave */}
+          <form onSubmit={handleCreateApiKey} className="flex gap-2 mb-6">
+            <Input
+              id="newKeyName"
+              placeholder="Nome da chave (ex: meu agente)"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value.slice(0, 60))}
+              required
+            />
+            <Button
+              type="submit"
+              disabled={creatingKey || !newKeyName.trim()}
+              className="shrink-0"
+            >
+              {creatingKey ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <>
+                  <Plus size={16} className="mr-1" />
+                  Criar
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* Lista de chaves */}
+          {loadingApiKeys ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-fg-muted" />
+            </div>
+          ) : apiKeysError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-fg-secondary">
+                Não foi possível carregar suas chaves.
+              </p>
+              <Button variant="outline" size="sm" onClick={fetchApiKeys}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : !apiKeys || apiKeys.length === 0 ? (
+            <p className="text-sm text-fg-muted text-center py-6">
+              Você ainda não tem nenhuma chave.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {apiKeys.map((key) => (
+                <div
+                  key={key.id}
+                  className="flex items-center gap-3 rounded-[12px] border border-border bg-page px-4 py-3"
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <KeyRound size={14} className="text-fg-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-fg font-medium truncate">
+                      {key.name}
+                    </p>
+                    <p className="text-xs text-fg-muted truncate font-[family-name:var(--font-mono)]">
+                      {key.prefix}••••
+                    </p>
+                    <p className="text-xs text-fg-muted mt-0.5">
+                      {key.lastUsedAt
+                        ? `Usada por último em ${formatDate(key.lastUsedAt)}`
+                        : "Nunca usada"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRevokeApiKey(key.id)}
+                    disabled={revokingKeyId === key.id}
+                    className="shrink-0"
+                  >
+                    {revokingKeyId === key.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 size={14} className="mr-1.5" />
+                        Revogar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        </div>
+        )}
       </div>
 
       {setup2fa && (
@@ -907,6 +1407,15 @@ export default function ConfiguracoesPage() {
         onClose={() => setDisable2faOpen(false)}
         onDisabled={handle2faDisabled}
       />
+
+      {createdKey && (
+        <ApiKeyCreatedModal
+          open
+          apiKey={createdKey.key}
+          name={createdKey.name}
+          onClose={() => setCreatedKey(null)}
+        />
+      )}
     </>
   );
 }

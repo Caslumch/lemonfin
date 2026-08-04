@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { MonthlyBreakdown } from "@/types/transaction";
+import { formatBRLCompact as formatCurrency } from "@/lib/format";
 
 const MONTH_NAMES: Record<string, string> = {
   "01": "Jan",
@@ -24,14 +25,6 @@ const MONTH_NAMES: Record<string, string> = {
   "11": "Nov",
   "12": "Dez",
 };
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 0,
-  }).format(value);
-}
 
 interface MonthlyChartProps {
   data: MonthlyBreakdown[];
@@ -68,7 +61,12 @@ export function MonthlyChart({ data, loading }: MonthlyChartProps) {
         {/* minWidth/minHeight evita o warning "width(-1) height(-1)" do recharts
             quando o container é medido com 0 no primeiro paint (antes do
             ResizeObserver). */}
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+        <ResponsiveContainer
+          width="100%"
+          height="100%"
+          minWidth={0}
+          minHeight={0}
+        >
           <BarChart data={chartData} barSize={28}>
             <XAxis
               dataKey="label"
