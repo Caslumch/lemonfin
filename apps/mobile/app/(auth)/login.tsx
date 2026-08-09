@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
@@ -11,11 +11,17 @@ import { useTheme } from "@/theme/use-theme";
 import { accent, fonts } from "@/theme/tokens";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, verifyTotp } = useAuth();
   const { palette } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Etapa de 2FA: quando o login pede TOTP, guardamos o tempToken e trocamos de
+  // fase para pedir o código do autenticador.
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   async function handleSubmit() {
     if (!email || !password) return;
@@ -28,15 +34,75 @@ export default function LoginScreen() {
       return;
     }
     if ("totp" in res) {
-      Alert.alert(
-        "Verificação em duas etapas",
-        "Sua conta tem 2FA. A tela de verificação TOTP entra na próxima fatia.",
-      );
+      setCode("");
+      setTempToken(res.totp.tempToken);
       return;
     }
     Alert.alert("Não foi possível entrar", res.error);
   }
 
+  async function handleVerify() {
+    if (!tempToken || code.length < 6) return;
+    setVerifying(true);
+    const ok = await verifyTotp(tempToken, code);
+    setVerifying(false);
+    if (ok) {
+      router.replace("/(app)");
+      return;
+    }
+    setCode("");
+    Alert.alert("Código inválido", "Confira o código do seu app autenticador e tente de novo.");
+  }
+
+  // --- Etapa 2FA ---
+  if (tempToken) {
+    return (
+      <Screen padded bottomInset>
+        <View style={{ flex: 1, justifyContent: "center", gap: 24 }}>
+          <View style={{ gap: 12 }}>
+            <LemonLogo size={56} />
+            <View>
+              <Txt style={{ fontFamily: fonts.outfit, fontSize: 30 }}>Verificação em duas etapas</Txt>
+              <Txt variant="body" color={palette.textSecondary}>
+                Digite o código de 6 dígitos do seu app autenticador.
+              </Txt>
+            </View>
+          </View>
+
+          <View style={{ gap: 16 }}>
+            <TextField
+              label="Código"
+              value={code}
+              onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
+              keyboardType="number-pad"
+              autoFocus
+              placeholder="000000"
+            />
+            <Button
+              label="Verificar"
+              onPress={handleVerify}
+              loading={verifying}
+              disabled={code.length < 6 || verifying}
+            />
+          </View>
+
+          <Pressable
+            onPress={() => {
+              setTempToken(null);
+              setCode("");
+            }}
+            style={{ alignItems: "center" }}
+          >
+            <Txt variant="small" color={palette.textSecondary}>
+              Voltar
+            </Txt>
+          </Pressable>
+        </View>
+      </Screen>
+    );
+  }
+
+  // --- Etapa credenciais ---
   return (
     <Screen padded bottomInset>
       <View style={{ flex: 1, justifyContent: "center", gap: 24 }}>
