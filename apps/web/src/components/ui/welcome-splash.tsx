@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { LemonLogo } from "@/components/ui/lemon-logo";
 import { randomLoadingPhrase } from "@/lib/lemon-phrases";
 
-/** Tempo no ar antes de começar a sair. Curto o bastante pra não estorvar. */
-const HOLD_MS = 900;
+/**
+ * Tempo no ar antes de começar a sair. Descontando a entrada da frase, sobra
+ * ~1,4s de leitura — 900ms não dava tempo de ler e ficava no pior meio-termo:
+ * demorado demais pra passar batido, curto demais pra ser lido.
+ */
+const HOLD_MS = 1600;
 /** Duração do fade de saída — casa com animate-lemon-splash-out. */
 const FADE_MS = 420;
 
@@ -60,7 +64,7 @@ export function WelcomeSplash({ onDone }: WelcomeSplashProps) {
       {/* min-h reserva a linha: sem isso o limão pula quando a frase aparece. */}
       <p
         className="animate-fade-in-up min-h-[1.75rem] max-w-[19rem] px-6 text-center font-display text-lg text-on-dark"
-        style={{ animationDelay: "180ms" }}
+        style={{ animationDelay: "120ms" }}
       >
         {phrase}
       </p>
