@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TransactionRow } from "@/components/transaction-row";
 import { InvoicePaySheet, type PayConfig } from "@/components/invoice-pay-sheet";
+import { InvoiceReconcileSheet, type ReconcileConfig } from "@/components/invoice-reconcile-sheet";
 import {
   type CardInvoice,
   useCardInvoice,
@@ -46,6 +47,7 @@ export default function FaturaScreen() {
   const { data: inv, isLoading } = useCardInvoice(cardId, month);
   const undo = useUndoInvoicePayment();
   const [pay, setPay] = useState<PayConfig | null>(null);
+  const [reconcileCfg, setReconcileCfg] = useState<ReconcileConfig | null>(null);
 
   const outstanding = inv ? Math.max(0, inv.total - inv.paid) : 0;
   const canPay = !!inv && inv.cycleState !== "future" && outstanding > 0;
@@ -118,6 +120,13 @@ export default function FaturaScreen() {
                 onPress={() => setPay({ cardId, cycle: inv.month, defaultCents: Math.round(outstanding * 100) })}
               />
             )}
+            {inv.cycleState !== "future" && (
+              <Button
+                label="Conferir com o banco"
+                variant="outline"
+                onPress={() => setReconcileCfg({ cardId, cycle: inv.month, appTotalCents: Math.round(inv.total * 100) })}
+              />
+            )}
           </Card>
 
           {/* Pagamentos feitos (com desfazer) */}
@@ -152,6 +161,7 @@ export default function FaturaScreen() {
         </ScrollView>
       )}
       <InvoicePaySheet config={pay} onClose={() => setPay(null)} />
+      <InvoiceReconcileSheet config={reconcileCfg} onClose={() => setReconcileCfg(null)} />
     </View>
   );
 }

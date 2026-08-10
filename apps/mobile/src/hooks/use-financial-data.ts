@@ -676,3 +676,34 @@ export function useUndoInvoicePayment() {
     onSuccess: invalidate,
   });
 }
+
+// Conferência da fatura com o banco: informedTotal = total real lido no app do
+// banco. matched = bate; adjusted = faltava (criou ajuste); over = app tem a
+// mais (possível duplicata).
+export interface ReconcileResult {
+  status: "matched" | "adjusted" | "over";
+  appTotal: number;
+  informedTotal: number;
+  difference?: number;
+  adjustmentId?: string;
+}
+
+export function useReconcileInvoice() {
+  const invalidate = useInvoiceInvalidate();
+  return useMutation({
+    mutationFn: ({
+      cardId,
+      cycle,
+      informedTotal,
+    }: {
+      cardId: string;
+      cycle: string;
+      informedTotal: number;
+    }) =>
+      api<ReconcileResult>(`/cards/${cardId}/invoice/reconcile`, {
+        method: "POST",
+        body: JSON.stringify({ cycle, informedTotal }),
+      }),
+    onSuccess: invalidate,
+  });
+}
