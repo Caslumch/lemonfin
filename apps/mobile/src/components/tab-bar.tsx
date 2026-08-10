@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAtomValue } from "jotai";
@@ -7,8 +8,9 @@ import { accent } from "@/theme/tokens";
 import { haptic } from "@/lib/haptics";
 import { openSheetCountAtom } from "@/state/ui";
 
-// Tab bar flutuante estilo Nubank: pill escura flutuando sobre o conteúdo, item
-// ativo num círculo uva, ícones sem label + FAB lima central (nova transação).
+// Tab bar flutuante estilo Nubank: pill de VIDRO FOSCO (glassmorphism via
+// expo-blur) flutuando sobre o conteúdo, item ativo num círculo uva, ícones sem
+// label + FAB lima central (nova transação).
 interface Props {
   state: { index: number; routes: { key: string; name: string }[] };
   navigation: { navigate: (name: string) => void };
@@ -21,7 +23,6 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   cartoes: "card",
   perfil: "person",
 };
-const PILL = "#1C1C1E";
 
 export function TabBar({ state, navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -57,7 +58,7 @@ export function TabBar({ state, navigation }: Props) {
             <Ionicons name={icon} size={22} color="#FFFFFF" />
           </View>
         ) : (
-          <Ionicons name={`${icon}-outline` as never} size={24} color="rgba(255,255,255,0.5)" />
+          <Ionicons name={`${icon}-outline` as never} size={24} color="rgba(255,255,255,0.7)" />
         )}
       </Pressable>
     );
@@ -75,45 +76,57 @@ export function TabBar({ state, navigation }: Props) {
         paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
       }}
     >
+      {/* Container só pra sombra (overflow visível). O blur é clipado no filho. */}
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          backgroundColor: PILL,
           borderRadius: 9999,
-          paddingHorizontal: 8,
-          paddingVertical: 8,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.08)",
           shadowColor: "#000",
-          shadowOpacity: 0.35,
+          shadowOpacity: 0.3,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: 10 },
           elevation: 14,
         }}
       >
-        {tab(ORDER[0])}
-        {tab(ORDER[1])}
-        {/* FAB — nova transação */}
-        <Pressable
-          onPress={() => {
-            haptic.medium();
-            router.push("/nova");
-          }}
+        <BlurView
+          intensity={50}
+          tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
           style={{
-            width: 52,
-            height: 52,
-            borderRadius: 26,
-            marginHorizontal: 4,
-            backgroundColor: accent.primary,
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
+            paddingHorizontal: 8,
+            paddingVertical: 8,
+            borderRadius: 9999,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.14)",
+            // leve escurecida por cima do blur → contraste dos ícones em qualquer fundo
+            backgroundColor: "rgba(20,20,22,0.35)",
           }}
         >
-          <Ionicons name="add" size={28} color="#0D0D0D" />
-        </Pressable>
-        {tab(ORDER[2])}
-        {tab(ORDER[3])}
+          {tab(ORDER[0])}
+          {tab(ORDER[1])}
+          {/* FAB — nova transação */}
+          <Pressable
+            onPress={() => {
+              haptic.medium();
+              router.push("/nova");
+            }}
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              marginHorizontal: 4,
+              backgroundColor: accent.primary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="add" size={28} color="#0D0D0D" />
+          </Pressable>
+          {tab(ORDER[2])}
+          {tab(ORDER[3])}
+        </BlurView>
       </View>
     </View>
   );
