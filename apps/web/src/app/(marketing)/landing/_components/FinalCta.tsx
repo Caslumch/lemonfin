@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Button } from "./ds";
 import { CTA_URL } from "./shared";
+import { LEMON_TAGLINE } from "@/lib/lemon-phrases";
 
 export function FinalCta() {
   return (
@@ -78,6 +79,21 @@ export function FinalCta() {
             >
               7 dias de garantia · cancele quando quiser
             </div>
+            {/* Assinatura da marca. Fecha a página e reaparece no login — quem
+                vê as duas sente que é o mesmo lugar. */}
+            <p
+              style={{
+                margin: "40px 0 0",
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(17px, 2vw, 21px)",
+                fontStyle: "italic",
+                color: "var(--lemon-400)",
+                opacity: 0.85,
+                textWrap: "balance",
+              }}
+            >
+              {LEMON_TAGLINE}
+            </p>
           </div>
         </div>
       </div>
