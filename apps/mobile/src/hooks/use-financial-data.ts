@@ -441,6 +441,37 @@ export function useChangePassword() {
   });
 }
 
+// Lembretes/notificações (premium-gated: GET/PUT dão 402 sem assinatura).
+export interface ReminderSettings {
+  billsEnabled: boolean;
+  daysBefore: number;
+  alertsEnabled: boolean;
+  dailySummaryEnabled: boolean;
+}
+
+export function useReminderSettings() {
+  return useQuery({
+    queryKey: ["reminder-settings"],
+    queryFn: () => api<ReminderSettings>("/reminders/settings"),
+    retry: false, // 402 (sem premium) não deve re-tentar
+  });
+}
+
+export function useUpdateReminderSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<ReminderSettings>) =>
+      api<ReminderSettings>("/reminders/settings", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (data) => {
+      haptic.success();
+      queryClient.setQueryData(["reminder-settings"], data);
+    },
+  });
+}
+
 // Exclusão de conta (LGPD). Re-autentica por senha; o backend apaga tudo.
 export function useDeleteAccount() {
   return useMutation({
