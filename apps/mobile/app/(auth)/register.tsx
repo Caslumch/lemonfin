@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Linking, View } from "react-native";
 import { Link, router } from "expo-router";
+import { PRIVACY_URL, TERMS_URL } from "@/lib/config";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,27 @@ export default function RegisterScreen() {
             placeholder="Mínimo 8 caracteres"
           />
           <Button label="Criar conta" onPress={handleSubmit} loading={loading} />
+          <Txt variant="small" color={palette.textTertiary} style={{ textAlign: "center", lineHeight: 18 }}>
+            Ao criar conta, você concorda com os{" "}
+            <Txt
+              variant="small"
+              color={accent.success}
+              style={{ fontFamily: fonts.sansSemi }}
+              onPress={() => Linking.openURL(TERMS_URL)}
+            >
+              Termos de Uso
+            </Txt>{" "}
+            e a{" "}
+            <Txt
+              variant="small"
+              color={accent.success}
+              style={{ fontFamily: fonts.sansSemi }}
+              onPress={() => Linking.openURL(PRIVACY_URL)}
+            >
+              Política de Privacidade
+            </Txt>
+            .
+          </Txt>
         </View>
 
         <View style={{ flexDirection: "row", justifyContent: "center", gap: 5 }}>

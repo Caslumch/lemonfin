@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StackHeader } from "@/components/ui/stack-header";
 import { Card } from "@/components/ui/card";
 import { Txt } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { DeleteAccountSheet } from "@/components/delete-account-sheet";
+import { exportUserData } from "@/lib/export-data";
+import { PRIVACY_URL, TERMS_URL } from "@/lib/config";
 import {
   type BillingStatus,
   useBillingStatus,
@@ -44,6 +47,19 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function LinkRow({ label, url, first }: { label: string; url: string; first?: boolean }) {
+  const { palette } = useTheme();
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(url)}
+      style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderTopColor: palette.border }}
+    >
+      <Txt variant="bodyMedium">{label}</Txt>
+      <Ionicons name="open-outline" size={16} color={palette.textTertiary} />
+    </Pressable>
+  );
+}
+
 export default function ConfiguracoesScreen() {
   const { palette } = useTheme();
   const { user } = useAuth();
@@ -55,6 +71,18 @@ export default function ConfiguracoesScreen() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportUserData();
+    } catch (e) {
+      Alert.alert("Não foi possível exportar", (e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function submitPassword() {
     if (!current || next.length < 8) {
@@ -146,6 +174,18 @@ export default function ConfiguracoesScreen() {
           </Card>
         </View>
 
+        {/* Meus dados (LGPD — portabilidade) */}
+        <View>
+          <SectionLabel>Meus dados</SectionLabel>
+          <Card style={{ gap: 12 }}>
+            <Txt variant="small" color={palette.textSecondary}>
+              Baixe uma cópia de todos os seus dados (transações, cartões, metas,
+              reservas…) em JSON.
+            </Txt>
+            <Button label="Exportar meus dados" variant="outline" onPress={handleExport} loading={exporting} />
+          </Card>
+        </View>
+
         {/* Zona de perigo — exclusão de conta (LGPD) */}
         <View>
           <SectionLabel>Zona de perigo</SectionLabel>
@@ -154,6 +194,15 @@ export default function ConfiguracoesScreen() {
               Excluir sua conta apaga permanentemente todos os seus dados.
             </Txt>
             <Button label="Excluir conta" variant="danger" onPress={() => setDeleting(true)} />
+          </Card>
+        </View>
+
+        {/* Legal */}
+        <View>
+          <SectionLabel>Legal</SectionLabel>
+          <Card style={{ paddingVertical: 4 }}>
+            <LinkRow label="Política de Privacidade" url={PRIVACY_URL} first />
+            <LinkRow label="Termos de Uso" url={TERMS_URL} />
           </Card>
         </View>
       </ScrollView>
