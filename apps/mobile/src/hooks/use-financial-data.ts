@@ -58,13 +58,28 @@ export function useTransactions() {
   });
 }
 
-// Extrato completo com scroll infinito.
-export function useInfiniteTransactions() {
+export interface TransactionFilters {
+  type?: "INCOME" | "EXPENSE";
+  categoryId?: string;
+  search?: string;
+  startDate?: string; // ISO
+  endDate?: string; // ISO
+}
+
+// Extrato completo com scroll infinito + filtros (server-side).
+export function useInfiniteTransactions(filters: TransactionFilters = {}) {
   return useInfiniteQuery({
-    queryKey: ["transactions", "infinite"],
+    queryKey: ["transactions", "infinite", filters],
     initialPageParam: 1,
-    queryFn: ({ pageParam }) =>
-      api<Paginated<Transaction>>(`/transactions?page=${pageParam}&perPage=25`),
+    queryFn: ({ pageParam }) => {
+      const qs = new URLSearchParams({ page: String(pageParam), perPage: "25" });
+      if (filters.type) qs.set("type", filters.type);
+      if (filters.categoryId) qs.set("categoryId", filters.categoryId);
+      if (filters.search) qs.set("search", filters.search);
+      if (filters.startDate) qs.set("startDate", filters.startDate);
+      if (filters.endDate) qs.set("endDate", filters.endDate);
+      return api<Paginated<Transaction>>(`/transactions?${qs.toString()}`);
+    },
     getNextPageParam: (last) =>
       last.meta.page < last.meta.totalPages ? last.meta.page + 1 : undefined,
   });

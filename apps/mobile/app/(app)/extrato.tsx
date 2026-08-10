@@ -1,8 +1,19 @@
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, RefreshControl, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  TextInput,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Screen } from "@/components/ui/screen";
 import { Txt } from "@/components/ui/text";
+import { Chip } from "@/components/ui/chip";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { type ConfirmConfig, ConfirmSheet } from "@/components/confirm-sheet";
@@ -10,16 +21,67 @@ import { TransactionRow } from "@/components/transaction-row";
 import { haptic } from "@/lib/haptics";
 import {
   type Transaction,
+  useCategories,
   useDeleteTransaction,
   useInfiniteTransactions,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
-import { accent } from "@/theme/tokens";
+import { accent, fonts, radii } from "@/theme/tokens";
 
 type Filter = "all" | "INCOME" | "EXPENSE";
+type Period = "all" | "month" | "last";
+
+const PERIODS: { key: Period; label: string }[] = [
+  { key: "all", label: "Tudo" },
+  { key: "month", label: "Este mês" },
+  { key: "last", label: "Mês passado" },
+];
+
+function periodRange(p: Period): { startDate?: string; endDate?: string } {
+  if (p === "all") return {};
+  const now = new Date();
+  if (p === "month") {
+    return {
+      startDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+      endDate: now.toISOString(),
+    };
+  }
+  return {
+    startDate: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(),
+    endDate: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString(),
+  };
+}
+
+function useDebounced<T>(value: T, delay: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return v;
+}
 
 export default function ExtratoScreen() {
   const { palette } = useTheme();
+  const categories = useCategories();
+
+  const [type, setType] = useState<Filter>("all");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), 350);
+
+  const filters = useMemo(() => {
+    const { startDate, endDate } = periodRange(period);
+    return {
+      type: type === "all" ? undefined : type,
+      categoryId: categoryId ?? undefined,
+      search: search || undefined,
+      startDate,
+      endDate,
+    };
+  }, [type, categoryId, period, search]);
+
   const {
     data,
     isLoading,
@@ -28,15 +90,11 @@ export default function ExtratoScreen() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useInfiniteTransactions();
+  } = useInfiniteTransactions(filters);
   const del = useDeleteTransaction();
-  const [filter, setFilter] = useState<Filter>("all");
   const [confirm, setConfirm] = useState<ConfirmConfig | null>(null);
 
-  const rows = useMemo(() => {
-    const all = data?.pages.flatMap((p) => p.data) ?? [];
-    return filter === "all" ? all : all.filter((t) => t.type === filter);
-  }, [data, filter]);
+  const rows = data?.pages.flatMap((p) => p.data) ?? [];
 
   function handleEdit(tx: Transaction) {
     router.push({
@@ -69,17 +127,74 @@ export default function ExtratoScreen() {
 
   return (
     <Screen padded>
-      <View style={{ paddingTop: 8, paddingBottom: 16, gap: 14 }}>
+      <View style={{ paddingTop: 8, paddingBottom: 12, gap: 12 }}>
         <Txt variant="title">Extrato</Txt>
+
+        {/* Busca */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            backgroundColor: palette.surface,
+            borderRadius: radii.chip,
+            paddingHorizontal: 14,
+            height: 44,
+            borderWidth: 1,
+            borderColor: palette.border,
+          }}
+        >
+          <Ionicons name="search" size={18} color={palette.textTertiary} />
+          <TextInput
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder="Buscar"
+            placeholderTextColor={palette.textTertiary}
+            style={{ flex: 1, color: palette.text, fontFamily: fonts.sans, fontSize: 15 }}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {searchInput ? (
+            <Pressable onPress={() => setSearchInput("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={palette.textTertiary} />
+            </Pressable>
+          ) : null}
+        </View>
+
         <SegmentedControl<Filter>
-          value={filter}
-          onChange={setFilter}
+          value={type}
+          onChange={setType}
           segments={[
             { key: "all", label: "Geral" },
             { key: "INCOME", label: "Entradas" },
             { key: "EXPENSE", label: "Saídas" },
           ]}
         />
+
+        {/* Categoria */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: 8, paddingRight: 4 }}
+        >
+          <Chip label="Todas" active={!categoryId} onPress={() => setCategoryId(null)} />
+          {(categories.data ?? []).map((c) => (
+            <Chip key={c.id} label={c.name} active={categoryId === c.id} onPress={() => setCategoryId(c.id)} />
+          ))}
+        </ScrollView>
+
+        {/* Período */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: 8, paddingRight: 4 }}
+        >
+          {PERIODS.map((p) => (
+            <Chip key={p.key} label={p.label} active={period === p.key} onPress={() => setPeriod(p.key)} />
+          ))}
+        </ScrollView>
       </View>
 
       {isLoading ? (
@@ -88,6 +203,7 @@ export default function ExtratoScreen() {
         <FlatList
           data={rows}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item, index }) => (
             <TransactionRow
               tx={item}
@@ -103,11 +219,7 @@ export default function ExtratoScreen() {
             if (hasNextPage && !isFetchingNextPage) fetchNextPage();
           }}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={accent.primary}
-            />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={accent.primary} />
           }
           ListFooterComponent={
             isFetchingNextPage ? (
@@ -116,7 +228,7 @@ export default function ExtratoScreen() {
           }
           ListEmptyComponent={
             <Txt variant="small" color={palette.textTertiary} style={{ marginTop: 24 }}>
-              Nenhuma transação neste filtro.
+              Nenhuma transação com esses filtros.
             </Txt>
           }
         />
