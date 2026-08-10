@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
+import { armWelcomeSplash } from "@/components/layout/welcome-splash-gate";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShieldCheck, Loader2 } from "lucide-react";
@@ -76,6 +77,8 @@ export default function LoginPage() {
       return false;
     }
 
+    // Só aqui: a splash é recompensa de login, não de toda abertura do app.
+    armWelcomeSplash();
     router.push("/");
     router.refresh();
     return true;

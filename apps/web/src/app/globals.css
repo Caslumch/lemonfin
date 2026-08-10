@@ -298,6 +298,45 @@
   animation: typing-dot 1.4s ease-in-out infinite;
 }
 
+/* Tela de boas-vindas pós-login: o limão "respira" enquanto os dados vêm. */
+@keyframes lemon-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@utility animate-lemon-breathe {
+  animation: lemon-breathe 2.4s ease-in-out infinite;
+}
+
+/* Entrada do limão: surge crescendo, sem o deslocamento vertical do fade-in-up. */
+@keyframes lemon-pop-in {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@utility animate-lemon-pop-in {
+  animation: lemon-pop-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Saída: some por inteiro. Entrada bonita com saída abrupta quebra o efeito. */
+@keyframes lemon-splash-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@utility animate-lemon-splash-out {
+  animation: lemon-splash-out 420ms ease-out both;
+}
+
+/* Quem pediu menos movimento recebe a tela estática — o conteúdo é o mesmo. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-lemon-breathe,
+  .animate-lemon-pop-in,
+  .animate-lemon-splash-out {
+    animation: none;
+  }
+}
+
 /* ===== Base Styles ===== */
 
 body {
