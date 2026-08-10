@@ -9,7 +9,14 @@
 /** Assinatura da landing. Afirma em vez de perguntar — headline já foi dada. */
 export const LEMON_TAGLINE = "Com poucos limões se faz uma bela limonada.";
 
-/** Frases da tela pós-login. Curtas: ficam no ar menos de um segundo. */
+/**
+ * Frases da tela pós-login. Mantidas em ~25-38 caracteres para que qualquer
+ * sorteio caiba no mesmo tempo de tela — frase curta demais desperdiça o hold,
+ * longa demais não termina de ser lida.
+ *
+ * A pergunta original abre a lista de propósito: é a frase que deu origem ao
+ * tema e a única que pode ser mais longa sem parecer deslocada.
+ */
 export const LEMON_LOADING_PHRASES = [
   "Com quantos limões se faz uma limonada?",
   "Espremendo seus números...",
@@ -18,7 +25,7 @@ export const LEMON_LOADING_PHRASES = [
   "Separando os limões maduros...",
   "Adoçando na medida certa...",
   "Contando cada centavo...",
-  "Preparando sua limonada financeira...",
+  "Sua limonada tá saindo...",
 ] as const;
 
 /** Sorteia uma frase. Chamada no client, nunca durante render de servidor. */
