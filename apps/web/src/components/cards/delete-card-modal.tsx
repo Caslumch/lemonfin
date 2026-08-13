@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface DeleteCardModalProps {
@@ -65,16 +65,23 @@ export function DeleteCardModal({
                 variant="outline"
                 className="flex-1"
                 onClick={onClose}
+                disabled={loading}
               >
                 Cancelar
               </Button>
               <Button
                 variant="danger"
-                className="flex-1"
+                className="flex-1 gap-1.5"
                 disabled={loading}
                 onClick={handleConfirm}
               >
-                {loading ? "Removendo..." : "Remover"}
+                {loading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Removendo
+                  </>
+                ) : (
+                  "Remover"
+                )}
               </Button>
             </div>
           </div>

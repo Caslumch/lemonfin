@@ -26,6 +26,13 @@ export const queryKeys = {
   // distinta da lista simples usada em selects de outras telas.
   managedCategories: ["managed-categories"] as const,
   cards: ["cards"] as const,
+  // A fatura depende do cartão e dos filtros do ciclo (mês, página, ordenação,
+  // categoria, parcelamento, busca). Cada combinação tem seu próprio cache, e
+  // invalidar pelo prefixo ["invoice"] atinge todas.
+  invoice: (cardId?: string, filters?: object) =>
+    cardId
+      ? (["invoice", cardId, filters ?? null] as const)
+      : (["invoice"] as const),
   goals: ["goals"] as const,
   budget: ["budget"] as const,
   reserves: ["reserves"] as const,
@@ -64,6 +71,17 @@ export function invalidateCategories(qc: QueryClient) {
 
 /** Cartões aparecem no painel e são usados em transações/recorrentes. */
 export function invalidateCards(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: queryKeys.cards });
+  qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+}
+
+/**
+ * Pagar/desfazer/conferir mexe no ciclo inteiro da fatura, então invalida pelo
+ * prefixo — todas as combinações de mês/filtro em cache. O badge de estado e o
+ * total do cartão no painel também mudam.
+ */
+export function invalidateInvoice(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: queryKeys.invoice() });
   qc.invalidateQueries({ queryKey: queryKeys.cards });
   qc.invalidateQueries({ queryKey: queryKeys.dashboard });
 }
