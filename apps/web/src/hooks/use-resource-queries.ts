@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useApi } from "@/hooks/use-api";
 import { queryKeys } from "@/lib/query-keys";
+import type { CardInvoice } from "@/types/card";
 import type { InsightsData } from "@/types/transaction";
 import type { ManagedCategory } from "@/types/category";
 import type { Goal } from "@/types/goal";
@@ -59,6 +60,52 @@ export function useReserves() {
     queryKey: queryKeys.reserves,
     enabled: Boolean(token),
     queryFn: () => fetchApi<Reserve[]>("/reserves"),
+  });
+}
+
+export interface InvoiceFilters {
+  month: string;
+  page: number;
+  orderBy: string;
+  order: string;
+  installment?: string;
+  categoryId?: string;
+  search?: string;
+}
+
+/**
+ * Fatura de um cartão em um ciclo, com filtros.
+ *
+ * `placeholderData: keepPreviousData` é o ponto central: trocar mês, página,
+ * filtro ou busca mantém a fatura anterior na tela enquanto a nova chega, em
+ * vez de colapsar tudo para um "Carregando...". Sem isso, digitar na busca
+ * fazia a tela inteira sumir e voltar a cada tecla (o badge, os blocos de
+ * pagamento/conferência e a própria paginação some junto, porque todos
+ * dependem de `invoice`).
+ *
+ * Use `isPending` para o primeiro load (não há o que mostrar) e `isFetching`
+ * para revalidações (o conteúdo anterior continua na tela).
+ */
+export function useCardInvoice(cardId: string, filters: InvoiceFilters) {
+  const { fetchApi, token } = useApi();
+  return useQuery<CardInvoice>({
+    queryKey: queryKeys.invoice(cardId, filters),
+    enabled: Boolean(token) && Boolean(cardId),
+    placeholderData: keepPreviousData,
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      qs.set("month", filters.month);
+      qs.set("page", String(filters.page));
+      qs.set("perPage", "20");
+      qs.set("orderBy", filters.orderBy);
+      qs.set("order", filters.order);
+      if (filters.installment && filters.installment !== "all") {
+        qs.set("installment", filters.installment);
+      }
+      if (filters.categoryId) qs.set("categoryId", filters.categoryId);
+      if (filters.search) qs.set("search", filters.search);
+      return fetchApi<CardInvoice>(`/cards/${cardId}/invoice?${qs.toString()}`);
+    },
   });
 }
 

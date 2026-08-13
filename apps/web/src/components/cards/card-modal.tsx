@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,15 +286,24 @@ export function CardModal({
                 variant="outline"
                 className="flex-1"
                 onClick={onClose}
+                disabled={loading}
               >
                 Cancelar
               </Button>
-              <Button type="submit" className="flex-1" disabled={loading}>
-                {loading
-                  ? "Salvando..."
-                  : isEditing
-                    ? "Salvar"
-                    : "Adicionar"}
+              <Button
+                type="submit"
+                className="flex-1 gap-1.5"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Salvando
+                  </>
+                ) : isEditing ? (
+                  "Salvar"
+                ) : (
+                  "Adicionar"
+                )}
               </Button>
             </div>
           </form>

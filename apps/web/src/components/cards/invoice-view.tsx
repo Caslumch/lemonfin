@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useApi } from "@/hooks/use-api";
 import { ErrorState } from "@/components/ui/error-state";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { useCategories } from "@/hooks/use-transactions-data";
-import { invalidateTransactionData } from "@/lib/query-keys";
+import { useCardInvoice } from "@/hooks/use-resource-queries";
+import {
+  invalidateInvoice,
+  invalidateTransactionData,
+} from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
-import type { CardInvoice } from "@/types/card";
 
 interface InvoiceViewProps {
   cardId: string;
@@ -120,22 +124,54 @@ function CycleBadge({
   );
 }
 
+/**
+ * Skeleton da lista de lançamentos.
+ *
+ * Espelha a estrutura real (card único com divide-y, itens px-4 py-3 e a linha
+ * de Total no rodapé) em vez de usar o ListSkeleton genérico, que é feito de
+ * cards soltos e mais altos — encaixá-lo aqui trocaria um pulo de layout por
+ * outro.
+ */
+function InvoiceListSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="rounded-[20px] border border-border bg-surface shadow-xs divide-y divide-border">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex animate-pulse items-center justify-between px-4 py-3"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="h-8 w-8 shrink-0 rounded-[12px] bg-muted" />
+            <div className="space-y-2">
+              <div className="h-4 w-40 rounded bg-muted" />
+              <div className="h-3 w-24 rounded bg-muted" />
+            </div>
+          </div>
+          <div className="h-4 w-20 shrink-0 rounded bg-muted" />
+        </div>
+      ))}
+      <div className="flex animate-pulse items-center justify-between bg-subtle px-4 py-3">
+        <div className="h-4 w-12 rounded bg-muted" />
+        <div className="h-4 w-24 rounded bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const { fetchApi } = useApi();
   const queryClient = useQueryClient();
   const { data: categories } = useCategories();
-  const [invoice, setInvoice] = useState<CardInvoice | null>(null);
-  // Distingue "falha ao carregar" de "fatura vazia" — sem isto o erro mostrava
-  // "Nenhuma transação neste período", como se o cartão não tivesse compras.
-  const [errored, setErrored] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
+  // Id do pagamento sendo desfeito — dá feedback no botão certo quando há
+  // vários pagamentos listados.
+  const [undoingId, setUndoingId] = useState<string | null>(null);
   // Conferência da fatura: campo do total informado + resultado da comparação.
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileTotal, setReconcileTotal] = useState("");
   const [reconcileSubmitting, setReconcileSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => {
     // Mês em UTC (não local): o backend deriva o ciclo em UTC e as transações
     // são gravadas ao meio-dia UTC. Usar o mês LOCAL abriria o mês anterior nas
@@ -162,46 +198,31 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     setPage(1);
   }, [month, sort, categoryId, installment, debouncedSearch]);
 
-  const fetchInvoice = useCallback(async () => {
-    setLoading(true);
-    setErrored(false);
-    try {
-      const { orderBy, order } = SORT_PARAMS[sort];
-      const params = new URLSearchParams();
-      params.set("month", month);
-      params.set("page", String(page));
-      params.set("perPage", "20");
-      params.set("orderBy", orderBy);
-      params.set("order", order);
-      if (installment !== "all") params.set("installment", installment);
-      if (categoryId) params.set("categoryId", categoryId);
-      if (debouncedSearch) params.set("search", debouncedSearch);
-
-      const data = await fetchApi<CardInvoice>(
-        `/cards/${cardId}/invoice?${params.toString()}`,
-      );
-      setInvoice(data);
-    } catch (error) {
-      logApiError("load:invoice", error);
-      setInvoice(null);
-      setErrored(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    fetchApi,
-    cardId,
+  const invoiceQuery = useCardInvoice(cardId, {
     month,
     page,
-    sort,
-    categoryId,
+    ...SORT_PARAMS[sort],
     installment,
-    debouncedSearch,
-  ]);
+    categoryId,
+    search: debouncedSearch,
+  });
+
+  const invoice = invoiceQuery.data ?? null;
+  // Distingue "falha ao carregar" de "fatura vazia" — sem isto o erro mostrava
+  // "Nenhuma transação neste período", como se o cartão não tivesse compras.
+  const errored = Boolean(invoiceQuery.error);
+  // Primeiro load: não há nada em cache para mostrar, então vai skeleton.
+  // Revalidação (trocar mês/filtro/página) mantém a fatura anterior na tela.
+  const loading = invoiceQuery.isPending;
+  const refreshing = invoiceQuery.isFetching;
 
   useEffect(() => {
-    fetchInvoice();
-  }, [fetchInvoice]);
+    if (invoiceQuery.error) logApiError("load:invoice", invoiceQuery.error);
+  }, [invoiceQuery.error]);
+
+  // `refetch` é estável no React Query, então serve direto como handler de
+  // retry/recarregar — sem useCallback envolvendo a query inteira.
+  const fetchInvoice = invoiceQuery.refetch;
 
   function navigateMonth(delta: number) {
     const [y, m] = month.split("-").map(Number);
@@ -234,7 +255,10 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       });
       toast.success("Pagamento registrado");
       setPayOpen(false);
-      await fetchInvoice();
+      // Invalida em vez de refetch manual: a fatura atual continua na tela e é
+      // substituída quando a nova chega, sem piscar um "Carregando..." por cima
+      // do toast de sucesso.
+      invalidateInvoice(queryClient);
       // A despesa de pagamento afeta saldo/gastos/transações.
       invalidateTransactionData(queryClient);
     } catch (error) {
@@ -246,16 +270,22 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   }
 
   async function handleUndoPayment(paymentId: string) {
+    // Guarda o id em estado: sem isto o botão não tinha feedback nenhum e dois
+    // cliques rápidos disparavam dois DELETE.
+    if (undoingId) return;
+    setUndoingId(paymentId);
     try {
       await fetchApi(`/cards/invoice-payments/${paymentId}`, {
         method: "DELETE",
       });
       toast.success("Pagamento desfeito");
-      await fetchInvoice();
+      invalidateInvoice(queryClient);
       invalidateTransactionData(queryClient);
     } catch (error) {
       logApiError("undo:invoice-payment", error);
       toast.error("Erro ao desfazer pagamento");
+    } finally {
+      setUndoingId(null);
     }
   }
 
@@ -290,7 +320,7 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       }
       setReconcileOpen(false);
       setReconcileTotal("");
-      await fetchInvoice();
+      invalidateInvoice(queryClient);
       invalidateTransactionData(queryClient);
     } catch (error) {
       logApiError("reconcile:invoice", error);
@@ -298,6 +328,12 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
     } finally {
       setReconcileSubmitting(false);
     }
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setCategoryId("");
+    setInstallment("all");
   }
 
   const monthLabel = (() => {
@@ -313,7 +349,9 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   // não consegue limpar o filtro que esvaziou a lista).
   const hasActiveFilters =
     Boolean(debouncedSearch) || Boolean(categoryId) || installment !== "all";
-  const showControls = transactions.length > 0 || hasActiveFilters;
+  // Mantém a barra visível durante o primeiro load: escondê-la e trazê-la de
+  // volta quando os dados chegam empurra todo o conteúdo abaixo.
+  const showControls = transactions.length > 0 || hasActiveFilters || loading;
 
   return (
     <div className="space-y-4">
@@ -325,13 +363,21 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-fg">
           Fatura — {cardName}
         </h2>
+        {/* A fatura era a única tela do dashboard sem recarregar — o header da
+            página some ao entrar aqui, então o botão mora no header interno. */}
+        <div className="ml-auto">
+          <RefreshButton onRefresh={fetchInvoice} refreshing={refreshing} />
+        </div>
       </div>
 
       {/* Month navigation */}
       <div className="flex items-center justify-between rounded-[20px] border border-border bg-surface shadow-xs px-4 py-3">
+        {/* disabled durante o fetch: sem isto, cliques repetidos disparavam
+            requests concorrentes cujas respostas podiam chegar fora de ordem. */}
         <button
           onClick={() => navigateMonth(-1)}
-          className="text-fg-muted hover:text-fg cursor-pointer"
+          disabled={refreshing}
+          className="text-fg-muted hover:text-fg cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft size={20} />
         </button>
@@ -340,7 +386,8 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
         </span>
         <button
           onClick={() => navigateMonth(1)}
-          className="text-fg-muted hover:text-fg cursor-pointer"
+          disabled={refreshing}
+          className="text-fg-muted hover:text-fg cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight size={20} />
         </button>
@@ -430,13 +477,11 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
       {errored ? (
         <ErrorState
           onRetry={fetchInvoice}
-          retrying={loading}
+          retrying={refreshing}
           description="Não foi possível carregar esta fatura. Verifique sua conexão e tente de novo."
         />
       ) : loading ? (
-        <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
-          <p className="text-fg-muted text-sm">Carregando...</p>
-        </div>
+        <InvoiceListSkeleton />
       ) : transactions.length === 0 ? (
         <div className="rounded-[20px] border border-border bg-surface shadow-xs p-8 text-center">
           <p className="text-fg-muted text-sm">
@@ -444,6 +489,18 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
               ? "Nenhum lançamento corresponde aos filtros."
               : "Nenhuma transação neste período."}
           </p>
+          {/* Sem esta saída o usuário fica olhando uma lista vazia sem saber
+              que um filtro a esvaziou. */}
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={clearFilters}
+            >
+              Limpar filtros
+            </Button>
+          )}
         </div>
       ) : (
         <div className="rounded-[20px] border border-border bg-surface shadow-xs divide-y divide-border">
@@ -548,8 +605,19 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                   />
                 </div>
               </label>
-              <Button size="sm" onClick={handlePay} disabled={paySubmitting}>
-                {paySubmitting ? "Salvando..." : "Confirmar"}
+              <Button
+                size="sm"
+                onClick={handlePay}
+                disabled={paySubmitting}
+                className="gap-1.5"
+              >
+                {paySubmitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Salvando
+                  </>
+                ) : (
+                  "Confirmar"
+                )}
               </Button>
               <Button
                 variant="ghost"
@@ -577,10 +645,19 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                   </span>
                   <button
                     onClick={() => handleUndoPayment(p.id)}
-                    className="flex items-center gap-1 text-xs text-fg-muted hover:text-danger cursor-pointer"
+                    disabled={undoingId !== null}
+                    className="flex items-center gap-1 text-xs text-fg-muted hover:text-danger cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-fg-muted"
                     title="Desfazer pagamento"
                   >
-                    <X size={14} /> Desfazer
+                    {undoingId === p.id ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Desfazendo
+                      </>
+                    ) : (
+                      <>
+                        <X size={14} /> Desfazer
+                      </>
+                    )}
                   </button>
                 </div>
               ))}
@@ -656,8 +733,15 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                   size="sm"
                   onClick={handleReconcile}
                   disabled={reconcileSubmitting}
+                  className="gap-1.5"
                 >
-                  {reconcileSubmitting ? "Conferindo..." : "Conferir"}
+                  {reconcileSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Conferindo
+                    </>
+                  ) : (
+                    "Conferir"
+                  )}
                 </Button>
                 <Button
                   variant="ghost"

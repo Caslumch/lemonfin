@@ -7,7 +7,7 @@ import { CreditCard, Pencil, Trash2 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/ui/refresh-button";
-import { ListSkeleton } from "@/components/ui/list-skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import { CardModal } from "@/components/cards/card-modal";
 import { DeleteCardModal } from "@/components/cards/delete-card-modal";
 import { InvoiceView } from "@/components/cards/invoice-view";
@@ -17,6 +17,33 @@ import { useCards } from "@/hooks/use-transactions-data";
 import { invalidateCards } from "@/lib/query-keys";
 import { logApiError } from "@/lib/log-error";
 import type { Card } from "@/types/card";
+
+/**
+ * Skeleton no formato do grid de cartões.
+ *
+ * O ListSkeleton genérico é uma pilha de linhas horizontais baixas; o conteúdo
+ * real é um grid de cartões altos. Usar aquele aqui trocava um pulo de layout
+ * por outro, então este espelha a proporção do CreditCardVisual e a linha de
+ * ações abaixo dele.
+ */
+function CardsGridSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <div className="animate-pulse rounded-[18px] border border-border bg-muted h-[188px]" />
+          <div className="flex animate-pulse items-center justify-between px-1">
+            <div className="h-3 w-16 rounded bg-muted" />
+            <div className="flex gap-1">
+              <div className="h-7 w-7 rounded-full bg-muted" />
+              <div className="h-7 w-7 rounded-full bg-muted" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function CartoesPage() {
   const { fetchApi } = useApi();
@@ -131,7 +158,15 @@ export default function CartoesPage() {
 
       <div className="px-5 pb-8 pt-2 md:px-8">
         {loading ? (
-          <ListSkeleton />
+          <CardsGridSkeleton />
+        ) : cardsQuery.error ? (
+          /* Sem isto a falha caía no empty state e o usuário lia "Nenhum cartão
+             cadastrado" — erro indistinguível de conta vazia. */
+          <ErrorState
+            onRetry={() => cardsQuery.refetch()}
+            retrying={cardsQuery.isFetching}
+            description="Não foi possível carregar seus cartões. Verifique sua conexão e tente de novo."
+          />
         ) : cards.length === 0 ? (
           <div className="rounded-[20px] border border-border bg-surface shadow-xs p-12 text-center">
             <CreditCard size={40} className="mx-auto text-fg-muted mb-3" />
