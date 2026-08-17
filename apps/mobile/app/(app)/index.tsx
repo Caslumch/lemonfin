@@ -13,11 +13,13 @@ import { ForecastCard } from "@/components/dashboard/forecast-card";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { ReceitaSparkline } from "@/components/charts/receita-sparkline";
 import { MonthlyBarChart } from "@/components/charts/monthly-bar-chart";
+import { CategoryBreakdownCard } from "@/components/dashboard/category-breakdown-card";
 import { CardsPreview } from "@/components/dashboard/cards-preview";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { useAuth } from "@/providers/auth-provider";
 import {
   useCards,
+  useCategoryBreakdown,
   useForecast,
   useInsights,
   useMonthly,
@@ -70,6 +72,7 @@ export default function HomeScreen() {
   const forecast = useForecast();
   const insights = useInsights();
   const cards = useCards();
+  const breakdown = useCategoryBreakdown();
 
   const income = Number(summary.data?.income ?? 0);
   const expense = Number(summary.data?.expense ?? 0);
@@ -93,6 +96,7 @@ export default function HomeScreen() {
     monthly.refetch();
     forecast.refetch();
     insights.refetch();
+    breakdown.refetch();
   };
 
   return (
@@ -231,6 +235,11 @@ export default function HomeScreen() {
                 </Txt>
                 <MonthlyBarChart data={months} />
               </Card>
+            )}
+
+            {/* Gastos por categoria (mês atual) */}
+            {breakdown.data && breakdown.data.length > 0 && (
+              <CategoryBreakdownCard data={breakdown.data} />
             )}
 
             {/* Forecast */}

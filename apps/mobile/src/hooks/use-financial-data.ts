@@ -202,6 +202,29 @@ export function useMonthly(months = 6) {
   });
 }
 
+// Gastos (EXPENSE) por categoria num período. Já vem ordenado desc pela API.
+export interface CategoryBreakdown {
+  categoryId: string;
+  category: (TransactionCategory & { slug?: string }) | null;
+  total: number;
+  count: number;
+}
+
+// Breakdown do MÊS ATUAL por categoria (dashboard). Sem datas = tudo; passamos
+// o range do mês corrente.
+export function useCategoryBreakdown() {
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const endDate = now.toISOString();
+  return useQuery({
+    queryKey: ["by-category", startDate.slice(0, 7)],
+    queryFn: () =>
+      api<CategoryBreakdown[]>(
+        `/transactions/by-category?startDate=${startDate}&endDate=${endDate}`,
+      ),
+  });
+}
+
 export interface PendingRecurrence {
   id: string;
   description: string;
