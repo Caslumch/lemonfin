@@ -1,6 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomSheet, {
@@ -42,7 +45,7 @@ function dateLabel(d: Date): string {
 }
 
 export default function NovaScreen() {
-  const { palette } = useTheme();
+  const { palette, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheet>(null);
 
@@ -78,18 +81,16 @@ export default function NovaScreen() {
   const showInstallments = !isEdit && isExpense && !!cardId;
   const parcelado = showInstallments && installments >= 2;
   const canSave = amount > 0 && !!categoryId && !pending;
-  const isToday = startOfDay(date).getTime() >= startOfDay(new Date()).getTime();
+  const [showPicker, setShowPicker] = useState(false);
 
   const cardList = cards.data ?? [];
   const close = () => sheetRef.current?.close();
 
-  function shiftDate(days: number) {
-    setDate((d) => {
-      const next = new Date(d);
-      next.setDate(next.getDate() + days);
-      if (next.getTime() > Date.now()) return d; // não deixa ir pro futuro
-      return next;
-    });
+  // No Android o picker é um diálogo (fecha sozinho); no iOS é inline (fica até
+  // o usuário tocar em "Pronto"). event.type === "dismissed" = cancelou.
+  function onDateChange(event: DateTimePickerEvent, picked?: Date) {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (event.type === "set" && picked) setDate(picked);
   }
 
   function handleSave() {
@@ -244,15 +245,28 @@ export default function NovaScreen() {
             {/* Data */}
             <View style={{ gap: 8 }}>
               <Txt variant="caption" color={palette.textTertiary}>Data</Txt>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: palette.border, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 6 }}>
-                <Pressable onPress={() => shiftDate(-1)} hitSlop={8} style={{ padding: 8 }}>
-                  <Ionicons name="chevron-back" size={20} color={palette.text} />
-                </Pressable>
+              <Pressable
+                onPress={() => setShowPicker((s) => !s)}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: palette.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 }}
+              >
                 <Txt variant="bodyMedium">{dateLabel(date)}</Txt>
-                <Pressable onPress={() => shiftDate(1)} hitSlop={8} disabled={isToday} style={{ padding: 8, opacity: isToday ? 0.3 : 1 }}>
-                  <Ionicons name="chevron-forward" size={20} color={palette.text} />
+                <Ionicons name="calendar-outline" size={18} color={palette.textSecondary} />
+              </Pressable>
+              {showPicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  maximumDate={new Date()}
+                  onChange={onDateChange}
+                  themeVariant={isDark ? "dark" : "light"}
+                />
+              )}
+              {showPicker && Platform.OS === "ios" && (
+                <Pressable onPress={() => setShowPicker(false)} style={{ alignSelf: "flex-end", paddingVertical: 6, paddingHorizontal: 12 }}>
+                  <Txt variant="small" color={accent.uva} style={{ fontFamily: fonts.sansSemi }}>Pronto</Txt>
                 </Pressable>
-              </View>
+              )}
             </View>
           </BottomSheetScrollView>
 
