@@ -21,6 +21,7 @@ import {
   useCards,
   useCategories,
   useCreateTransaction,
+  useUpdateInstallmentGroup,
   useUpdateTransaction,
 } from "@/hooks/use-financial-data";
 import { useTheme } from "@/theme/use-theme";
@@ -57,28 +58,32 @@ export default function NovaScreen() {
     description?: string;
     cardId?: string;
     date?: string;
+    installments?: string; // presente (>=2) → edição de grupo de parcelas
   }>();
   const isEdit = !!params.id;
+  const groupInstallments = Number(params.installments ?? "0");
+  const isGroupEdit = isEdit && groupInstallments >= 2;
 
   const categories = useCategories();
   const cards = useCards();
   const create = useCreateTransaction();
   const update = useUpdateTransaction();
-  const pending = create.isPending || update.isPending;
+  const updateGroup = useUpdateInstallmentGroup();
+  const pending = create.isPending || update.isPending || updateGroup.isPending;
 
   const [raw, setRaw] = useState(params.cents ?? "");
   const [type, setType] = useState<TxType>(params.type === "INCOME" ? "INCOME" : "EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(params.categoryId || null);
   const [description, setDescription] = useState(params.description ?? "");
   const [cardId, setCardId] = useState<string | null>(params.cardId || null);
-  const [installments, setInstallments] = useState(1);
+  const [installments, setInstallments] = useState(isGroupEdit ? groupInstallments : 1);
   const [date, setDate] = useState<Date>(params.date ? new Date(params.date) : new Date());
 
   const cents = Number(raw || "0");
   const amount = cents / 100;
   const isExpense = type === "EXPENSE";
-  // Parcelamento só faz sentido criando uma saída no cartão.
-  const showInstallments = !isEdit && isExpense && !!cardId;
+  // Parcelamento: ao criar saída no cartão, ou editando um grupo de parcelas.
+  const showInstallments = isGroupEdit || (!isEdit && isExpense && !!cardId);
   const parcelado = showInstallments && installments >= 2;
   const canSave = amount > 0 && !!categoryId && !pending;
   const [showPicker, setShowPicker] = useState(false);
@@ -95,6 +100,34 @@ export default function NovaScreen() {
 
   function handleSave() {
     if (!canSave || !categoryId) return;
+    const onDone = {
+      onSuccess: () => close(),
+      onError: (err: unknown) => Alert.alert("Não foi possível salvar", (err as Error).message),
+    };
+
+    // Edição de grupo de parcelas: recria as N parcelas com o total redividido.
+    if (isGroupEdit && params.id) {
+      if (installments < 2) {
+        Alert.alert("Parcelas inválidas", "Uma compra parcelada precisa de 2 ou mais parcelas.");
+        return;
+      }
+      updateGroup.mutate(
+        {
+          id: params.id,
+          input: {
+            amount, // total
+            description: description.trim() || undefined,
+            date: date.toISOString(),
+            categoryId,
+            cardId: cardId ?? null,
+            installments,
+          },
+        },
+        onDone,
+      );
+      return;
+    }
+
     const input: CreateTransactionInput = {
       amount,
       type,
@@ -108,10 +141,6 @@ export default function NovaScreen() {
     } else if (isEdit) {
       input.cardId = null; // limpa o cartão na edição
     }
-    const onDone = {
-      onSuccess: () => close(),
-      onError: (err: unknown) => Alert.alert("Não foi possível salvar", (err as Error).message),
-    };
     if (isEdit && params.id) update.mutate({ id: params.id, input }, onDone);
     else create.mutate(input, onDone);
   }
@@ -141,7 +170,9 @@ export default function NovaScreen() {
         <View style={{ flex: 1 }}>
           {/* Header */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 2, paddingBottom: 10 }}>
-            <Txt variant="title">{isEdit ? "Editar transação" : "Nova transação"}</Txt>
+            <Txt variant="title">
+              {isGroupEdit ? "Editar parcelamento" : isEdit ? "Editar transação" : "Nova transação"}
+            </Txt>
             <Pressable onPress={close} hitSlop={10}>
               <Ionicons name="close" size={26} color={palette.textSecondary} />
             </Pressable>
@@ -153,14 +184,17 @@ export default function NovaScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <SegmentedControl<TxType>
-              value={type}
-              onChange={setType}
-              segments={[
-                { key: "EXPENSE", label: "Saída" },
-                { key: "INCOME", label: "Entrada" },
-              ]}
-            />
+            {/* Grupo de parcelas é sempre saída — sem seletor de tipo. */}
+            {!isGroupEdit && (
+              <SegmentedControl<TxType>
+                value={type}
+                onChange={setType}
+                segments={[
+                  { key: "EXPENSE", label: "Saída" },
+                  { key: "INCOME", label: "Entrada" },
+                ]}
+              />
+            )}
 
             {/* Valor */}
             <View>
@@ -230,7 +264,8 @@ export default function NovaScreen() {
               <View style={{ gap: 8 }}>
                 <Txt variant="caption" color={palette.textTertiary}>Parcelas</Txt>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
-                  {INSTALLMENT_OPTIONS.map((n) => (
+                  {/* Editando um grupo: mantém parcelado (sem "À vista"/1x). */}
+                  {INSTALLMENT_OPTIONS.filter((n) => !isGroupEdit || n >= 2).map((n) => (
                     <Chip
                       key={n}
                       label={n === 1 ? "À vista" : `${n}x`}
