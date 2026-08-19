@@ -33,7 +33,7 @@ services:
       NODE_ENV: production
       # Rede interna do Docker: o MCP fala com a API sem sair para a internet.
       LEMONFIN_API_URL: http://lemonfin-api:3001
-      SELF_URL: https://mcp.wmode.org
+      SELF_URL: https://mcplemon.wmode.org
     depends_on:
       - api
     networks:
