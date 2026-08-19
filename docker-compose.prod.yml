@@ -1,0 +1,47 @@
+# Produção na VPS (Contabo), ao lado do wmode-connect. O Postgres é gerenciado
+# (Neon) — não há banco em container.
+#
+# Nenhum serviço publica porta no host: quem termina o TLS e faz o proxy é o
+# Caddy que já roda na VPS para o WMode (containers wmode-api-*). Por isso os
+# containers entram na rede externa dele — o Caddy os alcança pelo nome do
+# serviço, sem passar pela internet.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: lemonfin-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+    networks:
+      - web
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: lemonfin-mcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      # Rede interna do Docker: o MCP fala com a API sem sair para a internet.
+      LEMONFIN_API_URL: http://lemonfin-api:3001
+      SELF_URL: https://mcp.wmode.org
+    depends_on:
+      - api
+    networks:
+      - web
+
+# Rede criada pelo compose do wmode-connect. Confirmar o nome real com
+# `docker network ls` e ajustar se necessário.
+networks:
+  web:
+    external: true
+    name: wmode-api_default
