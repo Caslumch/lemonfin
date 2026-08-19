@@ -1,0 +1,42 @@
+# Imagem de produção da API (NestJS) para deploy em VPS via Docker.
+# Espelha a estratégia do wmode-connect: multi-stage, node:20-alpine, pnpm 9.15.9
+# (o pnpm latest exige Node 22+). O Postgres é gerenciado (Neon) — nada de banco
+# em container aqui; ver docker-compose.prod.yml.
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+
+# --- Build ---
+# O .npmrc traz shamefully-hoist=true e precisa vir junto, senão a resolução de
+# módulos no container difere da de desenvolvimento.
+FROM base AS build
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/mcp/package.json ./apps/mcp/
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+RUN pnpm install --frozen-lockfile
+COPY . .
+# O generate roda pelo workspace da api. Invocado da raiz (`pnpm prisma
+# generate`), o CLI resolve um peer-set de TypeScript diferente do que a api usa
+# e grava o client num diretório .pnpm que o `nest build` não lê — o resultado
+# são 177 erros de "implicitly any" por tipos do Prisma ausentes.
+RUN pnpm --filter api exec prisma generate --schema=../../prisma/schema.prisma && pnpm --filter api build
+
+# --- Production ---
+# openssl: exigido pelos engines do Prisma no Alpine.
+FROM base AS production
+RUN apk add --no-cache openssl
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/package.json ./
+COPY --from=build /app/apps/api/package.json ./apps/api/
+COPY --from=build /app/prisma ./prisma
+
+EXPOSE 3001
+# migrate deploy usa DIRECT_URL (conexão sem pooler) — ver prisma/schema.prisma.
+CMD ["sh", "-c", "npx prisma migrate deploy && node apps/api/dist/main.js"]

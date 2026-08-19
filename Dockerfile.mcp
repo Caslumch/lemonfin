@@ -1,0 +1,36 @@
+# Imagem de produção do servidor MCP remoto. Mais simples que a API: TypeScript
+# puro (tsc), sem Prisma — o MCP fala com a API via HTTP, não com o banco.
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+
+# --- Dependencies ---
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/mcp/package.json ./apps/mcp/
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+RUN pnpm install --frozen-lockfile
+
+# --- Build ---
+FROM base AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/mcp/node_modules ./apps/mcp/node_modules
+COPY . .
+RUN pnpm --filter mcp build
+
+# --- Production ---
+FROM base AS production
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/mcp/node_modules ./apps/mcp/node_modules
+COPY --from=build /app/apps/mcp/dist ./apps/mcp/dist
+COPY --from=build /app/package.json ./
+COPY --from=build /app/apps/mcp/package.json ./apps/mcp/
+
+EXPOSE 3002
+CMD ["node", "apps/mcp/dist/main.js"]
