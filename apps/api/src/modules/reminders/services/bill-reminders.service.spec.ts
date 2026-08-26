@@ -48,10 +48,22 @@ function buildService(overrides: {
       .mockResolvedValue({ total: overrides.cardTotal ?? 0, count: 1 }),
   };
   const wmodeClient = {
-    sendMessage: jest.fn().mockImplementation(({ content }) => {
-      if (overrides.sendFails) return Promise.reject(new Error('wmode down'));
-      sent.push(content);
-      return Promise.resolve();
+    // Envio em lote: recebe [{to, content, ref}] e devolve o resultado por item.
+    // sendFails simula falha TOTAL do lote (null); senão, tudo enfileirado.
+    sendBulk: jest.fn().mockImplementation((messages: { content: string; ref: unknown }[]) => {
+      if (overrides.sendFails) return Promise.resolve(null);
+      messages.forEach((m) => sent.push(m.content));
+      return Promise.resolve({
+        total: messages.length,
+        queued: messages.length,
+        rejected: 0,
+        results: messages.map((m, index) => ({
+          index,
+          to: '',
+          status: 'queued' as const,
+          ref: m.ref,
+        })),
+      });
     }),
   };
   const premiumAccess = {
@@ -152,7 +164,8 @@ describe('BillRemindersService', () => {
 
     await service.sendBillReminders(NOW);
 
-    expect(wmodeClient.sendMessage).not.toHaveBeenCalled();
+    // Sem itens claimados, o lote nem é chamado (batch vazio → early return).
+    expect(wmodeClient.sendBulk).not.toHaveBeenCalled();
     expect(sent).toHaveLength(0);
   });
 
@@ -219,7 +232,9 @@ describe('BillRemindersService', () => {
 
     await service.sendBillReminders(NOW);
 
-    expect(wmodeClient.sendMessage).toHaveBeenCalledTimes(1);
+    // 1 chamada de lote com 1 item (a mensagem única do usuário, agrupada).
+    expect(wmodeClient.sendBulk).toHaveBeenCalledTimes(1);
+    expect(wmodeClient.sendBulk.mock.calls[0][0]).toHaveLength(1);
     expect(sent[0]).toContain('Aluguel');
     expect(sent[0]).toContain('Nubank');
   });

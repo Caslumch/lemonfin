@@ -27,9 +27,21 @@ function buildService(overrides: {
     ),
   };
   const wmodeClient = {
-    sendMessage: jest.fn().mockImplementation(() => {
-      if (overrides.waFails) return Promise.reject(new Error('wmode down'));
-      return Promise.resolve({ ok: true });
+    // Envio em lote do WhatsApp. waFails simula falha total do lote (null);
+    // senão, cada item entra enfileirado (queued).
+    sendBulk: jest.fn().mockImplementation((messages: { content: string; ref: unknown }[]) => {
+      if (overrides.waFails) return Promise.resolve(null);
+      return Promise.resolve({
+        total: messages.length,
+        queued: messages.length,
+        rejected: 0,
+        results: messages.map((m, index) => ({
+          index,
+          to: '',
+          status: 'queued' as const,
+          ref: m.ref,
+        })),
+      });
     }),
   };
   const mail = {
@@ -83,14 +95,14 @@ describe('TrialReminderService', () => {
       'Lucas Machado',
       endsAt,
     );
-    expect(wmodeClient.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '5511999' }),
-    );
-    const { content } = wmodeClient.sendMessage.mock.calls[0][0] as {
+    const batch = wmodeClient.sendBulk.mock.calls[0][0] as {
+      to: string;
       content: string;
-    };
-    expect(content).toContain('teste grátis');
-    expect(content).toContain('/assinar');
+    }[];
+    expect(batch).toHaveLength(1);
+    expect(batch[0].to).toBe('5511999');
+    expect(batch[0].content).toContain('teste grátis');
+    expect(batch[0].content).toContain('/assinar');
   });
 
   it('dedupe: claim negado não reenvia', async () => {
@@ -101,7 +113,7 @@ describe('TrialReminderService', () => {
     await service.sendTrialEndingNotices(NOW);
 
     expect(mail.sendTrialEnding).not.toHaveBeenCalled();
-    expect(wmodeClient.sendMessage).not.toHaveBeenCalled();
+    expect(wmodeClient.sendBulk).not.toHaveBeenCalled();
   });
 
   it('membro coberto pelo premium da FAMÍLIA não recebe (falso alarme)', async () => {
@@ -131,7 +143,8 @@ describe('TrialReminderService', () => {
     await service.sendTrialEndingNotices(NOW);
 
     expect(mail.sendTrialEnding).toHaveBeenCalled();
-    expect(wmodeClient.sendMessage).not.toHaveBeenCalled();
+    // Sem telefone o usuário não entra no lote; batch vazio → sendBulk nem roda.
+    expect(wmodeClient.sendBulk).not.toHaveBeenCalled();
   });
 
   it('falha TOTAL (nenhum canal saiu) libera o claim pra tentar amanhã', async () => {
@@ -154,7 +167,7 @@ describe('TrialReminderService', () => {
 
     await service.sendTrialEndingNotices(NOW);
 
-    expect(wmodeClient.sendMessage).toHaveBeenCalled();
+    expect(wmodeClient.sendBulk).toHaveBeenCalled();
     expect(reminderLog.release).not.toHaveBeenCalled();
   });
 });

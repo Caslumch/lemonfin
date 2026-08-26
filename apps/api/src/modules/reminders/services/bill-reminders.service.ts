@@ -5,7 +5,10 @@ import { FamilyContextService } from '../../families/services/family-context.ser
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
-import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import {
+  WmodeClientService,
+  type BulkMessageParams,
+} from '../../whatsapp/services/wmode-client.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderSettingsRepository } from '../repositories/reminder-settings.repository';
 import { ReminderLogRepository } from '../repositories/reminder-log.repository';
@@ -46,25 +49,62 @@ export class BillRemindersService {
     this.logger.log('Running bill reminders...');
 
     const users = await this.usersRepository.findAllWithPhone();
+
+    // Fase 1: monta a mensagem e faz o claim dos itens de cada usuário. Cada item
+    // do lote carrega TODAS as suas dedupeKeys em `ref` (um usuário pode ter N
+    // contas/faturas no mesmo lembrete).
+    const batch: BulkMessageParams[] = [];
     for (const user of users) {
       try {
-        await this.sendForUser(user.id, user.name, user.phone!, now);
+        const prepared = await this.prepareForUser(
+          user.id,
+          user.name,
+          user.phone!,
+          now,
+        );
+        if (prepared) batch.push(prepared);
       } catch (error) {
-        this.logger.error(`Bill reminder failed for user ${user.id}: ${error}`);
+        this.logger.error(`Bill reminder prep failed for user ${user.id}: ${error}`);
       }
     }
+
+    if (batch.length === 0) return;
+
+    // Fase 2: UMA chamada em lote — o WMode espaça com o ritmo anti-ban.
+    const result = await this.wmodeClient.sendBulk(batch);
+
+    const dedupeKeysOf = (ref: unknown) => (ref as { dedupeKeys: string[] }).dedupeKeys;
+
+    // Falha total: libera todos os claims para o próximo cron.
+    if (!result) {
+      await this.reminderLog.release(batch.flatMap((b) => dedupeKeysOf(b.ref)));
+      this.logger.warn('Bill reminders: envio em lote falhou por completo; claims liberados');
+      return;
+    }
+
+    // Release só dos recusados (todas as dedupeKeys do item voltam a pendente).
+    const toRelease = result.results
+      .filter((r) => r.status === 'rejected')
+      .flatMap((r) => dedupeKeysOf(r.ref));
+    if (toRelease.length > 0) await this.reminderLog.release(toRelease);
+
+    this.logger.log(
+      `Bill reminders: ${result.queued} enfileirados, ${result.rejected} recusados`,
+    );
   }
 
-  private async sendForUser(
+  /** Coleta os vencimentos do usuário, faz o claim e monta a mensagem. Retorna o
+   * item de lote (com as dedupeKeys em `ref`) ou null se não há o que lembrar. */
+  private async prepareForUser(
     userId: string,
     name: string | null,
     phone: string,
     now: Date,
-  ) {
+  ): Promise<BulkMessageParams | null> {
     // Lembretes são premium (trial conta como acesso) e respeitam o opt-out.
-    if (!(await this.premiumAccess.hasAccess(userId))) return;
+    if (!(await this.premiumAccess.hasAccess(userId))) return null;
     const setting = await this.settings.getEffective(userId);
-    if (!setting.billsEnabled) return;
+    if (!setting.billsEnabled) return null;
 
     // Data-alvo: hoje (dia civil de Brasília) + antecedência, ancorada ao
     // meio-dia UTC (convenção do projeto para datas civis).
@@ -126,9 +166,9 @@ export class BillRemindersService {
       });
     }
 
-    if (items.length === 0) return;
+    if (items.length === 0) return null;
 
-    // Claim ANTES de enviar (idempotência): só entram na mensagem os itens
+    // Claim ANTES de enfileirar (idempotência): só entram na mensagem os itens
     // ainda não lembrados para este vencimento.
     const claimed: DueItem[] = [];
     for (const item of items) {
@@ -141,7 +181,7 @@ export class BillRemindersService {
       });
       if (ok) claimed.push(item);
     }
-    if (claimed.length === 0) return;
+    if (claimed.length === 0) return null;
 
     const when =
       setting.daysBefore === 0
@@ -162,18 +202,13 @@ export class BillRemindersService {
       'Já deixa separado pra não pesar depois 😉',
     ].join('\n');
 
-    try {
-      await this.wmodeClient.sendMessage({ to: phone, content: message });
-    } catch (error) {
-      // Envio falhou: libera os claims para o lembrete valer numa nova
-      // tentativa — senão ficaria "enviado" sem mensagem entregue.
-      await this.reminderLog.release(claimed.map((i) => i.dedupeKey));
-      throw error;
-    }
-
-    this.logger.log(
-      `Sent ${claimed.length} due-bill reminder(s) to ${phone} (target ${targetKey})`,
-    );
+    // Item pronto para o lote. Todas as dedupeKeys deste usuário viajam em `ref`;
+    // se o lote recusar/falhar este item, o cron libera todas de uma vez.
+    return {
+      to: phone,
+      content: message,
+      ref: { dedupeKeys: claimed.map((i) => i.dedupeKey) },
+    };
   }
 
   // Ciclo de fatura cujo VENCIMENTO cai exatamente na data-alvo. O vencimento

@@ -26,8 +26,8 @@ function buildService(overrides: {
   monthSummary?: Partial<typeof EMPTY_SUMMARY>;
   categories?: unknown[];
   claimResult?: boolean;
-  sendResult?: unknown;
   sendFails?: boolean;
+  bulkRejects?: boolean; // itens voltam como `rejected` (ex.: 429 de rate-limit)
 }) {
   const sent: string[] = [];
 
@@ -50,12 +50,23 @@ function buildService(overrides: {
       .mockResolvedValue(overrides.categories ?? []),
   };
   const wmodeClient = {
-    sendMessage: jest.fn().mockImplementation(({ content }) => {
-      if (overrides.sendFails) return Promise.reject(new Error('wmode down'));
-      sent.push(content);
-      return Promise.resolve(
-        'sendResult' in overrides ? overrides.sendResult : { id: 'msg-1' },
-      );
+    // Envio em lote: sendFails simula falha total (null); senão tudo enfileirado.
+    sendBulk: jest.fn().mockImplementation((messages: { content: string; ref: unknown }[]) => {
+      if (overrides.sendFails) return Promise.resolve(null);
+      const rejected = overrides.bulkRejects === true;
+      if (!rejected) messages.forEach((m) => sent.push(m.content));
+      return Promise.resolve({
+        total: messages.length,
+        queued: rejected ? 0 : messages.length,
+        rejected: rejected ? messages.length : 0,
+        results: messages.map((m, index) => ({
+          index,
+          to: '',
+          status: rejected ? ('rejected' as const) : ('queued' as const),
+          ...(rejected ? { statusCode: 429, reason: 'warmup', retryAfterSeconds: 3600 } : {}),
+          ref: m.ref,
+        })),
+      });
     }),
   };
   const premiumAccess = {
@@ -215,9 +226,9 @@ describe('DailySummaryService', () => {
     ]);
   });
 
-  it('envio que devolve null (falha silenciosa do WMode) → libera o claim', async () => {
+  it('item recusado no lote (429/rate-limit) → libera o claim para retentar depois', async () => {
     const { service, reminderLog } = buildService({
-      sendResult: null,
+      bulkRejects: true,
       daySummary: { expense: 50 },
     });
 

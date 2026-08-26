@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { UsersRepository } from '../../users/repositories/users.repository';
-import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import {
+  WmodeClientService,
+  type BulkMessageParams,
+} from '../../whatsapp/services/wmode-client.service';
 import { MailService } from '../../mail/services/mail.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderLogRepository } from '../repositories/reminder-log.repository';
@@ -42,83 +45,114 @@ export class TrialReminderService {
       windowEnd,
     );
 
+    // Fase 1: claim + e-mail (síncrono, não sofre rajada) por usuário. O WhatsApp
+    // NÃO é enviado aqui — vira item de lote. `emailOk` viaja no `ref` para o
+    // release final saber se algum canal chegou a sair.
+    const batch: BulkMessageParams[] = [];
     for (const user of users) {
       try {
-        await this.notifyUser(user);
+        const prepared = await this.prepareForUser(user);
+        if (prepared) batch.push(prepared);
       } catch (error) {
-        this.logger.error(`Trial notice failed for user ${user.id}: ${error}`);
+        this.logger.error(`Trial notice prep failed for user ${user.id}: ${error}`);
       }
+    }
+
+    if (batch.length === 0) return;
+
+    // Fase 2: WhatsApp em lote — o WMode espaça com o ritmo anti-ban.
+    const result = await this.wmodeClient.sendBulk(batch);
+
+    // Release do claim quando NENHUM canal entregou: WhatsApp recusado/falho E
+    // o e-mail também falhou. Se o e-mail saiu, o aviso cumpriu seu papel —
+    // mantém o claim mesmo que o WhatsApp tenha sido recusado.
+    const refOf = (r: unknown) => r as { dedupeKey: string; emailOk: boolean };
+    let released = 0;
+
+    const decide = (whatsappDelivered: boolean, ref: unknown) => {
+      const { dedupeKey, emailOk } = refOf(ref);
+      if (!whatsappDelivered && !emailOk) return dedupeKey;
+      return null;
+    };
+
+    if (!result) {
+      // Falha total do lote: WhatsApp não saiu para ninguém.
+      const toRelease = batch
+        .map((b) => decide(false, b.ref))
+        .filter((k): k is string => k !== null);
+      if (toRelease.length > 0) await this.reminderLog.release(toRelease);
+      released = toRelease.length;
+      this.logger.warn(`Trial notices: lote falhou; ${released} claim(s) liberados (sem e-mail)`);
+    } else {
+      const toRelease = result.results
+        .map((r) => decide(r.status === 'queued', r.ref))
+        .filter((k): k is string => k !== null);
+      if (toRelease.length > 0) await this.reminderLog.release(toRelease);
+      released = toRelease.length;
+      this.logger.log(
+        `Trial notices: ${result.queued} WhatsApp enfileirados, ${result.rejected} recusados, ${released} sem nenhum canal`,
+      );
     }
   }
 
-  private async notifyUser(user: {
+  /** Resolve elegibilidade, faz o claim e envia o E-MAIL (síncrono). Retorna o
+   * item de WhatsApp para o lote, ou null se o usuário não deve ser notificado.
+   * Usuário sem telefone é notificado só por e-mail aqui e não entra no lote. */
+  private async prepareForUser(user: {
     id: string;
     name: string;
     email: string;
     phone: string | null;
     trialEndsAt: Date | null;
-  }) {
-    if (!user.trialEndsAt) return;
+  }): Promise<BulkMessageParams | null> {
+    if (!user.trialEndsAt) return null;
 
     // Membro coberto pelo premium da família não precisa assinar — avisar
     // "seu teste acaba" seria falso alarme.
     const access = await this.premiumAccess.resolve(user.id);
-    if (access.hasPremium && access.source === 'family') return;
+    if (access.hasPremium && access.source === 'family') return null;
 
     const endsKey = user.trialEndsAt.toISOString().split('T')[0];
+    const dedupeKey = `trial_ending:${user.id}:${endsKey}`;
     const claimed = await this.reminderLog.claim({
       userId: user.id,
       kind: 'trial_ending',
       refId: user.id,
-      dedupeKey: `trial_ending:${user.id}:${endsKey}`,
+      dedupeKey,
       channel: user.phone ? 'whatsapp' : 'email',
     });
-    if (!claimed) return; // já avisado para este fim de trial
+    if (!claimed) return null; // já avisado para este fim de trial
 
-    const failures: string[] = [];
-
+    let emailOk = false;
     try {
       await this.mail.sendTrialEnding(user.email, user.name, user.trialEndsAt);
+      emailOk = true;
     } catch (error) {
-      failures.push(`email: ${error}`);
+      this.logger.warn(`Trial notice e-mail falhou [user:${user.id}]: ${error}`);
     }
 
-    if (user.phone) {
-      const firstName = user.name.split(' ')[0];
-      const when = user.trialEndsAt.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        timeZone: 'America/Sao_Paulo',
-      });
-      const appUrl = process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
-      try {
-        await this.wmodeClient.sendMessage({
-          to: user.phone,
-          content:
-            `Oi, ${firstName}! 🍋\n\n` +
-            `Seu teste grátis do LemonFin termina em *${when}*. ` +
-            `Pra continuar registrando seus gastos por aqui e recebendo os ` +
-            `lembretes, é só assinar:\n\n${appUrl}/assinar\n\n` +
-            `_Seus dados continuam salvos de qualquer forma 😉_`,
-        });
-      } catch (error) {
-        failures.push(`whatsapp: ${error}`);
-      }
+    // Sem telefone: só e-mail. Não entra no lote; resolve o claim aqui mesmo.
+    if (!user.phone) {
+      if (!emailOk) await this.reminderLog.release([dedupeKey]);
+      return null;
     }
 
-    // Se NENHUM canal saiu, libera o claim para tentar de novo amanhã
-    // (enquanto durar a janela).
-    if (failures.length > 0 && failures.length === (user.phone ? 2 : 1)) {
-      await this.reminderLog.release([`trial_ending:${user.id}:${endsKey}`]);
-      this.logger.warn(
-        `Trial notice não entregue em nenhum canal [user:${user.id}]: ${failures.join(' | ')}`,
-      );
-      return;
-    }
-
-    this.logger.log(
-      `Trial-ending notice sent [user:${user.id}, ends:${endsKey}]` +
-        (failures.length > 0 ? ` (parcial: ${failures.join(' | ')})` : ''),
-    );
+    const firstName = user.name.split(' ')[0];
+    const when = user.trialEndsAt.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    });
+    const appUrl = process.env.FRONTEND_URL ?? 'https://app.lemonfin.com.br';
+    return {
+      to: user.phone,
+      content:
+        `Oi, ${firstName}! 🍋\n\n` +
+        `Seu teste grátis do LemonFin termina em *${when}*. ` +
+        `Pra continuar registrando seus gastos por aqui e recebendo os ` +
+        `lembretes, é só assinar:\n\n${appUrl}/assinar\n\n` +
+        `_Seus dados continuam salvos de qualquer forma 😉_`,
+      ref: { dedupeKey, emailOk },
+    };
   }
 }
