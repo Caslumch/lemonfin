@@ -62,12 +62,17 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
     if (status === "authenticated" && enabled) setLocked(true);
   }, [status, enabled]);
 
-  // Ao voltar do background para foreground, re-trava.
+  // Ao voltar do background para foreground, re-trava. IMPORTANTE: só reagimos a
+  // `background` real (home / troca de app), NÃO a `inactive` — o próprio prompt
+  // de Face ID coloca o app em `inactive` e o retorno seria lido como
+  // "voltou do background", re-travando logo após um desbloqueio bem-sucedido
+  // (loop). Também ignoramos qualquer transição enquanto a auth está em curso.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
       const prev = appState.current;
       appState.current = next;
-      if (enabled && prev.match(/inactive|background/) && next === "active") {
+      if (authInFlight.current) return;
+      if (enabled && prev === "background" && next === "active") {
         setLocked(true);
       }
     });
