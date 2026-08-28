@@ -4,6 +4,7 @@ import { UsersRepository } from '../../users/repositories/users.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
 import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import { PushDispatchService } from '../../push/services/push-dispatch.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderSettingsRepository } from '../repositories/reminder-settings.repository';
 import { ReminderLogRepository } from '../repositories/reminder-log.repository';
@@ -17,6 +18,7 @@ export class DailySummaryService {
     private readonly familyContext: FamilyContextService,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly wmodeClient: WmodeClientService,
+    private readonly pushDispatch: PushDispatchService,
     private readonly premiumAccess: PremiumAccessService,
     private readonly settings: ReminderSettingsRepository,
     private readonly reminderLog: ReminderLogRepository,
@@ -29,10 +31,10 @@ export class DailySummaryService {
   async sendDailySummaries(now: Date = new Date()) {
     this.logger.log('Running daily summaries...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.usersRepository.findAllReminderTargets();
     for (const user of users) {
       try {
-        await this.sendForUser(user.id, user.name, user.phone!, now);
+        await this.sendForUser(user.id, user.name, user.phone, now);
       } catch (error) {
         this.logger.error(`Daily summary failed for user ${user.id}: ${error}`);
       }
@@ -42,7 +44,7 @@ export class DailySummaryService {
   private async sendForUser(
     userId: string,
     name: string | null,
-    phone: string,
+    phone: string | null,
     now: Date,
   ) {
     // Premium (trial conta) + opt-in explícito.
@@ -93,8 +95,59 @@ export class DailySummaryService {
     // Dia sem movimento → silêncio. Mensagem diária de "não teve nada" é ruído.
     if (daySpent <= 0 && day.income <= 0) return;
 
-    // Claim ANTES de enviar (idempotência): restart no horário do cron não
-    // manda o mesmo resumo duas vezes.
+    // WhatsApp (mensagem rica) — só para quem tem telefone. Cada canal tem seu
+    // próprio claim de idempotência (chaves distintas).
+    if (phone) {
+      await this.sendWhatsapp(userId, name, phone, dayKey, {
+        daySpent,
+        dayIncome: day.income,
+        monthSpent,
+        monthIncome: month.income,
+        monthStart,
+        dayStart,
+        categories,
+      });
+    }
+
+    // Push (resumo curto) — para devices registrados.
+    const pushKey = `push:daily_summary:${userId}:${dayKey}`;
+    const pushClaimed = await this.reminderLog.claim({
+      userId,
+      kind: 'daily_summary',
+      refId: dayKey,
+      dedupeKey: pushKey,
+      channel: 'push',
+    });
+    if (pushClaimed) {
+      const parts: string[] = [];
+      if (daySpent > 0) parts.push(`Gastou ${formatBRL(daySpent)}`);
+      if (day.income > 0) parts.push(`recebeu ${formatBRL(day.income)}`);
+      const body = `${capitalize(parts.join(' e '))} ontem · Mês: ${formatBRL(monthSpent)} em gastos.`;
+      const delivered = await this.pushDispatch.sendToUser(userId, {
+        title: `☀️ Resumo de ontem (${formatDayMonth(dayStart)})`,
+        body,
+        data: { type: 'daily_summary' },
+      });
+      if (!delivered) await this.reminderLog.release([pushKey]);
+      else this.logger.log(`Sent daily summary push to user ${userId} (day ${dayKey})`);
+    }
+  }
+
+  private async sendWhatsapp(
+    userId: string,
+    name: string | null,
+    phone: string,
+    dayKey: string,
+    d: {
+      daySpent: number;
+      dayIncome: number;
+      monthSpent: number;
+      monthIncome: number;
+      monthStart: Date;
+      dayStart: Date;
+      categories: { count: number; total: number; category?: { icon?: string | null; name?: string | null } | null }[];
+    },
+  ) {
     const dedupeKey = `daily_summary:${userId}:${dayKey}`;
     const claimed = await this.reminderLog.claim({
       userId,
@@ -105,8 +158,8 @@ export class DailySummaryService {
     });
     if (!claimed) return;
 
-    const count = categories.reduce((acc, c) => acc + c.count, 0);
-    const topCategories = categories.slice(0, 3).map((c) => {
+    const count = d.categories.reduce((acc, c) => acc + c.count, 0);
+    const topCategories = d.categories.slice(0, 3).map((c) => {
       const icon = c.category?.icon ?? '🏷️';
       const catName = c.category?.name ?? 'Outros';
       return `  ${icon} ${catName}: ${formatBRL(c.total)}`;
@@ -117,24 +170,24 @@ export class DailySummaryService {
       new Intl.DateTimeFormat('pt-BR', {
         month: 'long',
         timeZone: 'UTC',
-      }).format(monthStart),
+      }).format(d.monthStart),
     );
 
-    const lines = [`☀️ *Resumo de ontem (${formatDayMonth(dayStart)})*`, ''];
+    const lines = [`☀️ *Resumo de ontem (${formatDayMonth(d.dayStart)})*`, ''];
     lines.push(greeting, '');
-    if (daySpent > 0) {
+    if (d.daySpent > 0) {
       const plural = count === 1 ? 'lançamento' : 'lançamentos';
       lines.push(
-        `💸 Gastou: ${formatBRL(daySpent)}${count > 0 ? ` em ${count} ${plural}` : ''}`,
+        `💸 Gastou: ${formatBRL(d.daySpent)}${count > 0 ? ` em ${count} ${plural}` : ''}`,
       );
       lines.push(...topCategories);
     }
-    if (day.income > 0) {
-      lines.push(`💰 Recebeu: ${formatBRL(day.income)}`);
+    if (d.dayIncome > 0) {
+      lines.push(`💰 Recebeu: ${formatBRL(d.dayIncome)}`);
     }
     lines.push(
       '',
-      `📅 *${monthLabel} até agora:* ${formatBRL(monthSpent)} gastos • ${formatBRL(month.income)} recebidos`,
+      `📅 *${monthLabel} até agora:* ${formatBRL(d.monthSpent)} gastos • ${formatBRL(d.monthIncome)} recebidos`,
       '',
       'Bom dia! 🍋',
     );

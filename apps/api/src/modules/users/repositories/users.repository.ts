@@ -54,6 +54,17 @@ export class UsersRepository {
     });
   }
 
+  // Alvos de lembrete proativo: quem tem telefone (WhatsApp) OU ao menos um
+  // device registrado (push). `phone` volta nullable — usuário só-app não tem.
+  async findAllReminderTargets() {
+    return this.prisma.user.findMany({
+      where: {
+        OR: [{ phone: { not: null } }, { pushTokens: { some: {} } }],
+      },
+      select: { id: true, name: true, phone: true },
+    });
+  }
+
   // Usuários em TRIAL cujo teste termina dentro da janela — para o aviso de
   // fim de trial. Só TRIALING: quem já assinou (ACTIVE) não recebe.
   async findTrialsEndingBetween(start: Date, end: Date) {
