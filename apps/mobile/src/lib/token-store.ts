@@ -6,6 +6,7 @@ let currentToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
 let refreshHandler: (() => Promise<boolean>) | null = null;
 let refreshInFlight: Promise<boolean> | null = null;
+let signOutHook: (() => Promise<void>) | null = null;
 
 export function getToken(): string | null {
   return currentToken;
@@ -40,4 +41,14 @@ export function refreshAccessToken(): Promise<boolean> {
     });
   }
   return refreshInFlight;
+}
+
+// Hook rodado no INÍCIO do signOut, com o token ainda válido (ex.: dar baixa no
+// device de push via DELETE /devices). Registrado pelo PushProvider.
+export function setOnSignOut(fn: (() => Promise<void>) | null): void {
+  signOutHook = fn;
+}
+
+export async function runSignOutHook(): Promise<void> {
+  if (signOutHook) await signOutHook().catch(() => {});
 }

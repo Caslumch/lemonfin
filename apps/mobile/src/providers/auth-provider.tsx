@@ -20,7 +20,12 @@ import {
   signUpRequest,
   verifyTotpRequest,
 } from "@/lib/auth";
-import { setOnRefresh, setOnUnauthorized, setToken } from "@/lib/token-store";
+import {
+  runSignOutHook,
+  setOnRefresh,
+  setOnUnauthorized,
+  setToken,
+} from "@/lib/token-store";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -62,6 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Baixa do device de push ANTES de limpar o token (o DELETE /devices exige
+    // auth). Best-effort — não bloqueia o logout se falhar.
+    await runSignOutHook();
     const rt = refreshTokenRef.current;
     if (rt) void logoutRequest(rt).catch(() => {}); // revoga no servidor, best-effort
     refreshTokenRef.current = null;
