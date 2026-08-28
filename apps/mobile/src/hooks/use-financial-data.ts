@@ -33,8 +33,10 @@ export interface Transaction {
   categoryId?: string;
   category?: TransactionCategory | null;
   cardId?: string | null;
+  installmentGroupId?: string | null;
   installmentNumber?: number | null;
   installmentTotal?: number | null;
+  installmentSum?: number | null; // soma real das N parcelas (na linha representativa)
 }
 
 interface Paginated<T> {
@@ -176,6 +178,29 @@ export function useUpdateTransaction() {
   });
 }
 
+// Edita a compra parcelada INTEIRA (scope=group): o backend apaga as parcelas
+// atuais e recria N com o valor total redividido. amount = valor TOTAL da compra.
+export interface InstallmentGroupInput {
+  amount: number;
+  description?: string;
+  date: string; // ISO — data da 1ª parcela
+  categoryId: string;
+  cardId?: string | null;
+  installments: number; // >= 2
+}
+
+export function useUpdateInstallmentGroup() {
+  const invalidate = useTransactionInvalidate();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: InstallmentGroupInput }) =>
+      api<Transaction>(`/transactions/${id}?scope=group`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteTransaction() {
   const invalidate = useTransactionInvalidate();
   return useMutation({
@@ -199,6 +224,29 @@ export function useMonthly(months = 6) {
   return useQuery({
     queryKey: ["monthly", months],
     queryFn: () => api<MonthlyBreakdown[]>(`/transactions/monthly?months=${months}`),
+  });
+}
+
+// Gastos (EXPENSE) por categoria num período. Já vem ordenado desc pela API.
+export interface CategoryBreakdown {
+  categoryId: string;
+  category: (TransactionCategory & { slug?: string }) | null;
+  total: number;
+  count: number;
+}
+
+// Breakdown do MÊS ATUAL por categoria (dashboard). Sem datas = tudo; passamos
+// o range do mês corrente.
+export function useCategoryBreakdown() {
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const endDate = now.toISOString();
+  return useQuery({
+    queryKey: ["by-category", startDate.slice(0, 7)],
+    queryFn: () =>
+      api<CategoryBreakdown[]>(
+        `/transactions/by-category?startDate=${startDate}&endDate=${endDate}`,
+      ),
   });
 }
 

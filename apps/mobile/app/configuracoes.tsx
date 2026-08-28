@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { DeleteAccountSheet } from "@/components/delete-account-sheet";
 import { RemindersSettings } from "@/components/reminders-settings";
+import { BiometricLockSetting } from "@/components/biometric-lock-setting";
 import { exportUserData } from "@/lib/export-data";
 import { PRIVACY_URL, TERMS_URL } from "@/lib/config";
 import {
@@ -164,6 +165,9 @@ export default function ConfiguracoesScreen() {
             )}
           </Card>
         </View>
+
+        {/* Segurança — bloqueio biométrico (só se o aparelho tiver) */}
+        <BiometricLockSetting />
 
         {/* Lembretes e notificações */}
         <RemindersSettings />

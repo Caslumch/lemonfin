@@ -23,6 +23,7 @@
     "@expo/metro-runtime": "~6.1.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@lemonfin/shared": "workspace:*",
+    "@react-native-community/datetimepicker": "8.4.4",
     "@tanstack/react-query": "^5.101.0",
     "expo": "~54.0.35",
     "expo-blur": "~15.0.8",
