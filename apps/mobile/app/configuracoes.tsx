@@ -9,6 +9,7 @@ import { TextField } from "@/components/ui/text-field";
 import { DeleteAccountSheet } from "@/components/delete-account-sheet";
 import { RemindersSettings } from "@/components/reminders-settings";
 import { BiometricLockSetting } from "@/components/biometric-lock-setting";
+import { PushNotificationSetting } from "@/components/push-notification-setting";
 import { exportUserData } from "@/lib/export-data";
 import { PRIVACY_URL, TERMS_URL } from "@/lib/config";
 import {
@@ -168,6 +169,9 @@ export default function ConfiguracoesScreen() {
 
         {/* Segurança — bloqueio biométrico (só se o aparelho tiver) */}
         <BiometricLockSetting />
+
+        {/* Notificações no celular (push) */}
+        <PushNotificationSetting />
 
         {/* Lembretes e notificações */}
         <RemindersSettings />

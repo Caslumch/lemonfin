@@ -39,6 +39,12 @@
           "backgroundColor": "#0D0D0D"
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#D4F400"
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
