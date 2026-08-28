@@ -33,11 +33,17 @@ const LockContext = createContext<LockContextValue | null>(null);
 // o conteúdo com uma tela de bloqueio.
 export function LockProvider({ children }: { children: React.ReactNode }) {
   const { palette } = useTheme();
-  const { status } = useAuth();
+  const { status, signOut } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [locked, setLocked] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  // Guarda a autenticação em andamento sem entrar nas deps do callback (evita
+  // recriar `unlock` a cada toggle e re-disparar o prompt em loop).
+  const authInFlight = useRef(false);
+  // Marca que já disparamos o prompt automático para o bloqueio ATUAL, para não
+  // re-perguntar em loop quando o usuário cancela ou a biometria falha.
+  const autoPrompted = useRef(false);
 
   const refreshLockPref = useCallback(async () => {
     const on = await isLockEnabled();
@@ -69,19 +75,29 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   }, [enabled]);
 
   const unlock = useCallback(async () => {
-    if (authenticating) return;
+    if (authInFlight.current) return;
+    authInFlight.current = true;
     setAuthenticating(true);
     try {
       const ok = await authenticate("Desbloquear o LemonFin");
       if (ok) setLocked(false);
     } finally {
+      authInFlight.current = false;
       setAuthenticating(false);
     }
-  }, [authenticating]);
+  }, []);
 
-  // Dispara o prompt automaticamente ao travar (só quando logado).
+  // Dispara o prompt automaticamente UMA vez por bloqueio (só quando logado).
+  // Se o usuário cancela/falha, não re-pergunta em loop — fica o botão manual.
   useEffect(() => {
-    if (locked && status === "authenticated") void unlock();
+    if (!locked) {
+      autoPrompted.current = false;
+      return;
+    }
+    if (status === "authenticated" && !autoPrompted.current) {
+      autoPrompted.current = true;
+      void unlock();
+    }
   }, [locked, status, unlock]);
 
   // Só bloqueia conteúdo autenticado; login/registro nunca ficam travados.
@@ -123,6 +139,11 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
             <Ionicons name="lock-open-outline" size={18} color="#FFFFFF" />
             <Txt variant="bodyMedium" color="#FFFFFF">
               Desbloquear
+            </Txt>
+          </Pressable>
+          <Pressable onPress={() => void signOut()} hitSlop={8} disabled={authenticating}>
+            <Txt variant="small" color={palette.textTertiary}>
+              Sair da conta
             </Txt>
           </Pressable>
         </View>
