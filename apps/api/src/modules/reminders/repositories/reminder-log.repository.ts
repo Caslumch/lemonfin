@@ -14,7 +14,7 @@ export class ReminderLogRepository {
     kind: 'bill' | 'card_invoice' | 'trial_ending' | 'daily_summary';
     refId: string;
     dedupeKey: string;
-    channel: 'whatsapp' | 'email';
+    channel: 'whatsapp' | 'email' | 'push';
   }): Promise<boolean> {
     try {
       await this.prisma.reminderLog.create({ data: params });

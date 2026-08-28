@@ -84,6 +84,7 @@ model User {
   refreshTokens          RefreshToken[]
   advisorMemories        AdvisorMemory[]
   apiKeys                ApiKey[]
+  pushTokens             PushToken[]
 
   @@map("users")
 }
@@ -127,6 +128,24 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// Token de push notification de um device (Expo Push Token). Um usuário pode ter
+// vários aparelhos, então é 1-para-N (espelha RefreshToken). O `token` é único:
+// ao reinstalar/reabrir, o app faz upsert do mesmo token. Tokens inválidos
+// (DeviceNotRegistered no envio) são removidos automaticamente.
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  token      String   @unique
+  platform   String // "ios" | "android"
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 // Chave de API por conta — autenticação de MÁQUINA para o gateway (/v1) e o

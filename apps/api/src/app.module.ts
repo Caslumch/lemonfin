@@ -16,6 +16,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
+import { PushModule } from './modules/push/push.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { ReservesModule } from './modules/reserves/reserves.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
@@ -57,6 +58,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ChatModule,
     AlertsModule,
     RemindersModule,
+    PushModule,
     GoalsModule,
     ReservesModule,
     RecurringModule,
