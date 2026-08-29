@@ -10,10 +10,10 @@
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "ai.adalink.lemonfin"
+      "bundleIdentifier": "app.lemonfin"
     },
     "android": {
-      "package": "ai.adalink.lemonfin",
+      "package": "app.lemonfin",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
