@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "532044556468",
+    "project_id": "app-lemonfin",
+    "storage_bucket": "app-lemonfin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:532044556468:android:dfb8ab30947f898b338fe1",
+        "android_client_info": {
+          "package_name": "app.lemonfin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAapnUhFaIm7zAHV8BlDaWH2N3EfMCNsGE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
