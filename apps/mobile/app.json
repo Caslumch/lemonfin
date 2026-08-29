@@ -22,6 +22,8 @@
       },
       "permissions": [
         "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
       ]
     },
@@ -61,6 +63,12 @@
         "projectId": "510bba75-ca26-405f-8fea-9cbfb43fc200"
       }
     },
-    "owner": "caslumch"
+    "owner": "caslumch",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/510bba75-ca26-405f-8fea-9cbfb43fc200"
+    }
   }
 }
