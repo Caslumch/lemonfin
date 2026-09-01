@@ -3,7 +3,10 @@ import { Cron } from '@nestjs/schedule';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { FamilyContextService } from '../../families/services/family-context.service';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
-import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import {
+  WmodeClientService,
+  type BulkMessageParams,
+} from '../../whatsapp/services/wmode-client.service';
 import { PushDispatchService } from '../../push/services/push-dispatch.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderSettingsRepository } from '../repositories/reminder-settings.repository';
@@ -32,25 +35,67 @@ export class DailySummaryService {
     this.logger.log('Running daily summaries...');
 
     const users = await this.usersRepository.findAllReminderTargets();
+
+    // Fase 1: por usuario, dispara o PUSH (item a item, como sempre foi) e
+    // PREPARA o item de WhatsApp ja com o claim feito. Nada de WhatsApp e
+    // enviado aqui - so coletamos os itens reservados (idempotencia intacta).
+    const batch: BulkMessageParams[] = [];
     for (const user of users) {
       try {
-        await this.sendForUser(user.id, user.name, user.phone, now);
+        const prepared = await this.prepareForUser(
+          user.id,
+          user.name,
+          user.phone,
+          now,
+        );
+        if (prepared) batch.push(prepared);
       } catch (error) {
         this.logger.error(`Daily summary failed for user ${user.id}: ${error}`);
       }
     }
+
+    if (batch.length === 0) return;
+
+    // Fase 2: UMA chamada em lote. O WMode espaca os envios com o proprio ritmo
+    // anti-ban - o LemonFin nao dispara mais em rajada.
+    const result = await this.wmodeClient.sendBulk(batch);
+
+    const dedupeKeyOf = (ref: unknown) =>
+      (ref as { dedupeKey: string }).dedupeKey;
+
+    // Falha total (rede/5xx): libera TODOS os claims para o proximo cron.
+    if (!result) {
+      await this.reminderLog.release(batch.map((b) => dedupeKeyOf(b.ref)));
+      this.logger.warn(
+        'Daily summaries: envio em lote falhou por completo; claims liberados',
+      );
+      return;
+    }
+
+    // Libera o claim so dos itens RECUSADOS (429/guardrail) - ficam pendentes
+    // e sao reenviados no proximo cron. Os `queued` mantem o claim.
+    const toRelease = result.results
+      .filter((r) => r.status === 'rejected')
+      .map((r) => dedupeKeyOf(r.ref));
+    if (toRelease.length > 0) await this.reminderLog.release(toRelease);
+
+    this.logger.log(
+      `Daily summaries: ${result.queued} enfileiradas, ${result.rejected} recusadas`,
+    );
   }
 
-  private async sendForUser(
+  /** Dispara o push do usuario e devolve o item de WhatsApp para o lote (ou
+   * null quando nao ha resumo / nao ha telefone). */
+  private async prepareForUser(
     userId: string,
     name: string | null,
     phone: string | null,
     now: Date,
-  ) {
+  ): Promise<BulkMessageParams | null> {
     // Premium (trial conta) + opt-in explícito.
-    if (!(await this.premiumAccess.hasAccess(userId))) return;
+    if (!(await this.premiumAccess.hasAccess(userId))) return null;
     const setting = await this.settings.getEffective(userId);
-    if (!setting.dailySummaryEnabled) return;
+    if (!setting.dailySummaryEnabled) return null;
 
     // ONTEM no dia civil de Brasília (mesma régua do bill-reminders); as
     // janelas em UTC casam com a gravação noon-UTC das transações.
@@ -93,21 +138,7 @@ export class DailySummaryService {
     const monthSpent = month.expense + month.cardExpense;
 
     // Dia sem movimento → silêncio. Mensagem diária de "não teve nada" é ruído.
-    if (daySpent <= 0 && day.income <= 0) return;
-
-    // WhatsApp (mensagem rica) — só para quem tem telefone. Cada canal tem seu
-    // próprio claim de idempotência (chaves distintas).
-    if (phone) {
-      await this.sendWhatsapp(userId, name, phone, dayKey, {
-        daySpent,
-        dayIncome: day.income,
-        monthSpent,
-        monthIncome: month.income,
-        monthStart,
-        dayStart,
-        categories,
-      });
-    }
+    if (daySpent <= 0 && day.income <= 0) return null;
 
     // Push (resumo curto) — para devices registrados.
     const pushKey = `push:daily_summary:${userId}:${dayKey}`;
@@ -129,11 +160,29 @@ export class DailySummaryService {
         data: { type: 'daily_summary' },
       });
       if (!delivered) await this.reminderLog.release([pushKey]);
-      else this.logger.log(`Sent daily summary push to user ${userId} (day ${dayKey})`);
+      else
+        this.logger.log(
+          `Sent daily summary push to user ${userId} (day ${dayKey})`,
+        );
     }
+
+    // WhatsApp (mensagem rica) - so para quem tem telefone. Cada canal tem seu
+    // proprio claim de idempotencia (chaves distintas).
+    if (!phone) return null;
+    return this.prepareWhatsapp(userId, name, phone, dayKey, {
+      daySpent,
+      dayIncome: day.income,
+      monthSpent,
+      monthIncome: month.income,
+      monthStart,
+      dayStart,
+      categories,
+    });
   }
 
-  private async sendWhatsapp(
+  /** Faz o claim e monta a mensagem - SEM enviar. O envio acontece no lote
+   * (sendBulk); a dedupeKey viaja em `ref` para o release seletivo. */
+  private async prepareWhatsapp(
     userId: string,
     name: string | null,
     phone: string,
@@ -145,9 +194,13 @@ export class DailySummaryService {
       monthIncome: number;
       monthStart: Date;
       dayStart: Date;
-      categories: { count: number; total: number; category?: { icon?: string | null; name?: string | null } | null }[];
+      categories: {
+        count: number;
+        total: number;
+        category?: { icon?: string | null; name?: string | null } | null;
+      }[];
     },
-  ) {
+  ): Promise<BulkMessageParams | null> {
     const dedupeKey = `daily_summary:${userId}:${dayKey}`;
     const claimed = await this.reminderLog.claim({
       userId,
@@ -156,7 +209,7 @@ export class DailySummaryService {
       dedupeKey,
       channel: 'whatsapp',
     });
-    if (!claimed) return;
+    if (!claimed) return null;
 
     const count = d.categories.reduce((acc, c) => acc + c.count, 0);
     const topCategories = d.categories.slice(0, 3).map((c) => {
@@ -192,24 +245,13 @@ export class DailySummaryService {
       'Bom dia! 🍋',
     );
 
-    let result: unknown;
-    try {
-      result = await this.wmodeClient.sendMessage({
-        to: phone,
-        content: lines.join('\n'),
-      });
-    } catch (error) {
-      // Envio falhou: libera o claim — senão ficaria "enviado" sem mensagem.
-      await this.reminderLog.release([dedupeKey]);
-      throw error;
-    }
-    if (!result) {
-      // O WmodeClient devolve null em falha (não lança) — mesmo tratamento.
-      await this.reminderLog.release([dedupeKey]);
-      return;
-    }
-
-    this.logger.log(`Sent daily summary to ${phone} (day ${dayKey})`);
+    // Item pronto para o lote. A dedupeKey viaja em `ref`; se o WMode recusar
+    // este item (ou o lote falhar por completo), o cron libera o claim.
+    return {
+      to: phone,
+      content: lines.join('\n'),
+      ref: { dedupeKey },
+    };
   }
 }
 

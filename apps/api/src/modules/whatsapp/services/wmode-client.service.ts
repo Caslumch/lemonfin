@@ -6,6 +6,34 @@ interface SendMessageParams {
   content: string;
 }
 
+/** Uma mensagem do lote. `ref` é opcional e devolvido intacto no resultado —
+ * o chamador usa para casar o resultado de volta ao item de origem (ex.: as
+ * dedupeKeys do claim, para dar release só no que foi recusado). */
+export interface BulkMessageParams {
+  to: string;
+  content: string;
+  ref?: unknown;
+}
+
+/** Resultado por destinatário devolvido pelo WMode, com o `ref` reanexado. */
+export interface BulkItemResult {
+  index: number;
+  to: string;
+  status: 'queued' | 'rejected';
+  messageId?: string;
+  statusCode?: number;
+  reason?: string;
+  retryAfterSeconds?: number;
+  ref?: unknown;
+}
+
+export interface BulkResult {
+  total: number;
+  queued: number;
+  rejected: number;
+  results: BulkItemResult[];
+}
+
 interface SendAudioParams {
   to: string;
   // áudio em base64 (qualquer formato legível pelo ffmpeg — mandamos webm/opus).
@@ -56,6 +84,60 @@ export class WmodeClientService {
       return data;
     } catch (error) {
       this.logger.error(`WMode send error: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Envio em LOTE: manda todos os destinatários numa única requisição e deixa o
+   * WMode espaçar os envios com o próprio ritmo anti-ban. Substitui o loop de
+   * `sendMessage` (uma chamada HTTP por usuário), que disparava em rajada e
+   * furava o rate-limit do WMode.
+   *
+   * Devolve o resultado por item (queued/rejected). Em falha TOTAL (rede, 5xx,
+   * sessão fora) devolve null — o chamador trata como "nada saiu" e mantém os
+   * itens pendentes para o próximo cron. Cada item recusado (`rejected`, ex.:
+   * 429 de rate-limit) traz o motivo e o `retryAfterSeconds`; o `ref` volta
+   * intacto para o chamador reagir só aos recusados.
+   */
+  async sendBulk(messages: BulkMessageParams[]): Promise<BulkResult | null> {
+    if (messages.length === 0) {
+      return { total: 0, queued: 0, rejected: 0, results: [] };
+    }
+    const url = `${this.baseUrl}/api/v1/messages/bulk`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': this.apiKey,
+        },
+        body: JSON.stringify({
+          sessionId: this.sessionId,
+          messages: messages.map(({ to, content }) => ({ to, content })),
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(`WMode bulk failed: ${response.status} - ${body}`);
+        return null;
+      }
+
+      const data = (await response.json()) as BulkResult;
+      // Reanexa o `ref` de cada item pela posição — o WMode preserva a ordem e
+      // devolve `index`, mas casamos por índice do array de entrada por robustez.
+      const results = data.results.map((r) => ({
+        ...r,
+        ref: messages[r.index]?.ref,
+      }));
+      this.logger.log(
+        `WMode bulk: ${data.queued}/${data.total} enfileiradas, ${data.rejected} recusadas`,
+      );
+      return { ...data, results };
+    } catch (error) {
+      this.logger.error(`WMode bulk error: ${error}`);
       return null;
     }
   }

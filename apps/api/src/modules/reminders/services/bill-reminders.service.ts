@@ -5,7 +5,10 @@ import { FamilyContextService } from '../../families/services/family-context.ser
 import { RecurringRepository } from '../../recurring/repositories/recurring.repository';
 import { CardsRepository } from '../../cards/repositories/cards.repository';
 import { TransactionsRepository } from '../../transactions/repositories/transactions.repository';
-import { WmodeClientService } from '../../whatsapp/services/wmode-client.service';
+import {
+  WmodeClientService,
+  type BulkMessageParams,
+} from '../../whatsapp/services/wmode-client.service';
 import { PushDispatchService } from '../../push/services/push-dispatch.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderSettingsRepository } from '../repositories/reminder-settings.repository';
@@ -49,25 +52,66 @@ export class BillRemindersService {
     this.logger.log('Running bill reminders...');
 
     const users = await this.usersRepository.findAllReminderTargets();
+
+    // Fase 1: por usuário, dispara o PUSH (item a item, como sempre foi) e
+    // PREPARA o item de WhatsApp. Cada item do lote carrega todas as suas
+    // dedupeKeys em `ref` (um usuário pode ter N contas/faturas no lembrete).
+    const batch: BulkMessageParams[] = [];
     for (const user of users) {
       try {
-        await this.sendForUser(user.id, user.name, user.phone, now);
+        const prepared = await this.prepareForUser(
+          user.id,
+          user.name,
+          user.phone,
+          now,
+        );
+        if (prepared) batch.push(prepared);
       } catch (error) {
         this.logger.error(`Bill reminder failed for user ${user.id}: ${error}`);
       }
     }
+
+    if (batch.length === 0) return;
+
+    // Fase 2: UMA chamada em lote para o WhatsApp — o WMode espaça com o ritmo
+    // anti-ban, em vez da rajada de /send que derrubava a sessão.
+    const result = await this.wmodeClient.sendBulk(batch);
+
+    const dedupeKeysOf = (ref: unknown) =>
+      (ref as { dedupeKeys: string[] }).dedupeKeys;
+
+    // Falha total: libera todos os claims para o próximo cron.
+    if (!result) {
+      await this.reminderLog.release(batch.flatMap((b) => dedupeKeysOf(b.ref)));
+      this.logger.warn(
+        'Bill reminders: envio em lote falhou por completo; claims liberados',
+      );
+      return;
+    }
+
+    // Release só dos recusados (todas as dedupeKeys do item voltam a pendente).
+    const toRelease = result.results
+      .filter((r) => r.status === 'rejected')
+      .flatMap((r) => dedupeKeysOf(r.ref));
+    if (toRelease.length > 0) await this.reminderLog.release(toRelease);
+
+    this.logger.log(
+      `Bill reminders: ${result.queued} enfileirados, ${result.rejected} recusados`,
+    );
   }
 
-  private async sendForUser(
+  /** Dispara o push do usuário e devolve o item de WhatsApp para o lote (ou
+   * null quando não há o que lembrar / não há telefone). */
+  private async prepareForUser(
     userId: string,
     name: string | null,
     phone: string | null,
     now: Date,
-  ) {
+  ): Promise<BulkMessageParams | null> {
     // Lembretes são premium (trial conta como acesso) e respeitam o opt-out.
-    if (!(await this.premiumAccess.hasAccess(userId))) return;
+    if (!(await this.premiumAccess.hasAccess(userId))) return null;
     const setting = await this.settings.getEffective(userId);
-    if (!setting.billsEnabled) return;
+    if (!setting.billsEnabled) return null;
 
     // Data-alvo: hoje (dia civil de Brasília) + antecedência, ancorada ao
     // meio-dia UTC (convenção do projeto para datas civis).
@@ -131,7 +175,7 @@ export class BillRemindersService {
       });
     }
 
-    if (items.length === 0) return;
+    if (items.length === 0) return null;
 
     const when =
       setting.daysBefore === 0
@@ -142,17 +186,25 @@ export class BillRemindersService {
 
     // Cada canal deduplica de forma independente (chaves distintas), então um
     // usuário com telefone E app registrado recebe pelos dois.
-    if (phone) await this.sendWhatsapp(userId, name, phone, when, items);
+    //
+    // O PUSH continua item a item aqui: vai direto ao Expo, sem risco de ban e
+    // sem ganho em agrupar. Só o WhatsApp é adiado para o lote.
     await this.sendPush(userId, when, targetKey, items);
+
+    if (!phone) return null;
+    return this.prepareWhatsapp(userId, name, phone, when, items);
   }
 
-  private async sendWhatsapp(
+  /** Faz o claim dos itens e monta a mensagem — SEM enviar. O envio acontece
+   * no lote (sendBulk); as dedupeKeys viajam em `ref` para o release seletivo
+   * quando o WMode recusa/falha um item. */
+  private async prepareWhatsapp(
     userId: string,
     name: string | null,
     phone: string,
     when: string,
     items: DueItem[],
-  ) {
+  ): Promise<BulkMessageParams | null> {
     // Claim ANTES de enviar (idempotência): só entram na mensagem os itens
     // ainda não lembrados para este vencimento.
     const claimed: DueItem[] = [];
@@ -166,7 +218,7 @@ export class BillRemindersService {
       });
       if (ok) claimed.push(item);
     }
-    if (claimed.length === 0) return;
+    if (claimed.length === 0) return null;
 
     const greeting = name ? `Oi, ${name.split(' ')[0]}!` : 'Oi!';
     const message = [
@@ -181,18 +233,13 @@ export class BillRemindersService {
       'Já deixa separado pra não pesar depois 😉',
     ].join('\n');
 
-    try {
-      await this.wmodeClient.sendMessage({ to: phone, content: message });
-    } catch (error) {
-      // Envio falhou: libera os claims para o lembrete valer numa nova
-      // tentativa — senão ficaria "enviado" sem mensagem entregue.
-      await this.reminderLog.release(claimed.map((i) => i.dedupeKey));
-      throw error;
-    }
-
-    this.logger.log(
-      `Sent ${claimed.length} due-bill reminder(s) to ${phone}`,
-    );
+    // Item pronto para o lote. Todas as dedupeKeys deste usuário viajam em
+    // `ref`; se o lote recusar/falhar este item, o cron libera todas de uma vez.
+    return {
+      to: phone,
+      content: message,
+      ref: { dedupeKeys: claimed.map((i) => i.dedupeKey) },
+    };
   }
 
   private async sendPush(
