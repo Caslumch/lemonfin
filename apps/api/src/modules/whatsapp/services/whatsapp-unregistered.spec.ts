@@ -39,6 +39,8 @@ function buildService(overrides: { user?: unknown }) {
     {} as never, // billingConfig
     {} as never, // payInvoice
     {} as never, // tts
+    {} as never, // advisorMemories
+    {} as never, // memoryExtraction
   );
 
   return { service, usersRepository, wmodeClient, sent };

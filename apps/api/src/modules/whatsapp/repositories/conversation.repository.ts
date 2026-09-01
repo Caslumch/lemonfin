@@ -3,9 +3,12 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 // Uma troca curta de conversa (texto, não o JSON parseado — leve no contexto).
+// `at` é carimbado pelo repositório ao salvar (base do TTL de sessão — ver
+// SESSION_TTL_MS). Opcional: entradas gravadas antes do carimbo não têm.
 export interface HistoryEntry {
   role: 'user' | 'bot';
   text: string;
+  at?: string;
 }
 
 // Confirmação aguardando resposta do usuário. União discriminada por `type`:
@@ -45,6 +48,13 @@ export type PendingConfirmation = (
       // usuário confirmar se é para apagar a última ação mesmo.
       type: 'cancel-confirm';
       action: LastAction;
+    }
+  | {
+      // "esquece tudo" aguardando confirmação: apagar a memória inteira é
+      // destrutivo e irreversível, então nunca acontece na primeira mensagem.
+      // `count` é quantos fatos serão apagados (entra na pergunta).
+      type: 'forget-all-confirm';
+      count: number;
     }
   | {
       // Aporte aguardando o usuário escolher EM QUAL reserva lançar.
@@ -96,8 +106,12 @@ export type LastAction = (
     }
 ) & { savedAt?: string };
 
-const MAX_HISTORY = 4; // últimas 4 trocas
-const MAX_TEXT = 160; // trunca cada texto
+// Janela de contexto da conversa. Eram 4 trocas de 160 chars — ~2 idas e
+// voltas, com a resposta do bot cortada no meio, então o modelo relia o próprio
+// turno anterior mutilado e a conversa "esquecia" o que fora dito na 3ª
+// mensagem. 20 trocas cobrem um papo real; 600 chars cabem uma resposta inteira.
+const MAX_HISTORY = 20; // últimas 20 trocas
+const MAX_TEXT = 600; // trunca cada texto
 
 // Validade dos estados de conversa. Pendência é papo em andamento (minutos);
 // lastAction dura mais (um "cancela" meia hora depois ainda é legítimo), mas
@@ -106,6 +120,11 @@ const MAX_TEXT = 160; // trunca cada texto
 // carimbo) são tratados como vencidos.
 const PENDING_TTL_MS = 15 * 60 * 1000;
 const LAST_ACTION_TTL_MS = 60 * 60 * 1000;
+// Sessão de conversa: com a janela em 4 trocas o histórico se auto-limpava (a
+// conversa de ontem saía sozinha em 2 mensagens). Com 20, ela sobreviveria por
+// dias e contaminaria o papo de hoje — "e o mês passado?" resolveria contra uma
+// referência velha. 6h mantém uma conversa do dia viva e descarta a de ontem.
+const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
 function isFresh(savedAt: string | undefined, ttlMs: number): boolean {
   if (!savedAt) return false;
@@ -129,9 +148,13 @@ export class ConversationRepository {
     return isFresh(pending.savedAt, PENDING_TTL_MS) ? pending : null;
   }
 
+  // Só as trocas da sessão CORRENTE (ver SESSION_TTL_MS). Entradas sem `at`
+  // (gravadas antes do carimbo) são tratadas como vencidas, no mesmo critério de
+  // pending/lastAction.
   async getHistory(phone: string): Promise<HistoryEntry[]> {
     const state = await this.get(phone);
-    return (state?.history as HistoryEntry[] | undefined) ?? [];
+    const history = (state?.history as HistoryEntry[] | undefined) ?? [];
+    return history.filter((e) => isFresh(e.at, SESSION_TTL_MS));
   }
 
   async getLastAction(phone: string): Promise<LastAction | null> {
@@ -181,11 +204,16 @@ export class ConversationRepository {
 
   // Adiciona uma troca ao histórico (mantendo só as últimas MAX_HISTORY,
   // com cada texto truncado).
+  // `current` vem de getHistory (já sem as trocas vencidas), então a sessão
+  // expirada é descartada na primeira escrita depois do vencimento em vez de
+  // ficar acumulando na linha.
   async appendHistory(phone: string, entries: HistoryEntry[]) {
     const current = await this.getHistory(phone);
+    const at = new Date().toISOString();
     const trimmed = entries.map((e) => ({
       role: e.role,
       text: e.text.slice(0, MAX_TEXT),
+      at,
     }));
     const next = [...current, ...trimmed].slice(-MAX_HISTORY);
 

@@ -25,6 +25,9 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
   ],
   controllers: [ChatController],
   providers: [ChatCompletionUseCase, AdvisorMemoryRepository],
-  exports: [ChatCompletionUseCase],
+  // AdvisorMemoryRepository é exportado para o WhatsApp: os comandos diretos de
+  // memória ("o que você sabe sobre mim", "esquece tudo") leem/apagam a MESMA
+  // memória que o assessor usa — não existe uma segunda memória por canal.
+  exports: [ChatCompletionUseCase, AdvisorMemoryRepository],
 })
 export class ChatModule {}

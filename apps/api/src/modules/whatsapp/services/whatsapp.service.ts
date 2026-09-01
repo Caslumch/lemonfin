@@ -28,6 +28,8 @@ import { computeReserveProgress } from '../../reserves/reserve-progress';
 import { GoalsRepository } from '../../goals/repositories/goals.repository';
 import { ListGoalsUseCase } from '../../goals/use-cases/list-goals.use-case';
 import { ChatCompletionUseCase } from '../../chat/use-cases/chat-completion.use-case';
+import { AdvisorMemoryRepository } from '../../chat/repositories/advisor-memory.repository';
+import { MemoryExtractionService } from './memory-extraction.service';
 import {
   ConversationRepository,
   PendingConfirmation,
@@ -81,6 +83,8 @@ export class WhatsappService {
     private readonly billingConfig: BillingConfigService,
     private readonly payInvoiceUseCase: PayInvoiceUseCase,
     private readonly tts: TtsService,
+    private readonly advisorMemories: AdvisorMemoryRepository,
+    private readonly memoryExtraction: MemoryExtractionService,
   ) {}
 
   async handleIncomingMessage({
@@ -270,7 +274,46 @@ export class WhatsappService {
       return;
     }
 
-    // 3) Fluxo normal — com histórico de conversa como contexto.
+    // 3) Comandos de MEMÓRIA determinísticos (sem IA). Ficam antes do parser
+    // porque são sobre a memória em si, não sobre finanças — e porque a lista
+    // precisa ser fiel ao que está salvo, sem o modelo no meio.
+    if (this.isMemoryListCommand(content)) {
+      await this.conversation.appendHistory(phoneKey, [
+        { role: 'user', text: content },
+      ]);
+      await this.handleMemoryList(from, user.id, phoneKey);
+      return;
+    }
+    if (this.isForgetAllCommand(content)) {
+      await this.conversation.appendHistory(phoneKey, [
+        { role: 'user', text: content },
+      ]);
+      const count = (await this.advisorMemories.list(user.id)).length;
+      if (count === 0) {
+        await this.sendAndRecord(
+          from,
+          phoneKey,
+          'Não tem nada pra esquecer — ainda não anotei nada sobre você 🙂',
+        );
+        return;
+      }
+      await this.conversation.setPending(phoneKey, {
+        type: 'forget-all-confirm',
+        count,
+      });
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `Quer que eu apague TUDO que eu sei sobre você? ` +
+          `São ${count} ${count === 1 ? 'anotação' : 'anotações'} ` +
+          `(seus objetivos, preferências e contexto que você me contou).\n\n` +
+          `Isso não apaga seus lançamentos, metas nem reservas — só o que eu lembro das nossas conversas.\n\n` +
+          `Responde *sim* pra confirmar.`,
+      );
+      return;
+    }
+
+    // 4) Fluxo normal — com histórico de conversa como contexto.
     const history = await this.conversation.getHistory(phoneKey);
     // Categorias personalizadas entram no prompt para a IA poder classificar
     // transações nelas (além das de sistema).
@@ -368,6 +411,48 @@ export class WhatsappService {
           content: result.message,
         });
         break;
+    }
+
+    // Memória passiva: a pessoa pode ter contado algo estável sobre ela ENQUANTO
+    // registrava um gasto ("comprei fralda, minha filha nasceu semana passada").
+    // Roda DEPOIS da resposta (não atrasa o registro) e só quando o filtro
+    // heurístico vê sinal de fato pessoal — a maioria das mensagens nem chega à
+    // IA. 'advice' fica de fora: o assessor já tem a tool rememberFact e salvar
+    // duas vezes duplicaria o aviso.
+    if (result.intent !== 'advice') {
+      await this.maybeRememberFromMessage(from, user.id, content, phoneKey);
+    }
+  }
+
+  // Extrai um fato da mensagem e, se salvou, AVISA o usuário numa linha curta.
+  // O aviso é o que torna a memória passiva honesta: a pessoa vê o que foi
+  // guardado no momento em que acontece e pode corrigir na hora ("esquece
+  // isso"). Nunca lança — memória é enfeite, não pode derrubar o fluxo.
+  private async maybeRememberFromMessage(
+    from: string,
+    userId: string,
+    content: string,
+    phoneKey: string,
+  ) {
+    try {
+      if (!this.memoryExtraction.hasFactSignal(content)) return;
+
+      const existing = await this.advisorMemories.list(userId);
+      const fact = await this.memoryExtraction.extractAndSave(
+        userId,
+        content,
+        existing.map((m) => m.content),
+      );
+      if (!fact) return;
+
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `_📝 Anotei: ${fact}_` +
+          `\n_(se preferir que eu não guarde, é só dizer "esquece isso")_`,
+      );
+    } catch (error) {
+      this.logger.warn(`Memória passiva falhou: ${error}`);
     }
   }
 
@@ -792,6 +877,15 @@ export class WhatsappService {
         content,
       );
     }
+    if (pending.type === 'forget-all-confirm') {
+      return this.resolveForgetAllConfirm(
+        from,
+        phoneKey,
+        userId,
+        pending,
+        content,
+      );
+    }
     if (pending.type !== 'category') return false;
 
     const text = content.trim().toLowerCase();
@@ -966,6 +1060,122 @@ export class WhatsappService {
       return true;
     }
     return false; // não entendeu a resposta → reprocessa fora
+  }
+
+  // Confirmação do "esquece tudo": apagar a memória inteira é irreversível, e
+  // por isso só acontece depois de um "sim" explícito. Espelha o vocabulário de
+  // resolveCancelConfirm (mesma expectativa de resposta em toda confirmação).
+  private async resolveForgetAllConfirm(
+    from: string,
+    phoneKey: string,
+    userId: string,
+    pending: Extract<PendingConfirmation, { type: 'forget-all-confirm' }>,
+    content: string,
+  ): Promise<boolean> {
+    const text = this.normalizeText(content);
+
+    const yesWords = [
+      'sim',
+      's',
+      'pode',
+      'apaga',
+      'apagar',
+      'confirma',
+      'confirmo',
+      'isso',
+      'esquece',
+    ];
+    const noWords = ['nao', 'n', 'deixa', 'cancela', 'cancelar', 'nem', 'para'];
+
+    if (yesWords.includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      const removed = await this.advisorMemories.forgetAll(userId);
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        removed > 0
+          ? `Pronto, esqueci tudo o que eu sabia sobre você 🧹 ` +
+              `(${removed} ${removed === 1 ? 'anotação apagada' : 'anotações apagadas'}).\n\n` +
+              `Seus lançamentos, metas e reservas continuam intactos — apaguei só as anotações da nossa conversa.`
+          : 'Pronto, não sobrou nada na minha memória 🧹',
+      );
+      return true;
+    }
+    if (noWords.includes(text)) {
+      await this.conversation.clearPending(phoneKey);
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        'Beleza, não apaguei nada 👍 Continuo lembrando o que você me contou.',
+      );
+      return true;
+    }
+    return false; // não entendeu a resposta → reprocessa fora
+  }
+
+  // "o que você sabe sobre mim" — atalho determinístico (sem IA) que LISTA os
+  // fatos salvos. Determinístico de propósito: é a tela de transparência da
+  // memória (o usuário tem direito de ver e apagar o que foi inferido sobre
+  // ele), e uma lista fiel não pode depender do improviso do LLM.
+  private isMemoryListCommand(content: string): boolean {
+    const text = this.normalizeText(content).replace(/[?!.]+$/, '');
+    return [
+      'o que voce sabe sobre mim',
+      'o que voce sabe de mim',
+      'o que voce lembra de mim',
+      'o que voce lembra sobre mim',
+      'o que voce sabe a meu respeito',
+      'suas anotacoes',
+      'sua memoria',
+      'minhas anotacoes',
+      'o que voce anotou sobre mim',
+    ].includes(text);
+  }
+
+  // "esquece tudo" — pede confirmação antes de varrer a memória.
+  private isForgetAllCommand(content: string): boolean {
+    const text = this.normalizeText(content).replace(/[?!.]+$/, '');
+    return [
+      'esquece tudo',
+      'esqueca tudo',
+      'apaga tudo',
+      'apague tudo',
+      'esquece tudo sobre mim',
+      'apaga tudo que voce sabe sobre mim',
+      'apaga sua memoria',
+      'limpa sua memoria',
+      'esquece tudo que eu falei',
+    ].includes(text);
+  }
+
+  // Responde "o que você sabe sobre mim" com a lista dos fatos salvos.
+  private async handleMemoryList(
+    from: string,
+    userId: string,
+    phoneKey: string,
+  ) {
+    const memories = await this.advisorMemories.list(userId);
+
+    if (memories.length === 0) {
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        'Por enquanto não anotei nada sobre você 🙂\n\n' +
+          'Conforme a gente conversa, vou guardando o que for útil pros seus ' +
+          'conselhos — seus objetivos, seu contexto de vida, suas preferências. ' +
+          'Você também pode pedir: _"lembra que eu quero quitar o cartão até dezembro"_.',
+      );
+      return;
+    }
+
+    const lines = memories.map((m) => `• ${m.content}`).join('\n');
+    await this.sendAndRecord(
+      from,
+      phoneKey,
+      `🧠 *O que eu lembro de você*\n\n${lines}\n\n` +
+        '_Se algo aí estiver errado ou desatualizado, é só dizer: "esquece que ...". ' +
+        'Pra apagar tudo, manda "esquece tudo"._',
+    );
   }
 
   // "ajuda"/"menu"/"comandos" (e variações diretas) — atalho determinístico
@@ -1727,9 +1937,11 @@ export class WhatsappService {
     phoneKey: string,
   ) {
     const firstName = user.name?.trim().split(/\s+/)[0];
-    // Histórico do WhatsApp → formato do chat (bot vira assistant). Limita aos
-    // últimos turnos para não inflar o prompt.
-    const chatHistory = history.slice(-10).map((h) => ({
+    // Histórico do WhatsApp → formato do chat (bot vira assistant). A janela já
+    // é limitada no repositório (MAX_HISTORY), que também descarta as trocas de
+    // sessões vencidas — não cortar de novo aqui: um slice menor que MAX_HISTORY
+    // faria o assessor enxergar menos contexto do que o parser.
+    const chatHistory = history.map((h) => ({
       role: h.role === 'bot' ? ('assistant' as const) : ('user' as const),
       content: h.text,
     }));
