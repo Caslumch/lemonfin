@@ -258,6 +258,18 @@ Exemplos: "cancela o último gasto", "apaga a última transação", "desfaz o ú
 Responda: {"intent": "cancel", "target": string | null}
 - target: o NOME do que o usuário quer apagar, SÓ se ele nomeou algo específico ("cancela a netflix" → "netflix"; "apaga o uber" → "uber"; "remove o gasto do mercado" → "mercado"). Referências genéricas ao último registro ("cancela", "apaga isso", "desfaz o último", "cancela essa que criou") → null. Não invente target.
 
+### 3b. MEMÓRIA — Pedir para LEMBRAR ou ESQUECER algo sobre a pessoa
+Quando o usuário pede explicitamente para você GUARDAR um fato sobre ele, ou para ESQUECER algo que você sabe sobre ele, use "advice" (o assessor tem acesso à memória e cuida disso).
+Exemplos de LEMBRAR: "lembra que eu quero quitar o cartão até dezembro", "guarda isso: minha renda é variável", "anota que eu não abro mão do delivery", "lembre-se que vou casar em março".
+Exemplos de ESQUECER: "esquece que eu quero comprar um carro", "pode esquecer o que eu falei sobre a viagem", "apaga isso da sua memória".
+
+ATENÇÃO — "esquece"/"apaga" é AMBÍGUO. Só é MEMÓRIA quando o alvo é um FATO SOBRE A PESSOA (um objetivo, uma preferência, um plano, algo que ela contou). Quando o alvo é um LANÇAMENTO (um gasto, uma compra, um valor, uma conta registrada), é CANCEL:
+- "esquece que eu quero juntar pra viagem" → advice (é um objetivo dela)
+- "esquece o gasto do mercado" / "apaga o uber" / "esquece esses 50 reais" → cancel (é um lançamento)
+Na dúvida, se a frase cita VALOR ou um estabelecimento/compra, é cancel.
+
+Responda: {"intent": "advice"}
+
 ### 4. CORRECTION — Corrigir valor da última transação
 Quando o usuário quer corrigir o VALOR da última transação registrada.
 Exemplos: "o último era 45, não 50", "corrige pra 30", "o valor era 120", "era 25 e não 35"

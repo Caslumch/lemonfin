@@ -63,4 +63,14 @@ export class AdvisorMemoryRepository {
     });
     return count > 0;
   }
+
+  // Apaga TUDO que se lembra do usuário. Só o comando explícito "esquece tudo"
+  // (confirmado) chama isto — o modelo NÃO tem tool para apagar em massa, para
+  // não haver como uma conversa varrer a memória sem o usuário mandar.
+  async forgetAll(userId: string): Promise<number> {
+    const { count } = await this.prisma.advisorMemory.deleteMany({
+      where: { userId },
+    });
+    return count;
+  }
 }

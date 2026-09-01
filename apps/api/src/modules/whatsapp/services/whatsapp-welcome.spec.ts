@@ -65,6 +65,7 @@ function buildService(overrides: {
     billingConfig as never,
     {} as never, // payInvoice
     {} as never, // tts
+    {} as never, // advisorMemories
   );
 
   return {

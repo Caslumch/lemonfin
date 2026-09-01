@@ -53,6 +53,7 @@ function buildService(overrides: {
     {} as never, // billingConfig
     {} as never, // payInvoice
     {} as never, // tts
+    {} as never, // advisorMemories
   );
 
   return { service, transactionsRepository, conversation, sent };
