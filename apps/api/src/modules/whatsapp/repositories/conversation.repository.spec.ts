@@ -8,7 +8,11 @@ import {
 // "cancela" dias depois apagava uma ação que o usuário nem lembrava. O
 // repositório carimba savedAt ao salvar e trata vencido (ou sem carimbo, de
 // registros antigos) como inexistente.
-function buildRepo(state: { pending?: unknown; lastAction?: unknown }) {
+function buildRepo(state: {
+  pending?: unknown;
+  lastAction?: unknown;
+  history?: unknown;
+}) {
   const upserts: unknown[] = [];
   const prisma = {
     conversationState: {
@@ -16,7 +20,7 @@ function buildRepo(state: { pending?: unknown; lastAction?: unknown }) {
         phone: '5511999',
         pending: state.pending ?? null,
         lastAction: state.lastAction ?? null,
-        history: [],
+        history: state.history ?? [],
       }),
       upsert: jest.fn().mockImplementation((args: unknown) => {
         upserts.push(args);
@@ -93,5 +97,91 @@ describe('ConversationRepository TTL', () => {
       lastAction: { ...lastAction, savedAt: 'not-a-date' },
     });
     expect(await repo.getLastAction('5511999')).toBeNull();
+  });
+});
+
+// Janela de contexto da conversa: a queixa original era o bot "não saber o que
+// já foi falado" — com 4 trocas de 160 chars o contexto sumia na 3ª mensagem.
+describe('ConversationRepository histórico', () => {
+  const entry = (text: string, at: string) => ({ role: 'user', text, at });
+
+  it('guarda até 20 trocas (as mais recentes)', async () => {
+    const { repo, upserts } = buildRepo({});
+
+    await repo.appendHistory(
+      '5511999',
+      Array.from({ length: 25 }, (_, i) => ({
+        role: 'user' as const,
+        text: `msg ${i}`,
+      })),
+    );
+
+    const [call] = upserts as Array<{
+      update: { history: { text: string }[] };
+    }>;
+    expect(call.update.history).toHaveLength(20);
+    expect(call.update.history[0].text).toBe('msg 5');
+    expect(call.update.history[19].text).toBe('msg 24');
+  });
+
+  it('trunca cada texto em 600 chars (não 160)', async () => {
+    const { repo, upserts } = buildRepo({});
+
+    await repo.appendHistory('5511999', [
+      { role: 'bot', text: 'x'.repeat(900) },
+    ]);
+
+    const [call] = upserts as Array<{
+      update: { history: { text: string }[] };
+    }>;
+    expect(call.update.history[0].text).toHaveLength(600);
+  });
+
+  it('carimba `at` em cada entrada gravada', async () => {
+    const { repo, upserts } = buildRepo({});
+
+    await repo.appendHistory('5511999', [{ role: 'user', text: 'oi' }]);
+
+    const [call] = upserts as Array<{
+      update: { history: { at?: string }[] };
+    }>;
+    const at = call.update.history[0].at;
+    expect(typeof at).toBe('string');
+    expect(Number.isNaN(Date.parse(at as string))).toBe(false);
+  });
+
+  it('descarta trocas de sessão vencida (>6h) e mantém as da sessão atual', async () => {
+    const { repo } = buildRepo({
+      history: [
+        entry('conversa de ontem', minutesAgo(60 * 8)),
+        entry('conversa de agora', minutesAgo(30)),
+      ],
+    });
+
+    const history = await repo.getHistory('5511999');
+    expect(history).toHaveLength(1);
+    expect(history[0].text).toBe('conversa de agora');
+  });
+
+  it('entradas SEM `at` (anteriores ao carimbo) são tratadas como vencidas', async () => {
+    const { repo } = buildRepo({
+      history: [{ role: 'user', text: 'legado sem carimbo' }],
+    });
+
+    expect(await repo.getHistory('5511999')).toEqual([]);
+  });
+
+  it('a sessão vencida não é regravada ao anexar uma troca nova', async () => {
+    const { repo, upserts } = buildRepo({
+      history: [entry('conversa de ontem', minutesAgo(60 * 8))],
+    });
+
+    await repo.appendHistory('5511999', [{ role: 'user', text: 'oi de novo' }]);
+
+    const [call] = upserts as Array<{
+      update: { history: { text: string }[] };
+    }>;
+    expect(call.update.history).toHaveLength(1);
+    expect(call.update.history[0].text).toBe('oi de novo');
   });
 });

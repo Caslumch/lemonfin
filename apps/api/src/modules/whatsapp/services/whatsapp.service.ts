@@ -1727,9 +1727,11 @@ export class WhatsappService {
     phoneKey: string,
   ) {
     const firstName = user.name?.trim().split(/\s+/)[0];
-    // Histórico do WhatsApp → formato do chat (bot vira assistant). Limita aos
-    // últimos turnos para não inflar o prompt.
-    const chatHistory = history.slice(-10).map((h) => ({
+    // Histórico do WhatsApp → formato do chat (bot vira assistant). A janela já
+    // é limitada no repositório (MAX_HISTORY), que também descarta as trocas de
+    // sessões vencidas — não cortar de novo aqui: um slice menor que MAX_HISTORY
+    // faria o assessor enxergar menos contexto do que o parser.
+    const chatHistory = history.map((h) => ({
       role: h.role === 'bot' ? ('assistant' as const) : ('user' as const),
       content: h.text,
     }));
