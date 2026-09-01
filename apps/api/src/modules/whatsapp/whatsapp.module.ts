@@ -6,6 +6,7 @@ import { TranscriptionService } from './services/transcription.service';
 import { TtsService } from './services/tts.service';
 import { ReceiptExtractionService } from './services/receipt-extraction.service';
 import { WhatsappService } from './services/whatsapp.service';
+import { MemoryExtractionService } from './services/memory-extraction.service';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { ProcessedMessageRepository } from './repositories/processed-message.repository';
 import { WebhookSignatureGuard } from './guards/webhook-signature.guard';
@@ -44,6 +45,7 @@ import { AiUsageModule } from '../ai-usage/ai-usage.module';
     TranscriptionService,
     TtsService,
     ReceiptExtractionService,
+    MemoryExtractionService,
     WhatsappService,
     ConversationRepository,
     ProcessedMessageRepository,

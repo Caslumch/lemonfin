@@ -29,6 +29,7 @@ import { GoalsRepository } from '../../goals/repositories/goals.repository';
 import { ListGoalsUseCase } from '../../goals/use-cases/list-goals.use-case';
 import { ChatCompletionUseCase } from '../../chat/use-cases/chat-completion.use-case';
 import { AdvisorMemoryRepository } from '../../chat/repositories/advisor-memory.repository';
+import { MemoryExtractionService } from './memory-extraction.service';
 import {
   ConversationRepository,
   PendingConfirmation,
@@ -83,6 +84,7 @@ export class WhatsappService {
     private readonly payInvoiceUseCase: PayInvoiceUseCase,
     private readonly tts: TtsService,
     private readonly advisorMemories: AdvisorMemoryRepository,
+    private readonly memoryExtraction: MemoryExtractionService,
   ) {}
 
   async handleIncomingMessage({
@@ -409,6 +411,48 @@ export class WhatsappService {
           content: result.message,
         });
         break;
+    }
+
+    // Memória passiva: a pessoa pode ter contado algo estável sobre ela ENQUANTO
+    // registrava um gasto ("comprei fralda, minha filha nasceu semana passada").
+    // Roda DEPOIS da resposta (não atrasa o registro) e só quando o filtro
+    // heurístico vê sinal de fato pessoal — a maioria das mensagens nem chega à
+    // IA. 'advice' fica de fora: o assessor já tem a tool rememberFact e salvar
+    // duas vezes duplicaria o aviso.
+    if (result.intent !== 'advice') {
+      await this.maybeRememberFromMessage(from, user.id, content, phoneKey);
+    }
+  }
+
+  // Extrai um fato da mensagem e, se salvou, AVISA o usuário numa linha curta.
+  // O aviso é o que torna a memória passiva honesta: a pessoa vê o que foi
+  // guardado no momento em que acontece e pode corrigir na hora ("esquece
+  // isso"). Nunca lança — memória é enfeite, não pode derrubar o fluxo.
+  private async maybeRememberFromMessage(
+    from: string,
+    userId: string,
+    content: string,
+    phoneKey: string,
+  ) {
+    try {
+      if (!this.memoryExtraction.hasFactSignal(content)) return;
+
+      const existing = await this.advisorMemories.list(userId);
+      const fact = await this.memoryExtraction.extractAndSave(
+        userId,
+        content,
+        existing.map((m) => m.content),
+      );
+      if (!fact) return;
+
+      await this.sendAndRecord(
+        from,
+        phoneKey,
+        `_📝 Anotei: ${fact}_` +
+          `\n_(se preferir que eu não guarde, é só dizer "esquece isso")_`,
+      );
+    } catch (error) {
+      this.logger.warn(`Memória passiva falhou: ${error}`);
     }
   }
 

@@ -553,6 +553,9 @@ enum AiFeature {
   WHATSAPP_TRANSCRIPTION
   WHATSAPP_RECEIPT
   WHATSAPP_TTS
+  // Extração passiva de fatos para a memória de longo prazo (roda só quando o
+  // filtro heurístico acha sinal de fato pessoal na mensagem).
+  MEMORY_EXTRACTION
 }
 
 model AiUsage {

@@ -9,6 +9,8 @@ function buildService(overrides: {
   pending?: unknown;
   forgetAllCount?: number;
   parseResult?: unknown;
+  factSignal?: boolean;
+  extractedFact?: string | null;
 }) {
   const sent: { to: string; content: string }[] = [];
 
@@ -53,6 +55,14 @@ function buildService(overrides: {
     ),
   };
   const billingConfig = { enforcementEnabled: false };
+  // Sem sinal de fato por padrão: os testes de comando não devem disparar a
+  // memória passiva (ela tem testes próprios em whatsapp-memory-passive.spec).
+  const memoryExtraction = {
+    hasFactSignal: jest.fn().mockReturnValue(overrides.factSignal ?? false),
+    extractAndSave: jest
+      .fn()
+      .mockResolvedValue(overrides.extractedFact ?? null),
+  };
 
   const service = new WhatsappService(
     usersRepository as never,
@@ -77,6 +87,7 @@ function buildService(overrides: {
     {} as never, // payInvoice
     {} as never, // tts
     advisorMemories as never,
+    memoryExtraction as never,
   );
 
   return {
@@ -84,6 +95,7 @@ function buildService(overrides: {
     conversation,
     advisorMemories,
     messageParser,
+    memoryExtraction,
     sent,
   };
 }
@@ -233,5 +245,76 @@ describe('WhatsappService — comandos de memória', () => {
 
     expect(advisorMemories.forgetAll).not.toHaveBeenCalled();
     expect(messageParser.parse).toHaveBeenCalled();
+  });
+});
+
+// Memória PASSIVA no fluxo: a pessoa conta um fato ENQUANTO registra um gasto.
+// O aviso discreto é obrigatório — é o que torna honesto guardar algo que a
+// pessoa não pediu para guardar.
+describe('WhatsappService — memória passiva', () => {
+  it('avisa o usuário quando guarda um fato que ele não pediu', async () => {
+    const { service, sent } = buildService({
+      parseResult: { intent: 'unknown', message: 'Beleza!' },
+      factSignal: true,
+      extractedFact: 'É freelancer, renda variável',
+    });
+
+    await send(service, 'sou freelancer, minha renda é variável');
+
+    const aviso = sent.find((m) => m.content.includes('Anotei:'));
+    expect(aviso).toBeDefined();
+    expect(aviso?.content).toContain('É freelancer, renda variável');
+  });
+
+  it('o aviso ensina como desfazer', async () => {
+    const { service, sent } = buildService({
+      parseResult: { intent: 'unknown', message: 'Beleza!' },
+      factSignal: true,
+      extractedFact: 'Vai casar em março',
+    });
+
+    await send(service, 'vou casar em março do ano que vem');
+
+    const aviso = sent.find((m) => m.content.includes('Anotei:'));
+    expect(aviso?.content).toContain('esquece isso');
+  });
+
+  it('não avisa nada quando não há fato a guardar', async () => {
+    const { service, sent } = buildService({
+      parseResult: { intent: 'unknown', message: 'Beleza!' },
+      factSignal: true,
+      extractedFact: null,
+    });
+
+    await send(service, 'quero um café');
+
+    expect(sent.every((m) => !m.content.includes('Anotei:'))).toBe(true);
+  });
+
+  // O assessor já tem a tool rememberFact: extrair de novo duplicaria o aviso.
+  it('intent advice NÃO passa pela extração passiva', async () => {
+    const { service, memoryExtraction } = buildService({
+      parseResult: { intent: 'advice' },
+      factSignal: true,
+      extractedFact: 'É freelancer',
+    });
+
+    await send(service, 'sou freelancer, o que você acha?');
+
+    expect(memoryExtraction.extractAndSave).not.toHaveBeenCalled();
+  });
+
+  // Memória é enfeite: se ela quebrar, o registro da transação segue de pé.
+  it('falha da extração não derruba o fluxo', async () => {
+    const { service, memoryExtraction, sent } = buildService({
+      parseResult: { intent: 'unknown', message: 'Beleza!' },
+      factSignal: true,
+    });
+    memoryExtraction.extractAndSave.mockRejectedValue(new Error('boom'));
+
+    await expect(
+      send(service, 'sou freelancer e gastei 50'),
+    ).resolves.not.toThrow();
+    expect(sent.some((m) => m.content === 'Beleza!')).toBe(true);
   });
 });
