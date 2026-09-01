@@ -5,6 +5,7 @@ import { RecurringModule } from '../recurring/recurring.module';
 import { CardsModule } from '../cards/cards.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { PushModule } from '../push/push.module';
 import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 import { MailModule } from '../mail/mail.module';
 import { ReminderSettingsRepository } from './repositories/reminder-settings.repository';
@@ -23,6 +24,8 @@ import { ReminderSettingsController } from './controllers/reminder-settings.cont
     TransactionsModule,
     // WmodeClientService (envio proativo) vem do WhatsappModule → WmodeModule.
     WhatsappModule,
+    // PushDispatchService (lembretes também por push).
+    PushModule,
     BillingEnforcementModule,
     // E-mail do aviso de fim de trial.
     MailModule,

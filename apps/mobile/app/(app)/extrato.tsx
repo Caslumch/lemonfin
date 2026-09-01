@@ -97,16 +97,26 @@ export default function ExtratoScreen() {
   const rows = data?.pages.flatMap((p) => p.data) ?? [];
 
   function handleEdit(tx: Transaction) {
+    // Compra parcelada: a linha representativa (1ª parcela) tem installmentTotal
+    // >= 2. Edita o GRUPO inteiro — valor exibido = total (installmentSum), e a
+    // data já é a da 1ª parcela.
+    const isGroup = (tx.installmentTotal ?? 0) >= 2;
+    const totalCents = isGroup
+      ? Math.round(Number(tx.installmentSum ?? Number(tx.amount) * (tx.installmentTotal ?? 1)) * 100)
+      : Math.round(Number(tx.amount) * 100);
+    // Descrição sem o sufixo "(n/N)" que o backend acrescenta às parcelas.
+    const desc = (tx.description ?? "").replace(/\s*\(\d+\/\d+\)\s*$/, "");
     router.push({
       pathname: "/nova",
       params: {
         id: tx.id,
-        cents: String(Math.round(Number(tx.amount) * 100)),
+        cents: String(totalCents),
         type: tx.type,
         categoryId: tx.categoryId ?? "",
-        description: tx.description ?? "",
+        description: desc,
         cardId: tx.cardId ?? "",
         date: tx.date,
+        ...(isGroup ? { installments: String(tx.installmentTotal) } : {}),
       },
     });
   }

@@ -9,6 +9,7 @@ import {
   WmodeClientService,
   type BulkMessageParams,
 } from '../../whatsapp/services/wmode-client.service';
+import { PushDispatchService } from '../../push/services/push-dispatch.service';
 import { PremiumAccessService } from '../../billing/services/premium-access.service';
 import { ReminderSettingsRepository } from '../repositories/reminder-settings.repository';
 import { ReminderLogRepository } from '../repositories/reminder-log.repository';
@@ -23,7 +24,8 @@ interface DueItem {
   kind: 'bill' | 'card_invoice';
   refId: string;
   dedupeKey: string;
-  line: string; // linha pronta da mensagem
+  line: string; // linha pronta da mensagem (WhatsApp, com markdown)
+  pushLabel: string; // versão curta em texto puro (push)
 }
 
 @Injectable()
@@ -37,6 +39,7 @@ export class BillRemindersService {
     private readonly cardsRepository: CardsRepository,
     private readonly transactionsRepository: TransactionsRepository,
     private readonly wmodeClient: WmodeClientService,
+    private readonly pushDispatch: PushDispatchService,
     private readonly premiumAccess: PremiumAccessService,
     private readonly settings: ReminderSettingsRepository,
     private readonly reminderLog: ReminderLogRepository,
@@ -48,37 +51,41 @@ export class BillRemindersService {
   async sendBillReminders(now: Date = new Date()) {
     this.logger.log('Running bill reminders...');
 
-    const users = await this.usersRepository.findAllWithPhone();
+    const users = await this.usersRepository.findAllReminderTargets();
 
-    // Fase 1: monta a mensagem e faz o claim dos itens de cada usuário. Cada item
-    // do lote carrega TODAS as suas dedupeKeys em `ref` (um usuário pode ter N
-    // contas/faturas no mesmo lembrete).
+    // Fase 1: por usuário, dispara o PUSH (item a item, como sempre foi) e
+    // PREPARA o item de WhatsApp. Cada item do lote carrega todas as suas
+    // dedupeKeys em `ref` (um usuário pode ter N contas/faturas no lembrete).
     const batch: BulkMessageParams[] = [];
     for (const user of users) {
       try {
         const prepared = await this.prepareForUser(
           user.id,
           user.name,
-          user.phone!,
+          user.phone,
           now,
         );
         if (prepared) batch.push(prepared);
       } catch (error) {
-        this.logger.error(`Bill reminder prep failed for user ${user.id}: ${error}`);
+        this.logger.error(`Bill reminder failed for user ${user.id}: ${error}`);
       }
     }
 
     if (batch.length === 0) return;
 
-    // Fase 2: UMA chamada em lote — o WMode espaça com o ritmo anti-ban.
+    // Fase 2: UMA chamada em lote para o WhatsApp — o WMode espaça com o ritmo
+    // anti-ban, em vez da rajada de /send que derrubava a sessão.
     const result = await this.wmodeClient.sendBulk(batch);
 
-    const dedupeKeysOf = (ref: unknown) => (ref as { dedupeKeys: string[] }).dedupeKeys;
+    const dedupeKeysOf = (ref: unknown) =>
+      (ref as { dedupeKeys: string[] }).dedupeKeys;
 
     // Falha total: libera todos os claims para o próximo cron.
     if (!result) {
       await this.reminderLog.release(batch.flatMap((b) => dedupeKeysOf(b.ref)));
-      this.logger.warn('Bill reminders: envio em lote falhou por completo; claims liberados');
+      this.logger.warn(
+        'Bill reminders: envio em lote falhou por completo; claims liberados',
+      );
       return;
     }
 
@@ -93,12 +100,12 @@ export class BillRemindersService {
     );
   }
 
-  /** Coleta os vencimentos do usuário, faz o claim e monta a mensagem. Retorna o
-   * item de lote (com as dedupeKeys em `ref`) ou null se não há o que lembrar. */
+  /** Dispara o push do usuário e devolve o item de WhatsApp para o lote (ou
+   * null quando não há o que lembrar / não há telefone). */
   private async prepareForUser(
     userId: string,
     name: string | null,
-    phone: string,
+    phone: string | null,
     now: Date,
   ): Promise<BulkMessageParams | null> {
     // Lembretes são premium (trial conta como acesso) e respeitam o opt-out.
@@ -141,6 +148,7 @@ export class BillRemindersService {
         // recebe (e deduplica) o próprio lembrete.
         dedupeKey: `bill:${userId}:${rec.id}:${targetKey}`,
         line: `• ${rec.category?.icon ?? '📌'} *${rec.description}* — ${formatBRL(rec.amount.toNumber())}`,
+        pushLabel: `${rec.description} — ${formatBRL(rec.amount.toNumber())}`,
       });
     }
 
@@ -163,12 +171,41 @@ export class BillRemindersService {
         refId: card.id,
         dedupeKey: `card_invoice:${userId}:${card.id}:${targetKey}`,
         line: `• 💳 Fatura do *${card.name}* — ${formatBRL(total)}`,
+        pushLabel: `Fatura do ${card.name} — ${formatBRL(total)}`,
       });
     }
 
     if (items.length === 0) return null;
 
-    // Claim ANTES de enfileirar (idempotência): só entram na mensagem os itens
+    const when =
+      setting.daysBefore === 0
+        ? 'HOJE'
+        : setting.daysBefore === 1
+          ? 'amanhã'
+          : `em ${setting.daysBefore} dias (${formatDayMonth(target)})`;
+
+    // Cada canal deduplica de forma independente (chaves distintas), então um
+    // usuário com telefone E app registrado recebe pelos dois.
+    //
+    // O PUSH continua item a item aqui: vai direto ao Expo, sem risco de ban e
+    // sem ganho em agrupar. Só o WhatsApp é adiado para o lote.
+    await this.sendPush(userId, when, targetKey, items);
+
+    if (!phone) return null;
+    return this.prepareWhatsapp(userId, name, phone, when, items);
+  }
+
+  /** Faz o claim dos itens e monta a mensagem — SEM enviar. O envio acontece
+   * no lote (sendBulk); as dedupeKeys viajam em `ref` para o release seletivo
+   * quando o WMode recusa/falha um item. */
+  private async prepareWhatsapp(
+    userId: string,
+    name: string | null,
+    phone: string,
+    when: string,
+    items: DueItem[],
+  ): Promise<BulkMessageParams | null> {
+    // Claim ANTES de enviar (idempotência): só entram na mensagem os itens
     // ainda não lembrados para este vencimento.
     const claimed: DueItem[] = [];
     for (const item of items) {
@@ -183,12 +220,6 @@ export class BillRemindersService {
     }
     if (claimed.length === 0) return null;
 
-    const when =
-      setting.daysBefore === 0
-        ? 'HOJE'
-        : setting.daysBefore === 1
-          ? 'amanhã'
-          : `em ${setting.daysBefore} dias (${formatDayMonth(target)})`;
     const greeting = name ? `Oi, ${name.split(' ')[0]}!` : 'Oi!';
     const message = [
       '⏰ *Vencimentos chegando*',
@@ -202,13 +233,60 @@ export class BillRemindersService {
       'Já deixa separado pra não pesar depois 😉',
     ].join('\n');
 
-    // Item pronto para o lote. Todas as dedupeKeys deste usuário viajam em `ref`;
-    // se o lote recusar/falhar este item, o cron libera todas de uma vez.
+    // Item pronto para o lote. Todas as dedupeKeys deste usuário viajam em
+    // `ref`; se o lote recusar/falhar este item, o cron libera todas de uma vez.
     return {
       to: phone,
       content: message,
       ref: { dedupeKeys: claimed.map((i) => i.dedupeKey) },
     };
+  }
+
+  private async sendPush(
+    userId: string,
+    when: string,
+    targetKey: string,
+    items: DueItem[],
+  ) {
+    // Chave de dedupe própria do canal push (prefixo), independente do WhatsApp.
+    const claimed: DueItem[] = [];
+    const keys: string[] = [];
+    for (const item of items) {
+      const key = `push:${item.dedupeKey}`;
+      const ok = await this.reminderLog.claim({
+        userId,
+        kind: item.kind,
+        refId: item.refId,
+        dedupeKey: key,
+        channel: 'push',
+      });
+      if (ok) {
+        claimed.push(item);
+        keys.push(key);
+      }
+    }
+    if (claimed.length === 0) return;
+
+    const body =
+      claimed.length === 1
+        ? `${claimed[0].pushLabel} vence ${when}.`
+        : `${claimed.length} vencimentos chegando ${when}.`;
+
+    const delivered = await this.pushDispatch.sendToUser(userId, {
+      title: '⏰ Vencimentos chegando',
+      body,
+      data: { type: 'bill_reminder' },
+    });
+
+    if (!delivered) {
+      // Sem device ativo (ou todos inválidos): libera para valer numa próxima.
+      await this.reminderLog.release(keys);
+      return;
+    }
+
+    this.logger.log(
+      `Sent ${claimed.length} due-bill push(es) to user ${userId} (target ${targetKey})`,
+    );
   }
 
   // Ciclo de fatura cujo VENCIMENTO cai exatamente na data-alvo. O vencimento

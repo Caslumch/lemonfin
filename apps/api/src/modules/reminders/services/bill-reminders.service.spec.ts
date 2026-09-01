@@ -27,7 +27,7 @@ function buildService(overrides: {
   const sent: string[] = [];
 
   const usersRepository = {
-    findAllWithPhone: jest
+    findAllReminderTargets: jest
       .fn()
       .mockResolvedValue(
         overrides.users ?? [{ id: 'u1', name: 'Lucas Dev', phone: '5511999' }],
@@ -81,6 +81,9 @@ function buildService(overrides: {
     claim: jest.fn().mockResolvedValue(overrides.claimResult ?? true),
     release: jest.fn().mockResolvedValue(undefined),
   };
+  const pushDispatch = {
+    sendToUser: jest.fn().mockResolvedValue(false),
+  };
 
   const service = new BillRemindersService(
     usersRepository as never,
@@ -89,6 +92,7 @@ function buildService(overrides: {
     cardsRepository as never,
     transactionsRepository as never,
     wmodeClient as never,
+    pushDispatch as never,
     premiumAccess as never,
     settings as never,
     reminderLog as never,
