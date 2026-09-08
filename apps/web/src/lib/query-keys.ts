@@ -39,6 +39,8 @@ export const queryKeys = {
   recurring: ["recurring"] as const,
   insights: ["insights"] as const,
   family: ["family"] as const,
+  pluggyItems: ["pluggy-items"] as const,
+  pluggyAccounts: ["pluggy-accounts"] as const,
 };
 
 /**
@@ -101,4 +103,11 @@ export function invalidateRecurring(qc: QueryClient) {
 /** Reservas são isoladas (não aparecem em outras telas). */
 export function invalidateReserves(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: queryKeys.reserves });
+}
+
+/** Conexões bancárias (Pluggy): sincronizar transações afeta tudo. */
+export function invalidatePluggy(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: queryKeys.pluggyItems });
+  qc.invalidateQueries({ queryKey: queryKeys.pluggyAccounts });
+  invalidateTransactionData(qc);
 }

@@ -14,6 +14,7 @@ import {
   PiggyBank,
   Repeat,
   Lightbulb,
+  Landmark,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -39,6 +40,7 @@ const navItems = [
   { href: "/reservas", label: "Reservas", icon: PiggyBank },
   { href: "/recorrentes", label: "Recorrentes", icon: Repeat },
   { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/contas-bancarias", label: "Contas", icon: Landmark },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

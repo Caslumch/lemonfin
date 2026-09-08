@@ -22,6 +22,7 @@ import { ReservesModule } from './modules/reserves/reserves.module';
 import { RecurringModule } from './modules/recurring/recurring.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { PluggyModule } from './modules/pluggy/pluggy.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
@@ -64,6 +65,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     RecurringModule,
     BudgetsModule,
     BillingModule,
+    PluggyModule,
     AdminModule,
   ],
   controllers: [HealthController],

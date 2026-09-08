@@ -85,6 +85,8 @@ model User {
   advisorMemories        AdvisorMemory[]
   apiKeys                ApiKey[]
   pushTokens             PushToken[]
+  pluggyItems            PluggyItem[]
+  bankAccounts           BankAccount[]
 
   @@map("users")
 }
@@ -311,6 +313,10 @@ model Transaction {
   installmentGroupId String?           @map("installment_group_id")
   installmentNumber  Int?              @map("installment_number")
   installmentTotal   Int?              @map("installment_total")
+  // ID externo (ex: id da transação na Pluggy). Único quando presente — garante
+  // dedup na importação automática (upsert por externalId). Null em transações
+  // manuais/WhatsApp/recorrentes (não vêm de sistema externo).
+  externalId         String?           @unique @map("external_id")
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
@@ -447,6 +453,7 @@ enum TransactionSource {
   MANUAL
   WHATSAPP
   RECURRING
+  PLUGGY
 }
 
 model Family {
@@ -601,4 +608,68 @@ model ProcessedMessage {
 
   @@index([createdAt])
   @@map("processed_messages")
+}
+
+// ── Open Finance (Pluggy) ──────────────────────────────────────────────
+// Item da Pluggy: representa uma conexão autorizada com uma instituição
+// financeira (Nubank, Itaú, etc.). O usuário autoriza via Connect Widget, a
+// Pluggy sincroniza automaticamente (auto-sync configurável). O webhook
+// avisa quando dados novos chegam; o sync service importa transações →
+// Transaction com source=PLUGGY e externalId para dedup.
+
+enum PluggyItemStatus {
+  CONNECTED    // sincronizado com sucesso, dados disponíveis
+  UPDATING     // sync em andamento
+  WAITING_USER // aguardando MFA ou ação do usuário
+  LOGIN_ERROR  // credencial expirou, precisa reconectar
+  ERROR        // outro erro na sincronização
+}
+
+model PluggyItem {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  // ID do Item na API da Pluggy (UUID). Único — impede duplicata de conexão.
+  pluggyItemId    String           @unique @map("pluggy_item_id")
+  connectorName   String           @map("connector_name") // ex: "Nubank", "Itaú"
+  connectorLogo   String?          @map("connector_logo") // URL do logo da instituição
+  status          PluggyItemStatus @default(UPDATING)
+  lastSyncAt      DateTime?        @map("last_sync_at")
+  // clientUserId passado ao criar o Connect Token — mapeia o Item ao user do
+  // LemonFin na Pluggy. Redundante com userId, mas necessário para resolver
+  // webhooks (que só trazem clientUserId, não o nosso userId diretamente).
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts BankAccount[]
+
+  @@index([userId])
+  @@map("pluggy_items")
+}
+
+// Conta bancária real obtida via Pluggy (conta corrente, poupança, cartão de
+// crédito). Diferente do Card do LemonFin (que é um cartão manual para
+// categorizar gastos), o BankAccount é a conta de verdade com saldo vindo do
+// banco. Futuramente pode alimentar reconciliação automática.
+model BankAccount {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  pluggyItemId    String   @map("pluggy_item_id")
+  // ID da conta na API da Pluggy (UUID). Único — impede duplicata.
+  pluggyAccountId String   @unique @map("pluggy_account_id")
+  name            String // "Conta Corrente", "Cartão Nubank"…
+  type            String // BANK, CREDIT (Pluggy account type)
+  subtype         String?  // CHECKING_ACCOUNT, SAVINGS_ACCOUNT, CREDIT_CARD…
+  number          String? // últimos dígitos
+  balance         Decimal  @default(0) @db.Decimal(12, 2)
+  currencyCode    String   @default("BRL") @map("currency_code")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pluggyItem PluggyItem @relation(fields: [pluggyItemId], references: [pluggyItemId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([pluggyItemId])
+  @@map("bank_accounts")
 }
