@@ -17,7 +17,9 @@ import {
   Unplug,
   TrendingUp,
   TrendingDown,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
@@ -662,6 +664,17 @@ function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: Cre
               <span>{usedPercent.toFixed(0)}% usado</span>
             )}
           </div>
+
+          {/* Link para fatura detalhada */}
+          {acc.linkedCard && (
+            <Link
+              href={`/cartoes?card=${acc.linkedCard.id}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-lima hover:underline mt-1"
+            >
+              Ver fatura detalhada
+              <ExternalLink size={12} />
+            </Link>
+          )}
         </div>
       )}
     </div>
