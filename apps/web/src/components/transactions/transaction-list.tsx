@@ -188,6 +188,7 @@ export function TransactionList({
                 )}
                 {tx.user?.name && <span>· {tx.user.name.split(" ")[0]}</span>}
                 {tx.source === "WHATSAPP" && <span>· via WhatsApp</span>}
+                {tx.source === "PLUGGY" && <span>· via Open Finance</span>}
                 {tx.card && (
                   <span className="inline-flex items-center gap-1 text-fg-secondary">
                     ·

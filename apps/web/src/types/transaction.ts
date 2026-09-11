@@ -18,7 +18,7 @@ export interface Transaction {
   type: "INCOME" | "EXPENSE";
   description: string | null;
   date: string;
-  source: "MANUAL" | "WHATSAPP";
+  source: "MANUAL" | "WHATSAPP" | "RECURRING" | "PLUGGY";
   categoryId: string;
   category: Category;
   cardId: string | null;
