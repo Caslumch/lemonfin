@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -19,8 +20,8 @@ import { CreateConnectTokenUseCase } from '../use-cases/create-connect-token.use
 import { PluggyClientService } from '../services/pluggy-client.service';
 import { PluggySyncService } from '../services/pluggy-sync.service';
 import { PluggyRepository } from '../repositories/pluggy.repository';
-import { createConnectTokenSchema } from '../dtos/pluggy.dto';
-import type { CreateConnectTokenInput } from '../dtos/pluggy.dto';
+import { createConnectTokenSchema, linkCardSchema } from '../dtos/pluggy.dto';
+import type { CreateConnectTokenInput, LinkCardInput } from '../dtos/pluggy.dto';
 
 @Controller('pluggy')
 @UseGuards(JwtAuthGuard, PremiumGuard)
@@ -141,6 +142,22 @@ export class PluggyController {
       message: `Sincronizado: ${result.accounts} contas, ${result.transactions} transações.`,
       ...result,
     };
+  }
+
+  /** Vincula/desvincula manualmente um Card a uma conta de crédito. */
+  @Patch('accounts/:pluggyAccountId/link-card')
+  async linkCard(
+    @CurrentUser() user: { id: string },
+    @Param('pluggyAccountId') pluggyAccountId: string,
+    @Body(new ZodValidationPipe(linkCardSchema)) body: LinkCardInput,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const accounts = await this.pluggyRepo.findAccountsByUser(userIds);
+    const account = accounts.find((a) => a.pluggyAccountId === pluggyAccountId);
+    if (!account) throw new NotFoundException('Conta não encontrada.');
+
+    await this.pluggyRepo.updateAccountLinkedCard(pluggyAccountId, body.cardId);
+    return { message: body.cardId ? 'Cartão vinculado.' : 'Cartão desvinculado.' };
   }
 
   /** Remove uma conexão. */
