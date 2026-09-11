@@ -606,7 +606,11 @@ function AccountRow({
     if (!isCredit || !fetchApi || !acc.linkedCardId || transactions.length > 0) return;
     let active = true;
     setLoadingTx(true);
-    const params = cycleStartDate ? `?startDate=${cycleStartDate}` : "";
+    // Buscar transações do ciclo atual: desde o fechamento até hoje
+    const qs = new URLSearchParams();
+    if (cycleStartDate) qs.set("startDate", cycleStartDate);
+    qs.set("endDate", new Date().toISOString());
+    const params = qs.toString() ? `?${qs.toString()}` : "";
     fetchApi<PluggyTransaction[]>(`/pluggy/accounts/${acc.pluggyAccountId}/transactions${params}`)
       .then((txs) => { if (active) setTransactions(txs); })
       .catch(() => {})

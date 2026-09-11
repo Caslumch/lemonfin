@@ -73,13 +73,15 @@ export class PluggyController {
     return bills.results ?? [];
   }
 
-  /** Transações importadas da Pluggy para um cartão de crédito. */
+  /** Transações do ciclo atual de um cartão de crédito.
+   *  Sem startDate/endDate, calcula o ciclo do fechamento (closingDay do
+   *  cartão vinculado ou balanceCloseDate da conta Pluggy). */
   @Get('accounts/:pluggyAccountId/transactions')
   async listAccountTransactions(
     @CurrentUser() user: { id: string },
     @Param('pluggyAccountId') pluggyAccountId: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
   ) {
     const userIds = await this.familyContext.resolveUserIds(user.id);
     const accounts = await this.pluggyRepo.findAccountsByUser(userIds);
@@ -87,11 +89,28 @@ export class PluggyController {
     if (!account) throw new NotFoundException('Conta não encontrada.');
     if (!account.linkedCardId) return [];
 
+    // Calcular início do ciclo atual se não passado explicitamente.
+    // Usa balanceCloseDate (data de fechamento da Pluggy) ou closingDay
+    // do cartão vinculado para determinar quando o ciclo começou.
+    let startDate: Date | undefined;
+    if (startDateParam) {
+      startDate = new Date(startDateParam);
+    } else if (account.balanceCloseDate) {
+      startDate = new Date(account.balanceCloseDate);
+    } else if (account.linkedCard?.closingDay) {
+      // Estimar: se hoje > closingDay, ciclo começou neste mês; senão, no anterior
+      const now = new Date();
+      const closing = account.linkedCard.closingDay;
+      const year = now.getUTCFullYear();
+      const month = now.getUTCDate() > closing ? now.getUTCMonth() : now.getUTCMonth() - 1;
+      startDate = new Date(Date.UTC(year, month, closing + 1));
+    }
+
     return this.pluggyRepo.findCardTransactions({
       userIds,
       cardId: account.linkedCardId,
-      startDate: startDate ? new Date(startDate) : undefined,
-      endDate: endDate ? new Date(endDate) : undefined,
+      startDate,
+      endDate: endDateParam ? new Date(endDateParam) : new Date(),
     });
   }
 
