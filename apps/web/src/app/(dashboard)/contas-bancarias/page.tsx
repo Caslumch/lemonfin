@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Plus,
+  Link2,
   RefreshCw,
   Trash2,
   Landmark,
@@ -86,6 +87,7 @@ function ContasBancariasInner() {
   const { fetchApi, token } = useApi();
   const queryClient = useQueryClient();
   const [connecting, setConnecting] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
@@ -129,6 +131,28 @@ function ContasBancariasInner() {
     } catch {
       toast.error("Erro ao iniciar conexão.");
       setConnecting(false);
+    }
+  }, [fetchApi, queryClient]);
+
+  // ── Link existing Item (from Demo App / MeuPluggy) ─────────────
+
+  const handleLink = useCallback(async () => {
+    const pluggyItemId = prompt(
+      "Cole o Item ID da Pluggy (visível no dashboard):",
+    );
+    if (!pluggyItemId?.trim()) return;
+    setLinking(true);
+    try {
+      const result = await fetchApi<{ message: string; accounts: number; transactions: number }>(
+        "/pluggy/items/link",
+        { method: "POST", body: JSON.stringify({ pluggyItemId: pluggyItemId.trim() }) },
+      );
+      toast.success(result.message);
+      invalidatePluggy(queryClient);
+    } catch {
+      toast.error("Erro ao vincular Item. Verifique o ID.");
+    } finally {
+      setLinking(false);
     }
   }, [fetchApi, queryClient]);
 
@@ -176,14 +200,24 @@ function ContasBancariasInner() {
       <ContentHeader
         title="Contas Bancárias"
         actions={
-          <Button onClick={handleConnect} disabled={connecting}>
-            {connecting ? (
-              <Loader2 size={16} className="animate-spin mr-2" />
-            ) : (
-              <Plus size={16} className="mr-2" />
-            )}
-            Conectar banco
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleLink} disabled={linking}>
+              {linking ? (
+                <Loader2 size={16} className="animate-spin mr-2" />
+              ) : (
+                <Link2 size={16} className="mr-2" />
+              )}
+              Vincular Item
+            </Button>
+            <Button onClick={handleConnect} disabled={connecting}>
+              {connecting ? (
+                <Loader2 size={16} className="animate-spin mr-2" />
+              ) : (
+                <Plus size={16} className="mr-2" />
+              )}
+              Conectar banco
+            </Button>
+          </div>
         }
       />
 

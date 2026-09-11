@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -18,8 +19,8 @@ import { CreateConnectTokenUseCase } from '../use-cases/create-connect-token.use
 import { PluggyClientService } from '../services/pluggy-client.service';
 import { PluggySyncService } from '../services/pluggy-sync.service';
 import { PluggyRepository } from '../repositories/pluggy.repository';
-import { createConnectTokenSchema } from '../dtos/pluggy.dto';
-import type { CreateConnectTokenInput } from '../dtos/pluggy.dto';
+import { createConnectTokenSchema, linkItemSchema } from '../dtos/pluggy.dto';
+import type { CreateConnectTokenInput, LinkItemInput } from '../dtos/pluggy.dto';
 
 @Controller('pluggy')
 @UseGuards(JwtAuthGuard, PremiumGuard)
@@ -40,6 +41,38 @@ export class PluggyController {
     body: CreateConnectTokenInput,
   ) {
     return this.createConnectToken.execute(user.id, body.itemId);
+  }
+
+  /**
+   * Vincula um Item já existente na Pluggy ao usuário do LemonFin.
+   * Útil para Items criados via Demo App ou MeuPluggy OAuth.
+   */
+  @Post('items/link')
+  async linkItem(
+    @CurrentUser() user: { id: string },
+    @Body(new ZodValidationPipe(linkItemSchema))
+    body: LinkItemInput,
+  ) {
+    // Verificar se já existe
+    const existing = await this.pluggyRepo.findItemByPluggyId(body.pluggyItemId);
+    if (existing) throw new ConflictException('Este Item já está vinculado.');
+
+    // Buscar dados do Item na Pluggy para validar que existe e obter info
+    const itemData = await this.pluggyClient.getItem(body.pluggyItemId);
+
+    await this.pluggyRepo.createItem({
+      userId: user.id,
+      pluggyItemId: body.pluggyItemId,
+      connectorName: itemData.connector?.name ?? 'Desconhecido',
+      connectorLogo: itemData.connector?.imageUrl ?? undefined,
+    });
+
+    // Sincronizar contas e transações
+    const result = await this.syncService.syncItem(body.pluggyItemId);
+    return {
+      message: `Item vinculado. ${result.accounts} contas e ${result.transactions} transações importadas.`,
+      ...result,
+    };
   }
 
   /** Lista conexões (Items) do usuário/família. */
