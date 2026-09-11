@@ -35,7 +35,13 @@ export class PluggyRepository {
   async findItemsByUser(userIds: string[]) {
     return this.prisma.pluggyItem.findMany({
       where: { userId: { in: userIds } },
-      include: { accounts: true },
+      include: {
+        accounts: {
+          include: {
+            linkedCard: { select: { id: true, name: true, brand: true, closingDay: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -75,7 +81,20 @@ export class PluggyRepository {
     balance: number;
     currencyCode: string;
     linkedCardId?: string;
+    creditLimit?: number;
+    availableCreditLimit?: number;
+    balanceDueDate?: Date;
+    balanceCloseDate?: Date;
+    minimumPayment?: number;
   }) {
+    const creditFields = {
+      creditLimit: data.creditLimit != null ? new Prisma.Decimal(data.creditLimit) : null,
+      availableCreditLimit: data.availableCreditLimit != null ? new Prisma.Decimal(data.availableCreditLimit) : null,
+      balanceDueDate: data.balanceDueDate ?? null,
+      balanceCloseDate: data.balanceCloseDate ?? null,
+      minimumPayment: data.minimumPayment != null ? new Prisma.Decimal(data.minimumPayment) : null,
+    };
+
     return this.prisma.bankAccount.upsert({
       where: { pluggyAccountId: data.pluggyAccountId },
       create: {
@@ -89,6 +108,7 @@ export class PluggyRepository {
         balance: new Prisma.Decimal(data.balance),
         currencyCode: data.currencyCode,
         linkedCardId: data.linkedCardId,
+        ...creditFields,
       },
       update: {
         name: data.name,
@@ -97,6 +117,7 @@ export class PluggyRepository {
         number: data.number,
         balance: new Prisma.Decimal(data.balance),
         currencyCode: data.currencyCode,
+        ...creditFields,
         // Não sobrescreve linkedCardId se já foi setado manualmente
         ...(data.linkedCardId && { linkedCardId: data.linkedCardId }),
       },

@@ -46,6 +46,12 @@ interface BankAccount {
   balance: number;
   currencyCode: string;
   linkedCardId: string | null;
+  linkedCard: { id: string; name: string; brand: string | null; closingDay: number } | null;
+  creditLimit: number | null;
+  availableCreditLimit: number | null;
+  balanceDueDate: string | null;
+  balanceCloseDate: string | null;
+  minimumPayment: number | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -321,11 +327,11 @@ function ContasBancariasInner() {
                     Cartão de crédito
                   </span>
                 </div>
-                <p className="text-2xl font-bold tabular-nums text-fg">
+                <p className="text-2xl font-bold tabular-nums text-amber-500">
                   {fmt(totalCredit)}
                 </p>
                 <p className="text-xs text-fg-muted mt-1">
-                  {credit.length} cartão{credit.length !== 1 && "ões"} · saldo total
+                  {credit.length} cartão{credit.length !== 1 && "ões"} · fatura aberta
                 </p>
               </div>
             )}
@@ -490,31 +496,96 @@ function AccountRow({ account: acc }: { account: BankAccount }) {
   const Icon = accountIcon(acc.type, acc.subtype);
   const label = accountLabel(acc.subtype, acc.type);
   const isCredit = acc.type === "CREDIT";
+  const usedPercent =
+    isCredit && acc.creditLimit
+      ? Math.min(100, (acc.balance / acc.creditLimit) * 100)
+      : null;
 
   return (
-    <div className="flex items-center justify-between px-5 py-3.5">
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          "w-9 h-9 rounded-lg flex items-center justify-center",
-          isCredit ? "bg-amber-500/10" : "bg-emerald-500/10",
-        )}>
-          <Icon size={16} className={isCredit ? "text-amber-500" : "text-emerald-500"} />
+    <div className="px-5 py-4">
+      {/* Main row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-9 h-9 rounded-lg flex items-center justify-center",
+            isCredit ? "bg-amber-500/10" : "bg-emerald-500/10",
+          )}>
+            <Icon size={16} className={isCredit ? "text-amber-500" : "text-emerald-500"} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-fg">{acc.name}</p>
+            <p className="text-xs text-fg-muted">
+              {label}
+              {acc.number && ` · ···${acc.number}`}
+              {acc.linkedCard && ` · ${acc.linkedCard.name}`}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-medium text-fg">{acc.name}</p>
-          <p className="text-xs text-fg-muted">
-            {label}
-            {acc.number && ` · ···${acc.number}`}
-            {acc.linkedCardId && " · vinculado"}
+        <div className="text-right">
+          <p className={cn(
+            "text-sm font-semibold tabular-nums",
+            isCredit ? "text-amber-500" : acc.balance >= 0 ? "text-fg" : "text-danger",
+          )}>
+            {fmt(isCredit ? acc.balance : acc.balance, acc.currencyCode)}
           </p>
+          {isCredit && acc.creditLimit != null && (
+            <p className="text-xs text-fg-muted">
+              de {fmt(acc.creditLimit)}
+            </p>
+          )}
         </div>
       </div>
-      <p className={cn(
-        "text-sm font-semibold tabular-nums",
-        isCredit ? "text-amber-500" : acc.balance >= 0 ? "text-fg" : "text-danger",
-      )}>
-        {isCredit && "- "}{fmt(Math.abs(acc.balance), acc.currencyCode)}
-      </p>
+
+      {/* Credit card details */}
+      {isCredit && (
+        <div className="mt-3 space-y-2">
+          {/* Usage bar */}
+          {usedPercent != null && (
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  usedPercent > 80 ? "bg-danger" : usedPercent > 50 ? "bg-amber-500" : "bg-emerald-500",
+                )}
+                style={{ width: `${usedPercent}%` }}
+              />
+            </div>
+          )}
+
+          {/* Info chips */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
+            {acc.availableCreditLimit != null && (
+              <span>
+                Disponível: <span className="text-fg font-medium">{fmt(acc.availableCreditLimit)}</span>
+              </span>
+            )}
+            {acc.minimumPayment != null && acc.minimumPayment > 0 && (
+              <span>
+                Mínimo: <span className="text-fg font-medium">{fmt(acc.minimumPayment)}</span>
+              </span>
+            )}
+            {acc.balanceDueDate && (
+              <span>
+                Vencimento: <span className="text-fg font-medium">
+                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(acc.balanceDueDate))}
+                </span>
+              </span>
+            )}
+            {acc.balanceCloseDate && (
+              <span>
+                Fechamento: <span className="text-fg font-medium">
+                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(acc.balanceCloseDate))}
+                </span>
+              </span>
+            )}
+            {usedPercent != null && (
+              <span>
+                {usedPercent.toFixed(0)}% usado
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

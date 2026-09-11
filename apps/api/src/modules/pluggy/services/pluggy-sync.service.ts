@@ -115,6 +115,9 @@ export class PluggySyncService {
           }
         }
 
+        // Extrair dados de crédito (creditData) se for conta de cartão
+        const cd = acc.creditData;
+
         await this.pluggyRepo.upsertAccount({
           userId,
           pluggyItemId,
@@ -126,6 +129,11 @@ export class PluggySyncService {
           balance: acc.balance ?? 0,
           currencyCode: acc.currencyCode ?? 'BRL',
           linkedCardId,
+          creditLimit: cd?.creditLimit ?? undefined,
+          availableCreditLimit: cd?.availableCreditLimit ?? undefined,
+          balanceDueDate: cd?.balanceDueDate ? new Date(cd.balanceDueDate) : undefined,
+          balanceCloseDate: cd?.balanceCloseDate ? new Date(cd.balanceCloseDate) : undefined,
+          minimumPayment: cd?.minimumPayment ?? undefined,
         });
         totalAccounts++;
 
