@@ -193,7 +193,9 @@ export class PluggyRepository {
     });
   }
 
-  /** Transações importadas da Pluggy para um cartão, num período. */
+  /** Transações importadas da Pluggy para um cartão, num período.
+   *  Só EXPENSE: pagamentos (CREDIT/INCOME como "PAGTO. POR DEB EM C/C")
+   *  são filtrados — não são compras, são quitação da fatura. */
   async findPluggyTransactions(params: {
     userIds: string[];
     cardId: string;
@@ -206,6 +208,7 @@ export class PluggyRepository {
         userId: { in: params.userIds },
         cardId: params.cardId,
         source: 'PLUGGY',
+        type: 'EXPENSE',
         ...(params.startDate || params.endDate
           ? {
               date: {
