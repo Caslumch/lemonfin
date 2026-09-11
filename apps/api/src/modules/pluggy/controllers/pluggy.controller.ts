@@ -4,6 +4,7 @@ import {
   Post,
   Delete,
   Param,
+  Query,
   Body,
   UseGuards,
   NotFoundException,
@@ -70,6 +71,28 @@ export class PluggyController {
 
     const bills = await this.pluggyClient.getCreditCardBills(pluggyAccountId);
     return bills.results ?? [];
+  }
+
+  /** Transações importadas da Pluggy para um cartão de crédito. */
+  @Get('accounts/:pluggyAccountId/transactions')
+  async listAccountTransactions(
+    @CurrentUser() user: { id: string },
+    @Param('pluggyAccountId') pluggyAccountId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const accounts = await this.pluggyRepo.findAccountsByUser(userIds);
+    const account = accounts.find((a) => a.pluggyAccountId === pluggyAccountId);
+    if (!account) throw new NotFoundException('Conta não encontrada.');
+    if (!account.linkedCardId) return [];
+
+    return this.pluggyRepo.findPluggyTransactions({
+      userIds,
+      cardId: account.linkedCardId,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
   }
 
   /** Força re-sync de um Item. */

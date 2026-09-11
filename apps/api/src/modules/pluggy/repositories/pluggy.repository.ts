@@ -193,6 +193,34 @@ export class PluggyRepository {
     });
   }
 
+  /** Transações importadas da Pluggy para um cartão, num período. */
+  async findPluggyTransactions(params: {
+    userIds: string[];
+    cardId: string;
+    startDate?: Date;
+    endDate?: Date;
+    take?: number;
+  }) {
+    return this.prisma.transaction.findMany({
+      where: {
+        userId: { in: params.userIds },
+        cardId: params.cardId,
+        source: 'PLUGGY',
+        ...(params.startDate || params.endDate
+          ? {
+              date: {
+                ...(params.startDate && { gte: params.startDate }),
+                ...(params.endDate && { lte: params.endDate }),
+              },
+            }
+          : {}),
+      },
+      include: { category: true },
+      orderBy: { date: 'desc' },
+      take: params.take ?? 50,
+    });
+  }
+
   // Procura uma transação manual (sem externalId) com mesmo valor, tipo e
   // data próxima (±2 dias) — candidata a duplicata de uma importação Pluggy.
   async findPossibleManualDuplicate(params: {
