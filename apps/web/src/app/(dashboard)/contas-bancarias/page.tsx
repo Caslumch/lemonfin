@@ -19,12 +19,15 @@ import {
   TrendingDown,
   ChevronDown,
   ChevronUp,
+  Link2Off,
 } from "lucide-react";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
+import { useCards } from "@/hooks/use-transactions-data";
 import { queryKeys, invalidatePluggy } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import type { Card } from "@/types/card";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -156,6 +159,9 @@ function ContasBancariasInner() {
   const [linking, setLinking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  // Fetch cards for manual linking
+  const { data: cards } = useCards();
 
   // Fetch items
   const itemsQuery = useQuery<PluggyItem[]>({
@@ -295,6 +301,24 @@ function ContasBancariasInner() {
         toast.error("Erro ao remover conexão.");
       } finally {
         setDeletingId(null);
+      }
+    },
+    [fetchApi, queryClient],
+  );
+
+  // ── Link card ─────────────────────────────────────────────────────
+
+  const handleLinkCard = useCallback(
+    async (pluggyAccountId: string, cardId: string | null) => {
+      try {
+        await fetchApi(`/pluggy/accounts/${pluggyAccountId}/link-card`, {
+          method: "PATCH",
+          body: JSON.stringify({ cardId }),
+        });
+        toast.success(cardId ? "Cartão vinculado." : "Cartão desvinculado.");
+        invalidatePluggy(queryClient);
+      } catch {
+        toast.error("Erro ao vincular cartão.");
       }
     },
     [fetchApi, queryClient],
@@ -462,6 +486,8 @@ function ContasBancariasInner() {
                       account={acc}
                       bills={billsByAccount[acc.pluggyAccountId]}
                       fetchApi={fetchApi}
+                      cards={cards}
+                      onLinkCard={handleLinkCard}
                     />
                   ))}
                 </div>
@@ -565,10 +591,14 @@ function AccountRow({
   account: acc,
   bills,
   fetchApi,
+  cards,
+  onLinkCard,
 }: {
   account: BankAccount;
   bills?: CreditCardBill[];
   fetchApi?: <T>(path: string, opts?: RequestInit) => Promise<T>;
+  cards?: Card[];
+  onLinkCard?: (pluggyAccountId: string, cardId: string | null) => Promise<void>;
 }) {
   const Icon = accountIcon(acc.type, acc.subtype);
   const label = accountLabel(acc.subtype, acc.type);
@@ -707,6 +737,37 @@ function AccountRow({
             )}
             {usedPercent != null && <span>{usedPercent.toFixed(0)}% usado</span>}
           </div>
+
+          {/* Link manual a cartão */}
+          {onLinkCard && cards && (
+            <div className="flex items-center gap-2">
+              <CreditCard size={14} className="text-fg-muted shrink-0" />
+              <select
+                value={acc.linkedCardId ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onLinkCard(acc.pluggyAccountId, val || null);
+                }}
+                className="text-xs bg-transparent border border-border rounded-lg px-2 py-1.5 text-fg cursor-pointer focus:outline-none focus:ring-1 focus:ring-lima"
+              >
+                <option value="">Sem cartão vinculado</option>
+                {cards.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.lastFour ? ` (···${c.lastFour})` : ""}{c.brand ? ` · ${c.brand}` : ""}
+                  </option>
+                ))}
+              </select>
+              {acc.linkedCardId && (
+                <button
+                  onClick={() => onLinkCard(acc.pluggyAccountId, null)}
+                  className="text-fg-muted hover:text-danger transition-colors cursor-pointer"
+                  title="Desvincular cartão"
+                >
+                  <Link2Off size={14} />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Ver transações */}
           {acc.linkedCardId && (

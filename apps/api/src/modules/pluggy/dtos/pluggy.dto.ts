@@ -7,3 +7,9 @@ export const createConnectTokenSchema = z.object({
 });
 
 export type CreateConnectTokenInput = z.infer<typeof createConnectTokenSchema>;
+
+export const linkCardSchema = z.object({
+  cardId: z.string().cuid().nullable(),
+});
+
+export type LinkCardInput = z.infer<typeof linkCardSchema>;
