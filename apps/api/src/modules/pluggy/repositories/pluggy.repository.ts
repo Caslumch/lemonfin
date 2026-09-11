@@ -226,8 +226,58 @@ export class PluggyRepository {
     });
   }
 
-  // Procura uma transação manual (sem externalId) com mesmo valor, tipo e
-  // data próxima (±2 dias) — candidata a duplicata de uma importação Pluggy.
+  /**
+   * Remove transações source=PLUGGY que são duplicatas de manuais.
+   * Critério: mesmo cardId, mesmo tipo, valor ±R$1, data ±2 dias,
+   * e existe uma transação manual (externalId null) correspondente.
+   */
+  async removeDuplicatePluggyTransactions(userIds: string[]): Promise<number> {
+    const pluggyTxs = await this.prisma.transaction.findMany({
+      where: {
+        userId: { in: userIds },
+        source: 'PLUGGY',
+        externalId: { not: null },
+      },
+      select: { id: true, amount: true, type: true, date: true, cardId: true, userId: true },
+    });
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const toDelete: string[] = [];
+
+    for (const ptx of pluggyTxs) {
+      const amt = ptx.amount.toNumber();
+      const manual = await this.prisma.transaction.findFirst({
+        where: {
+          userId: ptx.userId,
+          externalId: null,
+          cardId: ptx.cardId,
+          type: ptx.type,
+          amount: {
+            gte: new Prisma.Decimal(Math.max(0, amt - 1)),
+            lte: new Prisma.Decimal(amt + 1),
+          },
+          date: {
+            gte: new Date(ptx.date.getTime() - 2 * dayMs),
+            lte: new Date(ptx.date.getTime() + 2 * dayMs),
+          },
+        },
+      });
+      if (manual) toDelete.push(ptx.id);
+    }
+
+    if (toDelete.length > 0) {
+      await this.prisma.transaction.deleteMany({
+        where: { id: { in: toDelete } },
+      });
+    }
+
+    return toDelete.length;
+  }
+
+  // Procura uma transação manual (sem externalId) com valor próximo (±R$1),
+  // mesmo tipo e data próxima (±2 dias) — candidata a duplicata de uma
+  // importação Pluggy. A tolerância de ±R$1 cobre arredondamentos de centavos
+  // entre o que o usuário registrou e o que o banco cobrou de fato.
   async findPossibleManualDuplicate(params: {
     userId: string;
     amount: number;
@@ -237,12 +287,16 @@ export class PluggyRepository {
     const dayMs = 24 * 60 * 60 * 1000;
     const dateBefore = new Date(params.date.getTime() - 2 * dayMs);
     const dateAfter = new Date(params.date.getTime() + 2 * dayMs);
+    const amt = Math.abs(params.amount);
 
     return this.prisma.transaction.findFirst({
       where: {
         userId: params.userId,
         externalId: null, // só transações manuais
-        amount: new Prisma.Decimal(Math.abs(params.amount)),
+        amount: {
+          gte: new Prisma.Decimal(Math.max(0, amt - 1)),
+          lte: new Prisma.Decimal(amt + 1),
+        },
         type: params.type,
         date: { gte: dateBefore, lte: dateAfter },
       },
