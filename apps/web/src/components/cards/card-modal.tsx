@@ -41,6 +41,7 @@ const cardSchema = z.object({
     .min(1, "Dia deve ser entre 1 e 31")
     .max(31, "Dia deve ser entre 1 e 31")
     .optional(),
+  lastFour: z.string().regex(/^\d{4}$/, "Deve ter 4 dígitos").optional(),
   colorPreset: z.enum(COLOR_KEYS).nullable().optional(),
 });
 
@@ -55,6 +56,7 @@ interface CardModalProps {
     limit?: number;
     closingDay: number;
     dueDay?: number;
+    lastFour?: string;
     colorPreset?: ColorKey | null;
   }) => Promise<void>;
   card?: Card | null;
@@ -71,6 +73,7 @@ export function CardModal({
   const [limit, setLimit] = useState("");
   const [closingDay, setClosingDay] = useState("");
   const [dueDay, setDueDay] = useState("");
+  const [lastFour, setLastFour] = useState("");
   // null = "Bandeira" (sem cor escolhida → o visual segue a bandeira).
   const [colorPreset, setColorPreset] = useState<ColorKey | null>(null);
   const [error, setError] = useState("");
@@ -85,6 +88,7 @@ export function CardModal({
       setLimit(card.limit ? String(Number(card.limit)) : "");
       setClosingDay(String(card.closingDay));
       setDueDay(card.dueDay ? String(card.dueDay) : "");
+      setLastFour(card.lastFour || "");
       setColorPreset(
         card.colorPreset && (COLOR_KEYS as readonly string[]).includes(
           card.colorPreset,
@@ -98,6 +102,7 @@ export function CardModal({
       setLimit("");
       setClosingDay("");
       setDueDay("");
+      setLastFour("");
       setColorPreset(null);
     }
     setError("");
@@ -115,6 +120,7 @@ export function CardModal({
       limit: limit ? parseFloat(limit) : undefined,
       closingDay: parseInt(closingDay, 10),
       dueDay: dueDay ? parseInt(dueDay, 10) : undefined,
+      lastFour: lastFour || undefined,
       colorPreset,
     });
 
@@ -169,6 +175,7 @@ export function CardModal({
                 limit: limit ? String(parseFloat(limit)) : null,
                 closingDay: closingDay ? parseInt(closingDay, 10) : 1,
                 dueDay: dueDay ? parseInt(dueDay, 10) : null,
+                lastFour: lastFour || null,
                 colorPreset,
                 userId: card?.userId ?? "",
                 createdAt: card?.createdAt ?? "",
@@ -195,6 +202,17 @@ export function CardModal({
               size="md"
               placeholder="Selecione..."
               options={BRANDS.map((b) => ({ value: b, label: b }))}
+            />
+
+            <Input
+              id="lastFour"
+              label="Últimos 4 dígitos"
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="Ex: 6809"
+              value={lastFour}
+              onChange={(e) => setLastFour(e.target.value.replace(/\D/g, "").slice(0, 4))}
             />
 
             {/* Cor do cartão: paleta de swatches + "Bandeira" (= sem cor, segue

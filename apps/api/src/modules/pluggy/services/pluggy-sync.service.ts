@@ -112,6 +112,15 @@ export class PluggySyncService {
             this.logger.log(
               `Auto-link: conta "${acc.name}" (···${acc.number}) → card ${linkedCardId}`,
             );
+            // Salvar os últimos 4 dígitos no Card quando o Pluggy informa o
+            // número e o card ainda não tem lastFour preenchido.
+            if (acc.number) {
+              const card = userCards.find((c) => c.id === linkedCardId);
+              if (card && !card.lastFour) {
+                await this.cardsRepo.update(linkedCardId, { lastFour: acc.number });
+                card.lastFour = acc.number;
+              }
+            }
           }
         }
 
@@ -251,19 +260,30 @@ export class PluggySyncService {
   /**
    * Tenta encontrar o Card do LemonFin correspondente a uma conta de crédito
    * da Pluggy. Estratégias em ordem de prioridade:
-   * 1. Match por nome do conector no nome do card (ex: "Bradesco" no card name)
-   * 2. Match por brand extraída do nome da conta (ex: "VISA" → brand "Visa")
+   * 1. Match exato por últimos 4 dígitos (lastFour vs accountNumber) — sem ambiguidade
+   * 2. Match por nome do conector no nome do card (ex: "Bradesco" no card name)
+   * 3. Match por brand extraída do nome da conta (ex: "VISA" → brand "Visa")
    * Retorna o cardId ou null se não encontrou.
    */
   private matchCard(
     accountName: string,
     accountNumber: string,
-    cards: Array<{ id: string; name: string; brand: string | null }>,
+    cards: Array<{ id: string; name: string; brand: string | null; lastFour: string | null }>,
   ): string | null {
     if (cards.length === 0) return null;
+
+    // 1. Match exato por últimos 4 dígitos — mais confiável, sem ambiguidade.
+    // Ex: conta com number "6809" → card com lastFour "6809"
+    if (accountNumber) {
+      const match = cards.find(
+        (c) => c.lastFour && c.lastFour === accountNumber,
+      );
+      if (match) return match.id;
+    }
+
     const nameLower = accountName.toLowerCase();
 
-    // 1. Match direto: nome do card contido no nome da conta ou vice-versa
+    // 2. Match direto: nome do card contido no nome da conta ou vice-versa
     // Ex: conta "VISA SIGNATURE" vs card "Bradesco" — não bate.
     // Ex: conta "Nubank Ultravioleta" vs card "Nubank" — bate.
     for (const card of cards) {
@@ -273,7 +293,7 @@ export class PluggySyncService {
       }
     }
 
-    // 2. Match por brand: extrair bandeira do nome da conta da Pluggy
+    // 3. Match por brand: extrair bandeira do nome da conta da Pluggy
     // Ex: conta "VISA SIGNATURE" → brand "visa" → card com brand "Visa"
     const brands = ['visa', 'mastercard', 'elo', 'amex', 'hipercard'];
     for (const brand of brands) {

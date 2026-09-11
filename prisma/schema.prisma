@@ -380,6 +380,7 @@ model Card {
   limit       Decimal? @db.Decimal(12, 2)
   closingDay  Int      @map("closing_day")
   dueDay      Int?     @map("due_day")
+  lastFour    String?  @map("last_four")
   // Cor escolhida pelo usuário (chave de preset, ex.: "azul"). Nulo = sem
   // escolha → o visual do cartão cai no tema derivado da bandeira (brand).
   colorPreset String?  @map("color_preset")
