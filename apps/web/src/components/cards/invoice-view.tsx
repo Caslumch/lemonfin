@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Search, X, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CategoryIconWithBg } from "@/components/ui/category-icon";
@@ -185,6 +185,23 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDeleteTx(txId: string) {
+    if (!confirm("Excluir esta transação?")) return;
+    setDeletingId(txId);
+    try {
+      await fetchApi(`/transactions/${txId}`, { method: "DELETE" });
+      toast.success("Transação excluída.");
+      invalidateInvoice(queryClient);
+      invalidateTransactionData(queryClient);
+    } catch {
+      toast.error("Erro ao excluir.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Debounce da busca (mesmo padrão da tela de Transações: 350ms).
   useEffect(() => {
@@ -549,9 +566,23 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                     </p>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-fg shrink-0">
-                  {formatBRL(Number(tx.amount))}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-semibold text-fg">
+                    {formatBRL(Number(tx.amount))}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteTx(tx.id)}
+                    disabled={deletingId === tx.id}
+                    className="p-1 text-fg-muted hover:text-danger rounded-md hover:bg-subtle transition-colors cursor-pointer"
+                    title="Excluir"
+                  >
+                    {deletingId === tx.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </button>
+                </div>
               </div>
             );
           })}
