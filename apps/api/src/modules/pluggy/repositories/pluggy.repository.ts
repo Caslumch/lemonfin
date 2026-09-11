@@ -140,7 +140,10 @@ export class PluggyRepository {
   async findAccountsByUser(userIds: string[]) {
     return this.prisma.bankAccount.findMany({
       where: { userId: { in: userIds } },
-      include: { pluggyItem: { select: { connectorName: true, connectorLogo: true, status: true } } },
+      include: {
+        pluggyItem: { select: { connectorName: true, connectorLogo: true, status: true } },
+        linkedCard: { select: { id: true, name: true, brand: true, closingDay: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
