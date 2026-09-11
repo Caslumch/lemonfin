@@ -56,6 +56,22 @@ export class PluggyController {
     return this.pluggyRepo.findAccountsByUser(userIds);
   }
 
+  /** Faturas de um cartão de crédito (Pluggy). */
+  @Get('accounts/:pluggyAccountId/bills')
+  async listBills(
+    @CurrentUser() user: { id: string },
+    @Param('pluggyAccountId') pluggyAccountId: string,
+  ) {
+    // Verificar que a conta pertence ao usuário
+    const userIds = await this.familyContext.resolveUserIds(user.id);
+    const accounts = await this.pluggyRepo.findAccountsByUser(userIds);
+    const account = accounts.find((a) => a.pluggyAccountId === pluggyAccountId);
+    if (!account) throw new NotFoundException('Conta não encontrada.');
+
+    const bills = await this.pluggyClient.getCreditCardBills(pluggyAccountId);
+    return bills.results ?? [];
+  }
+
   /** Força re-sync de um Item. */
   @Post('items/:pluggyItemId/sync')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })

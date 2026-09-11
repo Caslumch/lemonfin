@@ -100,4 +100,10 @@ export class PluggyClientService {
     const client = this.client();
     return client.fetchAllTransactions(accountId, options);
   }
+
+  /** Lista faturas de um cartão de crédito. */
+  async getCreditCardBills(accountId: string) {
+    const client = this.client();
+    return client.fetchCreditCardBills(accountId);
+  }
 }
