@@ -112,8 +112,9 @@ export function themeFor(card?: {
   return BRAND_THEMES.default;
 }
 
-function maskedNumber(id: string): string {
-  // 4 dígitos finais estáveis a partir do id (não guardamos PAN real).
+function maskedNumber(lastFour: string | null | undefined, id: string): string {
+  if (lastFour) return `**** **** **** ${lastFour}`;
+  // Fallback: 4 dígitos derivados do id (quando o cartão não tem lastFour).
   const digits = id.replace(/\D/g, "");
   const last4 = (digits.slice(-4) || "0000").padStart(4, "0");
   return `**** **** **** ${last4}`;
@@ -170,7 +171,7 @@ export function CreditCardVisual({ card }: CreditCardVisualProps) {
       />
 
       <p className="relative mt-4 font-[family-name:var(--font-mono)] text-[17px] tracking-[0.18em] tabular-nums text-white/90">
-        {maskedNumber(card.id)}
+        {maskedNumber(card.lastFour, card.id)}
       </p>
 
       <div className="relative mt-4 flex items-end justify-between">

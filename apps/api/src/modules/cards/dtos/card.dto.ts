@@ -31,6 +31,7 @@ export const createCardSchema = z.object({
     .min(1)
     .max(31, 'Dia de vencimento deve ser entre 1 e 31')
     .optional(),
+  lastFour: z.string().regex(/^\d{4}$/, 'Deve ter exatamente 4 dígitos').optional(),
   colorPreset: colorPresetSchema.nullable().optional(),
 });
 
@@ -40,6 +41,7 @@ export const updateCardSchema = z.object({
   limit: z.number().positive().optional(),
   closingDay: z.number().int().min(1).max(31).optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
+  lastFour: z.string().regex(/^\d{4}$/, 'Deve ter exatamente 4 dígitos').nullable().optional(),
   colorPreset: colorPresetSchema.nullable().optional(),
 });
 
