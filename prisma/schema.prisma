@@ -664,6 +664,12 @@ model BankAccount {
   number          String? // últimos dígitos
   balance         Decimal  @default(0) @db.Decimal(12, 2)
   currencyCode    String   @default("BRL") @map("currency_code")
+  // ── Dados de crédito (preenchidos só para type=CREDIT) ────────────
+  creditLimit           Decimal?  @map("credit_limit") @db.Decimal(12, 2)
+  availableCreditLimit  Decimal?  @map("available_credit_limit") @db.Decimal(12, 2)
+  balanceDueDate        DateTime? @map("balance_due_date") // vencimento da fatura
+  balanceCloseDate      DateTime? @map("balance_close_date") // fechamento da fatura
+  minimumPayment        Decimal?  @map("minimum_payment") @db.Decimal(12, 2)
   // Vínculo com o Card manual do LemonFin. Quando preenchido, transações de
   // crédito importadas desta conta são atribuídas ao cartão (cardId na
   // Transaction). Pode ser setado automaticamente (match por nome/dígitos)
