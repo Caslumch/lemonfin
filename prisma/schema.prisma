@@ -392,6 +392,7 @@ model Card {
   recurring              RecurringTransaction[]
   invoicePayments        InvoicePayment[]
   invoiceReconciliations InvoiceReconciliation[]
+  bankAccounts           BankAccount[]
 
   @@index([userId])
   @@map("cards")
@@ -663,11 +664,17 @@ model BankAccount {
   number          String? // últimos dígitos
   balance         Decimal  @default(0) @db.Decimal(12, 2)
   currencyCode    String   @default("BRL") @map("currency_code")
+  // Vínculo com o Card manual do LemonFin. Quando preenchido, transações de
+  // crédito importadas desta conta são atribuídas ao cartão (cardId na
+  // Transaction). Pode ser setado automaticamente (match por nome/dígitos)
+  // ou manualmente pelo usuário.
+  linkedCardId    String?  @map("linked_card_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   pluggyItem PluggyItem @relation(fields: [pluggyItemId], references: [pluggyItemId], onDelete: Cascade)
+  linkedCard Card?      @relation(fields: [linkedCardId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([pluggyItemId])

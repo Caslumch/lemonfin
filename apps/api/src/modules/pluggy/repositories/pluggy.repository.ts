@@ -74,6 +74,7 @@ export class PluggyRepository {
     number?: string;
     balance: number;
     currencyCode: string;
+    linkedCardId?: string;
   }) {
     return this.prisma.bankAccount.upsert({
       where: { pluggyAccountId: data.pluggyAccountId },
@@ -87,6 +88,7 @@ export class PluggyRepository {
         number: data.number,
         balance: new Prisma.Decimal(data.balance),
         currencyCode: data.currencyCode,
+        linkedCardId: data.linkedCardId,
       },
       update: {
         name: data.name,
@@ -95,7 +97,22 @@ export class PluggyRepository {
         number: data.number,
         balance: new Prisma.Decimal(data.balance),
         currencyCode: data.currencyCode,
+        // Não sobrescreve linkedCardId se já foi setado manualmente
+        ...(data.linkedCardId && { linkedCardId: data.linkedCardId }),
       },
+    });
+  }
+
+  async findAccountByPluggyId(pluggyAccountId: string) {
+    return this.prisma.bankAccount.findUnique({
+      where: { pluggyAccountId },
+    });
+  }
+
+  async updateAccountLinkedCard(pluggyAccountId: string, linkedCardId: string | null) {
+    return this.prisma.bankAccount.update({
+      where: { pluggyAccountId },
+      data: { linkedCardId },
     });
   }
 
@@ -129,6 +146,7 @@ export class PluggyRepository {
     date: Date;
     userId: string;
     categoryId: string;
+    cardId?: string;
   }) {
     return this.prisma.transaction.upsert({
       where: { externalId: data.externalId },
@@ -141,6 +159,7 @@ export class PluggyRepository {
         source: 'PLUGGY',
         userId: data.userId,
         categoryId: data.categoryId,
+        cardId: data.cardId,
       },
       update: {
         amount: new Prisma.Decimal(Math.abs(data.amount)),
@@ -148,7 +167,32 @@ export class PluggyRepository {
         description: data.description,
         date: data.date,
         categoryId: data.categoryId,
+        cardId: data.cardId,
       },
+    });
+  }
+
+  // Procura uma transação manual (sem externalId) com mesmo valor, tipo e
+  // data próxima (±2 dias) — candidata a duplicata de uma importação Pluggy.
+  async findPossibleManualDuplicate(params: {
+    userId: string;
+    amount: number;
+    type: 'INCOME' | 'EXPENSE';
+    date: Date;
+  }) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const dateBefore = new Date(params.date.getTime() - 2 * dayMs);
+    const dateAfter = new Date(params.date.getTime() + 2 * dayMs);
+
+    return this.prisma.transaction.findFirst({
+      where: {
+        userId: params.userId,
+        externalId: null, // só transações manuais
+        amount: new Prisma.Decimal(Math.abs(params.amount)),
+        type: params.type,
+        date: { gte: dateBefore, lte: dateAfter },
+      },
+      orderBy: { date: 'desc' },
     });
   }
 }

@@ -8,10 +8,11 @@ import { CreateConnectTokenUseCase } from './use-cases/create-connect-token.use-
 import { HandlePluggyWebhookUseCase } from './use-cases/handle-pluggy-webhook.use-case';
 import { FamiliesModule } from '../families/families.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { CardsModule } from '../cards/cards.module';
 import { BillingEnforcementModule } from '../../common/billing/billing-enforcement.module';
 
 @Module({
-  imports: [FamiliesModule, CategoriesModule, BillingEnforcementModule],
+  imports: [FamiliesModule, CategoriesModule, CardsModule, BillingEnforcementModule],
   controllers: [PluggyController, PluggyWebhookController],
   providers: [
     PluggyClientService,
