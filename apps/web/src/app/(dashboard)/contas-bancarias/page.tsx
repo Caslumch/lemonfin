@@ -587,36 +587,33 @@ function AccountRow({
   const [transactions, setTransactions] = useState<PluggyTransaction[]>([]);
   const [loadingTx, setLoadingTx] = useState(false);
 
-  // Fatura aberta = soma das transações importadas quando a bill da Pluggy
-  // está zerada (paga) ou não existe para o ciclo atual.
+  // Fatura aberta = soma das transações do ciclo (já filtradas pelo backend)
   const openInvoiceFromTx = useMemo(() => {
     if (transactions.length === 0) return null;
-    // Filtra só transações desde o último fechamento
-    const closeDate = currentBill?.billClosingDate ?? acc.balanceCloseDate;
-    const since = closeDate ? new Date(closeDate) : null;
-    const relevant = since
-      ? transactions.filter((tx) => new Date(tx.date) >= since)
-      : transactions;
-    return relevant.reduce((s, tx) => s + Number(tx.amount), 0);
-  }, [transactions, currentBill, acc.balanceCloseDate]);
+    return transactions.reduce((s, tx) => s + Number(tx.amount), 0);
+  }, [transactions]);
 
   // Valor exibido: bill pendente se > 0, senão soma das transações do ciclo
   const displayInvoice = (billRemaining && billRemaining > 0)
     ? billRemaining
     : openInvoiceFromTx;
 
-  // Auto-load transações para contas de crédito (necessário para calcular fatura aberta)
+  // Auto-load transações do ciclo atual para contas de crédito
+  // Usa a data de fechamento (balanceCloseDate ou billClosingDate) como início
+  const cycleStartDate = currentBill?.billClosingDate ?? acc.balanceCloseDate;
+
   useEffect(() => {
     if (!isCredit || !fetchApi || !acc.linkedCardId || transactions.length > 0) return;
     let active = true;
     setLoadingTx(true);
-    fetchApi<PluggyTransaction[]>(`/pluggy/accounts/${acc.pluggyAccountId}/transactions`)
+    const params = cycleStartDate ? `?startDate=${cycleStartDate}` : "";
+    fetchApi<PluggyTransaction[]>(`/pluggy/accounts/${acc.pluggyAccountId}/transactions${params}`)
       .then((txs) => { if (active) setTransactions(txs); })
       .catch(() => {})
       .finally(() => { if (active) setLoadingTx(false); });
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCredit, fetchApi, acc.linkedCardId, acc.pluggyAccountId]);
+  }, [isCredit, fetchApi, acc.linkedCardId, acc.pluggyAccountId, cycleStartDate]);
 
   const toggleExpand = useCallback(() => {
     setExpanded((prev) => !prev);
