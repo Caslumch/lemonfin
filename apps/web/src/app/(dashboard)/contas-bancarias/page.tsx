@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, Suspense } from "react";
+import { useState, useCallback, useMemo, useEffect, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -52,6 +52,14 @@ interface BankAccount {
   balanceDueDate: string | null;
   balanceCloseDate: string | null;
   minimumPayment: number | null;
+}
+
+interface CreditCardBill {
+  id: string;
+  dueDate: string;
+  billClosingDate: string | null;
+  totalAmount: number;
+  minimumPayment: number;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -127,6 +135,28 @@ function ContasBancariasInner() {
   const items = itemsQuery.data ?? [];
   const loading = itemsQuery.isPending;
 
+  // ── Fetch bills for credit card accounts ───────────────────────────
+
+  const [billsByAccount, setBillsByAccount] = useState<Record<string, CreditCardBill[]>>({});
+
+  const creditAccountIds = useMemo(
+    () => items.flatMap((i) => i.accounts).filter((a) => a.type === "CREDIT").map((a) => a.pluggyAccountId),
+    [items],
+  );
+
+  useEffect(() => {
+    if (!token || creditAccountIds.length === 0) return;
+    let active = true;
+    for (const accId of creditAccountIds) {
+      fetchApi<CreditCardBill[]>(`/pluggy/accounts/${accId}/bills`)
+        .then((bills) => {
+          if (active) setBillsByAccount((prev) => ({ ...prev, [accId]: bills }));
+        })
+        .catch(() => {});
+    }
+    return () => { active = false; };
+  }, [token, creditAccountIds, fetchApi]);
+
   // ── Derived: all accounts flat + summaries ────────────────────────
 
   const allAccounts = useMemo(
@@ -153,6 +183,24 @@ function ContasBancariasInner() {
     () => credit.reduce((s, a) => s + a.balance, 0),
     [credit],
   );
+
+  // Fatura do mês atual: pega a bill mais recente (menor dueDate no futuro
+  // ou a última fechada). Soma totalAmount de todos os cartões de crédito.
+  const currentMonthInvoice = useMemo(() => {
+    let total = 0;
+    let hasData = false;
+    for (const acc of credit) {
+      const bills = billsByAccount[acc.pluggyAccountId];
+      if (!bills || bills.length === 0) continue;
+      // Bills vêm ordenadas por dueDate desc. A primeira é a mais recente.
+      const currentBill = bills[0];
+      if (currentBill) {
+        total += currentBill.totalAmount;
+        hasData = true;
+      }
+    }
+    return hasData ? total : null;
+  }, [credit, billsByAccount]);
 
   // ── Connect flow ──────────────────────────────────────────────────
 
@@ -324,14 +372,16 @@ function ContasBancariasInner() {
                     <CreditCard size={16} className="text-amber-500" />
                   </div>
                   <span className="text-xs font-medium text-fg-muted uppercase tracking-wide">
-                    Cartão de crédito
+                    {currentMonthInvoice != null ? "Fatura do mês" : "Limite usado"}
                   </span>
                 </div>
                 <p className="text-2xl font-bold tabular-nums text-amber-500">
-                  {fmt(totalCredit)}
+                  {fmt(currentMonthInvoice ?? totalCredit)}
                 </p>
                 <p className="text-xs text-fg-muted mt-1">
-                  {credit.length} cartão{credit.length !== 1 && "ões"} · fatura aberta
+                  {currentMonthInvoice != null
+                    ? `Limite usado: ${fmt(totalCredit)}`
+                    : `${credit.length} cartão${credit.length !== 1 ? "ões" : ""}`}
                 </p>
               </div>
             )}
@@ -357,12 +407,12 @@ function ContasBancariasInner() {
               </div>
               <p className={cn(
                 "text-2xl font-bold tabular-nums",
-                totalChecking - totalCredit >= 0 ? "text-emerald-500" : "text-danger",
+                totalChecking - (currentMonthInvoice ?? totalCredit) >= 0 ? "text-emerald-500" : "text-danger",
               )}>
-                {fmt(totalChecking - totalCredit)}
+                {fmt(totalChecking - (currentMonthInvoice ?? totalCredit))}
               </p>
               <p className="text-xs text-fg-muted mt-1">
-                Conta corrente − cartão de crédito
+                Saldo − fatura do mês
               </p>
             </div>
           </div>
@@ -393,7 +443,11 @@ function ContasBancariasInner() {
                 </h3>
                 <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
                   {credit.map((acc) => (
-                    <AccountRow key={acc.id} account={acc} />
+                    <AccountRow
+                      key={acc.id}
+                      account={acc}
+                      bills={billsByAccount[acc.pluggyAccountId]}
+                    />
                   ))}
                 </div>
               </div>
@@ -492,7 +546,7 @@ function ContasBancariasInner() {
 
 // ── Account Row ─────────────────────────────────────────────────────────
 
-function AccountRow({ account: acc }: { account: BankAccount }) {
+function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: CreditCardBill[] }) {
   const Icon = accountIcon(acc.type, acc.subtype);
   const label = accountLabel(acc.subtype, acc.type);
   const isCredit = acc.type === "CREDIT";
@@ -500,6 +554,9 @@ function AccountRow({ account: acc }: { account: BankAccount }) {
     isCredit && acc.creditLimit
       ? Math.min(100, (acc.balance / acc.creditLimit) * 100)
       : null;
+
+  // Fatura mais recente (primeira da lista, ordenada por dueDate desc)
+  const currentBill = bills?.[0];
 
   return (
     <div className="px-5 py-4">
@@ -522,16 +579,30 @@ function AccountRow({ account: acc }: { account: BankAccount }) {
           </div>
         </div>
         <div className="text-right">
-          <p className={cn(
-            "text-sm font-semibold tabular-nums",
-            isCredit ? "text-amber-500" : acc.balance >= 0 ? "text-fg" : "text-danger",
-          )}>
-            {fmt(isCredit ? acc.balance : acc.balance, acc.currencyCode)}
-          </p>
-          {isCredit && acc.creditLimit != null && (
-            <p className="text-xs text-fg-muted">
-              de {fmt(acc.creditLimit)}
-            </p>
+          {/* Mostra fatura do mês se disponível, senão limite usado */}
+          {isCredit && currentBill ? (
+            <>
+              <p className="text-sm font-semibold tabular-nums text-amber-500">
+                {fmt(currentBill.totalAmount)}
+              </p>
+              <p className="text-xs text-fg-muted">
+                fatura do mês · usado {fmt(acc.balance)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={cn(
+                "text-sm font-semibold tabular-nums",
+                isCredit ? "text-amber-500" : acc.balance >= 0 ? "text-fg" : "text-danger",
+              )}>
+                {fmt(acc.balance, acc.currencyCode)}
+              </p>
+              {isCredit && acc.creditLimit != null && (
+                <p className="text-xs text-fg-muted">
+                  de {fmt(acc.creditLimit)}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -559,29 +630,36 @@ function AccountRow({ account: acc }: { account: BankAccount }) {
                 Disponível: <span className="text-fg font-medium">{fmt(acc.availableCreditLimit)}</span>
               </span>
             )}
-            {acc.minimumPayment != null && acc.minimumPayment > 0 && (
+            {(currentBill?.minimumPayment ?? (acc.minimumPayment != null && acc.minimumPayment > 0 ? acc.minimumPayment : null)) != null && (
               <span>
-                Mínimo: <span className="text-fg font-medium">{fmt(acc.minimumPayment)}</span>
+                Mínimo: <span className="text-fg font-medium">{fmt(currentBill?.minimumPayment ?? acc.minimumPayment!)}</span>
               </span>
             )}
-            {acc.balanceDueDate && (
+            {(currentBill?.dueDate ?? acc.balanceDueDate) && (
               <span>
                 Vencimento: <span className="text-fg font-medium">
-                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(acc.balanceDueDate))}
+                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
+                    new Date(currentBill?.dueDate ?? acc.balanceDueDate!),
+                  )}
                 </span>
               </span>
             )}
-            {acc.balanceCloseDate && (
+            {(currentBill?.billClosingDate ?? acc.balanceCloseDate) && (
               <span>
                 Fechamento: <span className="text-fg font-medium">
-                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(acc.balanceCloseDate))}
+                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
+                    new Date(currentBill?.billClosingDate ?? acc.balanceCloseDate!),
+                  )}
                 </span>
+              </span>
+            )}
+            {acc.creditLimit != null && (
+              <span>
+                Limite: <span className="text-fg font-medium">{fmt(acc.creditLimit)}</span>
               </span>
             )}
             {usedPercent != null && (
-              <span>
-                {usedPercent.toFixed(0)}% usado
-              </span>
+              <span>{usedPercent.toFixed(0)}% usado</span>
             )}
           </div>
         </div>
