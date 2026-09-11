@@ -68,11 +68,21 @@ export class PluggyController {
     const item = items.find((i) => i.pluggyItemId === pluggyItemId);
     if (!item) throw new NotFoundException('Conexão não encontrada.');
 
-    // Dispara update na Pluggy (que depois notifica via webhook)
-    await this.pluggyClient.updateItem(pluggyItemId);
-    await this.pluggyRepo.updateItemStatus(pluggyItemId, { status: 'UPDATING' });
+    // Tenta disparar update na Pluggy. Items do MeuPluggy (proxy) não
+    // aceitam update — nesse caso, apenas re-importa os dados existentes.
+    try {
+      await this.pluggyClient.updateItem(pluggyItemId);
+    } catch {
+      // MeuPluggy item ou outro erro — segue para sync local
+    }
 
-    return { message: 'Sincronização iniciada.' };
+    await this.pluggyRepo.updateItemStatus(pluggyItemId, { status: 'UPDATING' });
+    const result = await this.syncService.syncItem(pluggyItemId);
+
+    return {
+      message: `Sincronizado: ${result.accounts} contas, ${result.transactions} transações.`,
+      ...result,
+    };
   }
 
   /** Remove uma conexão. */
