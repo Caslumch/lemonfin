@@ -87,7 +87,7 @@ export class PluggyController {
     if (!account) throw new NotFoundException('Conta não encontrada.');
     if (!account.linkedCardId) return [];
 
-    return this.pluggyRepo.findPluggyTransactions({
+    return this.pluggyRepo.findCardTransactions({
       userIds,
       cardId: account.linkedCardId,
       startDate: startDate ? new Date(startDate) : undefined,
