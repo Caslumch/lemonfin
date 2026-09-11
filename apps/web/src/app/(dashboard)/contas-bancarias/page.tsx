@@ -17,9 +17,9 @@ import {
   Unplug,
   TrendingUp,
   TrendingDown,
-  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import Link from "next/link";
 import { ContentHeader } from "@/components/layout/content-header";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/use-api";
@@ -54,6 +54,15 @@ interface BankAccount {
   balanceDueDate: string | null;
   balanceCloseDate: string | null;
   minimumPayment: number | null;
+}
+
+interface PluggyTransaction {
+  id: string;
+  amount: string;
+  type: "INCOME" | "EXPENSE";
+  description: string | null;
+  date: string;
+  category: { name: string; icon: string | null; colorBg: string; colorText: string };
 }
 
 interface CreditCardBill {
@@ -449,6 +458,7 @@ function ContasBancariasInner() {
                       key={acc.id}
                       account={acc}
                       bills={billsByAccount[acc.pluggyAccountId]}
+                      fetchApi={fetchApi}
                     />
                   ))}
                 </div>
@@ -548,7 +558,15 @@ function ContasBancariasInner() {
 
 // ── Account Row ─────────────────────────────────────────────────────────
 
-function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: CreditCardBill[] }) {
+function AccountRow({
+  account: acc,
+  bills,
+  fetchApi,
+}: {
+  account: BankAccount;
+  bills?: CreditCardBill[];
+  fetchApi?: <T>(path: string, opts?: RequestInit) => Promise<T>;
+}) {
   const Icon = accountIcon(acc.type, acc.subtype);
   const label = accountLabel(acc.subtype, acc.type);
   const isCredit = acc.type === "CREDIT";
@@ -557,8 +575,33 @@ function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: Cre
       ? Math.min(100, (acc.balance / acc.creditLimit) * 100)
       : null;
 
-  // Fatura mais recente (primeira da lista, ordenada por dueDate desc)
   const currentBill = bills?.[0];
+
+  // Expandir transações
+  const [expanded, setExpanded] = useState(false);
+  const [transactions, setTransactions] = useState<PluggyTransaction[]>([]);
+  const [loadingTx, setLoadingTx] = useState(false);
+
+  const toggleExpand = useCallback(async () => {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    if (!fetchApi || !acc.linkedCardId) return;
+    setExpanded(true);
+    if (transactions.length > 0) return; // já carregou
+    setLoadingTx(true);
+    try {
+      const txs = await fetchApi<PluggyTransaction[]>(
+        `/pluggy/accounts/${acc.pluggyAccountId}/transactions`,
+      );
+      setTransactions(txs);
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingTx(false);
+    }
+  }, [expanded, fetchApi, acc.linkedCardId, acc.pluggyAccountId, transactions.length]);
 
   return (
     <div className="px-5 py-4">
@@ -581,7 +624,6 @@ function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: Cre
           </div>
         </div>
         <div className="text-right">
-          {/* Mostra fatura do mês se disponível, senão limite usado */}
           {isCredit && currentBill ? (
             <>
               <p className="text-sm font-semibold tabular-nums text-amber-500">
@@ -600,9 +642,7 @@ function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: Cre
                 {fmt(acc.balance, acc.currencyCode)}
               </p>
               {isCredit && acc.creditLimit != null && (
-                <p className="text-xs text-fg-muted">
-                  de {fmt(acc.creditLimit)}
-                </p>
+                <p className="text-xs text-fg-muted">de {fmt(acc.creditLimit)}</p>
               )}
             </>
           )}
@@ -628,52 +668,77 @@ function AccountRow({ account: acc, bills }: { account: BankAccount; bills?: Cre
           {/* Info chips */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
             {acc.availableCreditLimit != null && (
-              <span>
-                Disponível: <span className="text-fg font-medium">{fmt(acc.availableCreditLimit)}</span>
-              </span>
+              <span>Disponível: <span className="text-fg font-medium">{fmt(acc.availableCreditLimit)}</span></span>
             )}
             {(currentBill?.minimumPayment ?? (acc.minimumPayment != null && acc.minimumPayment > 0 ? acc.minimumPayment : null)) != null && (
-              <span>
-                Mínimo: <span className="text-fg font-medium">{fmt(currentBill?.minimumPayment ?? acc.minimumPayment!)}</span>
-              </span>
+              <span>Mínimo: <span className="text-fg font-medium">{fmt(currentBill?.minimumPayment ?? acc.minimumPayment!)}</span></span>
             )}
             {(currentBill?.dueDate ?? acc.balanceDueDate) && (
-              <span>
-                Vencimento: <span className="text-fg font-medium">
-                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
-                    new Date(currentBill?.dueDate ?? acc.balanceDueDate!),
-                  )}
-                </span>
-              </span>
+              <span>Vencimento: <span className="text-fg font-medium">
+                {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(currentBill?.dueDate ?? acc.balanceDueDate!))}
+              </span></span>
             )}
             {(currentBill?.billClosingDate ?? acc.balanceCloseDate) && (
-              <span>
-                Fechamento: <span className="text-fg font-medium">
-                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
-                    new Date(currentBill?.billClosingDate ?? acc.balanceCloseDate!),
-                  )}
-                </span>
-              </span>
+              <span>Fechamento: <span className="text-fg font-medium">
+                {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(currentBill?.billClosingDate ?? acc.balanceCloseDate!))}
+              </span></span>
             )}
             {acc.creditLimit != null && (
-              <span>
-                Limite: <span className="text-fg font-medium">{fmt(acc.creditLimit)}</span>
-              </span>
+              <span>Limite: <span className="text-fg font-medium">{fmt(acc.creditLimit)}</span></span>
             )}
-            {usedPercent != null && (
-              <span>{usedPercent.toFixed(0)}% usado</span>
-            )}
+            {usedPercent != null && <span>{usedPercent.toFixed(0)}% usado</span>}
           </div>
 
-          {/* Link para fatura detalhada */}
-          {acc.linkedCard && (
-            <Link
-              href={`/cartoes?card=${acc.linkedCard.id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium text-lima hover:underline mt-1"
+          {/* Ver transações */}
+          {acc.linkedCardId && (
+            <button
+              onClick={toggleExpand}
+              className="inline-flex items-center gap-1 text-xs font-medium text-lima hover:underline mt-1 cursor-pointer"
             >
-              Ver fatura detalhada
-              <ExternalLink size={12} />
-            </Link>
+              {expanded ? "Ocultar transações" : "Ver transações da fatura"}
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
+
+          {/* Transações expandidas */}
+          {expanded && (
+            <div className="mt-2 space-y-0.5">
+              {loadingTx && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 size={16} className="animate-spin text-fg-muted" />
+                </div>
+              )}
+              {!loadingTx && transactions.length === 0 && (
+                <p className="text-xs text-fg-muted py-2">Nenhuma transação importada.</p>
+              )}
+              {transactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between py-2 px-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] shrink-0"
+                      style={{ backgroundColor: tx.category.colorBg, color: tx.category.colorText }}
+                    >
+                      {tx.category.icon ?? tx.category.name.charAt(0)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-fg truncate">
+                        {tx.description ?? "Sem descrição"}
+                      </p>
+                      <p className="text-[11px] text-fg-muted">
+                        {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(tx.date))}
+                        {" · "}{tx.category.name}
+                      </p>
+                    </div>
+                  </div>
+                  <p className={cn(
+                    "text-xs font-semibold tabular-nums shrink-0 ml-2",
+                    tx.type === "INCOME" ? "text-emerald-500" : "text-fg",
+                  )}>
+                    {tx.type === "EXPENSE" ? "- " : "+ "}{fmt(Number(tx.amount))}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
