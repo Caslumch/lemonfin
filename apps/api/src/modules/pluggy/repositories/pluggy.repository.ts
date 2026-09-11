@@ -196,8 +196,8 @@ export class PluggyRepository {
     });
   }
 
-  /** Transações de um cartão num período (todas as fontes: manual, WhatsApp,
-   *  Pluggy). Só EXPENSE: pagamentos de fatura são filtrados. */
+  /** Transações importadas pela Pluggy para um cartão num período.
+   *  Só EXPENSE + source=PLUGGY: exclui manuais e pagamentos de fatura. */
   async findCardTransactions(params: {
     userIds: string[];
     cardId: string;
@@ -209,6 +209,7 @@ export class PluggyRepository {
       where: {
         userId: { in: params.userIds },
         cardId: params.cardId,
+        source: 'PLUGGY',
         type: 'EXPENSE',
         ...(params.startDate || params.endDate
           ? {
