@@ -40,7 +40,6 @@ const navItems = [
   { href: "/reservas", label: "Reservas", icon: PiggyBank },
   { href: "/recorrentes", label: "Recorrentes", icon: Repeat },
   { href: "/insights", label: "Insights", icon: Lightbulb },
-  { href: "/contas-bancarias", label: "Contas", icon: Landmark },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
@@ -65,8 +64,14 @@ export function Sidebar() {
     };
   }, [fetchApi, token]);
 
+  // "Contas" (Open Finance) e "Admin" só para superAdmin enquanto Pluggy
+  // está em modo dev — evita expor feature incompleta para outros usuários.
   const items = isAdmin
-    ? [...navItems, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    ? [
+        ...navItems,
+        { href: "/contas-bancarias", label: "Contas", icon: Landmark },
+        { href: "/admin", label: "Admin", icon: ShieldCheck },
+      ]
     : navItems;
 
   const isActive = (href: string) => {
