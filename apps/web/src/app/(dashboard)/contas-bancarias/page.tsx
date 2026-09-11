@@ -65,12 +65,18 @@ interface PluggyTransaction {
   category: { name: string; icon: string | null; colorBg: string; colorText: string };
 }
 
+interface CreditCardBillPayment {
+  amount: number;
+  paymentDate: string;
+}
+
 interface CreditCardBill {
   id: string;
   dueDate: string;
   billClosingDate: string | null;
   totalAmount: number;
-  minimumPayment: number;
+  minimumPaymentAmount: number | null;
+  payments: CreditCardBillPayment[];
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -102,6 +108,22 @@ function fmtDate(iso: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+/**
+ * Encontra a fatura atual: a bill com dueDate mais próxima no futuro
+ * (fatura aberta/a vencer). Se todas já venceram, pega a mais recente.
+ */
+function findCurrentBill(bills?: CreditCardBill[]): CreditCardBill | null {
+  if (!bills || bills.length === 0) return null;
+  const now = Date.now();
+  // Bills com dueDate no futuro, ordenadas pela mais próxima
+  const future = bills
+    .filter((b) => new Date(b.dueDate).getTime() > now)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  if (future.length > 0) return future[0];
+  // Todas no passado — pega a mais recente
+  return bills.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())[0];
 }
 
 function accountIcon(type: string, subtype: string | null) {
@@ -195,18 +217,17 @@ function ContasBancariasInner() {
     [credit],
   );
 
-  // Fatura do mês atual: pega a bill mais recente (menor dueDate no futuro
-  // ou a última fechada). Soma totalAmount de todos os cartões de crédito.
+  // Fatura do mês atual: busca a bill cuja dueDate é a mais próxima no
+  // futuro (fatura aberta). Se não houver, pega a mais recente no passado.
+  // Subtrai pagamentos já feitos para mostrar o saldo pendente.
   const currentMonthInvoice = useMemo(() => {
     let total = 0;
     let hasData = false;
     for (const acc of credit) {
-      const bills = billsByAccount[acc.pluggyAccountId];
-      if (!bills || bills.length === 0) continue;
-      // Bills vêm ordenadas por dueDate desc. A primeira é a mais recente.
-      const currentBill = bills[0];
-      if (currentBill) {
-        total += currentBill.totalAmount;
+      const bill = findCurrentBill(billsByAccount[acc.pluggyAccountId]);
+      if (bill) {
+        const paid = bill.payments.reduce((s, p) => s + p.amount, 0);
+        total += Math.max(0, bill.totalAmount - paid);
         hasData = true;
       }
     }
@@ -575,7 +596,9 @@ function AccountRow({
       ? Math.min(100, (acc.balance / acc.creditLimit) * 100)
       : null;
 
-  const currentBill = bills?.[0];
+  const currentBill = findCurrentBill(bills);
+  const billPaid = currentBill?.payments.reduce((s, p) => s + p.amount, 0) ?? 0;
+  const billRemaining = currentBill ? Math.max(0, currentBill.totalAmount - billPaid) : null;
 
   // Expandir transações
   const [expanded, setExpanded] = useState(false);
@@ -624,13 +647,13 @@ function AccountRow({
           </div>
         </div>
         <div className="text-right">
-          {isCredit && currentBill ? (
+          {isCredit && billRemaining != null ? (
             <>
               <p className="text-sm font-semibold tabular-nums text-amber-500">
-                {fmt(currentBill.totalAmount)}
+                {fmt(billRemaining)}
               </p>
               <p className="text-xs text-fg-muted">
-                fatura do mês · usado {fmt(acc.balance)}
+                {billPaid > 0 ? `fatura ${fmt(currentBill!.totalAmount)} · pago ${fmt(billPaid)}` : `fatura do mês · usado ${fmt(acc.balance)}`}
               </p>
             </>
           ) : (
@@ -670,8 +693,8 @@ function AccountRow({
             {acc.availableCreditLimit != null && (
               <span>Disponível: <span className="text-fg font-medium">{fmt(acc.availableCreditLimit)}</span></span>
             )}
-            {(currentBill?.minimumPayment ?? (acc.minimumPayment != null && acc.minimumPayment > 0 ? acc.minimumPayment : null)) != null && (
-              <span>Mínimo: <span className="text-fg font-medium">{fmt(currentBill?.minimumPayment ?? acc.minimumPayment!)}</span></span>
+            {(currentBill?.minimumPaymentAmount ?? (acc.minimumPayment != null && acc.minimumPayment > 0 ? acc.minimumPayment : null)) != null && (
+              <span>Mínimo: <span className="text-fg font-medium">{fmt(currentBill?.minimumPaymentAmount ?? acc.minimumPayment!)}</span></span>
             )}
             {(currentBill?.dueDate ?? acc.balanceDueDate) && (
               <span>Vencimento: <span className="text-fg font-medium">
