@@ -544,6 +544,8 @@ export function InvoiceView({ cardId, cardName, onBack }: InvoiceViewProps) {
                           {formatBRL(purchaseTotal)}
                         </>
                       )}
+                      {tx.source === "WHATSAPP" && <span> · via WhatsApp</span>}
+                      {tx.source === "PLUGGY" && <span> · via Open Finance</span>}
                     </p>
                   </div>
                 </div>
