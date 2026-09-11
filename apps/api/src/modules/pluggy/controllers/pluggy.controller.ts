@@ -114,15 +114,6 @@ export class PluggyController {
     });
   }
 
-  /** Remove transações Pluggy que são duplicatas de transações manuais.
-   *  Útil para limpar duplicatas criadas antes da detecção de duplicatas. */
-  @Post('cleanup-duplicates')
-  async cleanupDuplicates(@CurrentUser() user: { id: string }) {
-    const userIds = await this.familyContext.resolveUserIds(user.id);
-    const removed = await this.pluggyRepo.removeDuplicatePluggyTransactions(userIds);
-    return { message: `${removed} duplicatas removidas.`, removed };
-  }
-
   /** Força re-sync de um Item. */
   @Post('items/:pluggyItemId/sync')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
