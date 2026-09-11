@@ -217,22 +217,6 @@ function ContasBancariasInner() {
     [credit],
   );
 
-  // Fatura do mês atual: busca a bill cuja dueDate é a mais próxima no
-  // futuro (fatura aberta). Se não houver, pega a mais recente no passado.
-  // Subtrai pagamentos já feitos para mostrar o saldo pendente.
-  const currentMonthInvoice = useMemo(() => {
-    let total = 0;
-    let hasData = false;
-    for (const acc of credit) {
-      const bill = findCurrentBill(billsByAccount[acc.pluggyAccountId]);
-      if (bill) {
-        const paid = bill.payments.reduce((s, p) => s + p.amount, 0);
-        total += Math.max(0, bill.totalAmount - paid);
-        hasData = true;
-      }
-    }
-    return hasData ? total : null;
-  }, [credit, billsByAccount]);
 
   // ── Connect flow ──────────────────────────────────────────────────
 
@@ -404,16 +388,14 @@ function ContasBancariasInner() {
                     <CreditCard size={16} className="text-amber-500" />
                   </div>
                   <span className="text-xs font-medium text-fg-muted uppercase tracking-wide">
-                    {currentMonthInvoice != null ? "Fatura do mês" : "Limite usado"}
+                    Limite usado
                   </span>
                 </div>
                 <p className="text-2xl font-bold tabular-nums text-amber-500">
-                  {fmt(currentMonthInvoice ?? totalCredit)}
+                  {fmt(totalCredit)}
                 </p>
                 <p className="text-xs text-fg-muted mt-1">
-                  {currentMonthInvoice != null
-                    ? `Limite usado: ${fmt(totalCredit)}`
-                    : `${credit.length} cartão${credit.length !== 1 ? "ões" : ""}`}
+                  {credit.length} cartão{credit.length !== 1 ? "ões" : ""}
                 </p>
               </div>
             )}
@@ -439,12 +421,12 @@ function ContasBancariasInner() {
               </div>
               <p className={cn(
                 "text-2xl font-bold tabular-nums",
-                totalChecking - (currentMonthInvoice ?? totalCredit) >= 0 ? "text-emerald-500" : "text-danger",
+                totalChecking - totalCredit >= 0 ? "text-emerald-500" : "text-danger",
               )}>
-                {fmt(totalChecking - (currentMonthInvoice ?? totalCredit))}
+                {fmt(totalChecking - totalCredit)}
               </p>
               <p className="text-xs text-fg-muted mt-1">
-                Saldo − fatura do mês
+                Saldo − limite usado
               </p>
             </div>
           </div>
@@ -605,26 +587,40 @@ function AccountRow({
   const [transactions, setTransactions] = useState<PluggyTransaction[]>([]);
   const [loadingTx, setLoadingTx] = useState(false);
 
-  const toggleExpand = useCallback(async () => {
-    if (expanded) {
-      setExpanded(false);
-      return;
-    }
-    if (!fetchApi || !acc.linkedCardId) return;
-    setExpanded(true);
-    if (transactions.length > 0) return; // já carregou
+  // Fatura aberta = soma das transações importadas quando a bill da Pluggy
+  // está zerada (paga) ou não existe para o ciclo atual.
+  const openInvoiceFromTx = useMemo(() => {
+    if (transactions.length === 0) return null;
+    // Filtra só transações desde o último fechamento
+    const closeDate = currentBill?.billClosingDate ?? acc.balanceCloseDate;
+    const since = closeDate ? new Date(closeDate) : null;
+    const relevant = since
+      ? transactions.filter((tx) => new Date(tx.date) >= since)
+      : transactions;
+    return relevant.reduce((s, tx) => s + Number(tx.amount), 0);
+  }, [transactions, currentBill, acc.balanceCloseDate]);
+
+  // Valor exibido: bill pendente se > 0, senão soma das transações do ciclo
+  const displayInvoice = (billRemaining && billRemaining > 0)
+    ? billRemaining
+    : openInvoiceFromTx;
+
+  // Auto-load transações para contas de crédito (necessário para calcular fatura aberta)
+  useEffect(() => {
+    if (!isCredit || !fetchApi || !acc.linkedCardId || transactions.length > 0) return;
+    let active = true;
     setLoadingTx(true);
-    try {
-      const txs = await fetchApi<PluggyTransaction[]>(
-        `/pluggy/accounts/${acc.pluggyAccountId}/transactions`,
-      );
-      setTransactions(txs);
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingTx(false);
-    }
-  }, [expanded, fetchApi, acc.linkedCardId, acc.pluggyAccountId, transactions.length]);
+    fetchApi<PluggyTransaction[]>(`/pluggy/accounts/${acc.pluggyAccountId}/transactions`)
+      .then((txs) => { if (active) setTransactions(txs); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoadingTx(false); });
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCredit, fetchApi, acc.linkedCardId, acc.pluggyAccountId]);
+
+  const toggleExpand = useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
 
   return (
     <div className="px-5 py-4">
@@ -647,27 +643,26 @@ function AccountRow({
           </div>
         </div>
         <div className="text-right">
-          {isCredit && billRemaining != null ? (
+          {isCredit ? (
             <>
               <p className="text-sm font-semibold tabular-nums text-amber-500">
-                {fmt(billRemaining)}
+                {displayInvoice != null ? fmt(displayInvoice) : fmt(acc.balance)}
               </p>
               <p className="text-xs text-fg-muted">
-                {billPaid > 0 ? `fatura ${fmt(currentBill!.totalAmount)} · pago ${fmt(billPaid)}` : `fatura do mês · usado ${fmt(acc.balance)}`}
+                {displayInvoice != null && billRemaining != null && billRemaining > 0
+                  ? `fatura ${fmt(currentBill!.totalAmount)} · pago ${fmt(billPaid)}`
+                  : displayInvoice != null
+                    ? "fatura aberta · ciclo atual"
+                    : `limite usado · de ${fmt(acc.creditLimit ?? 0)}`}
               </p>
             </>
           ) : (
-            <>
-              <p className={cn(
-                "text-sm font-semibold tabular-nums",
-                isCredit ? "text-amber-500" : acc.balance >= 0 ? "text-fg" : "text-danger",
-              )}>
-                {fmt(acc.balance, acc.currencyCode)}
-              </p>
-              {isCredit && acc.creditLimit != null && (
-                <p className="text-xs text-fg-muted">de {fmt(acc.creditLimit)}</p>
-              )}
-            </>
+            <p className={cn(
+              "text-sm font-semibold tabular-nums",
+              acc.balance >= 0 ? "text-fg" : "text-danger",
+            )}>
+              {fmt(acc.balance, acc.currencyCode)}
+            </p>
           )}
         </div>
       </div>
