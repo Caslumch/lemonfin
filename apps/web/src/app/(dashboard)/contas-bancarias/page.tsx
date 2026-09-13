@@ -274,12 +274,19 @@ function ContasBancariasInner() {
   const handleSync = useCallback(
     async (pluggyItemId: string) => {
       setSyncingId(pluggyItemId);
+      const toastId = toast.loading("Sincronizando contas… isso pode levar alguns minutos.");
       try {
-        await fetchApi(`/pluggy/items/${pluggyItemId}/sync`, { method: "POST" });
-        toast.success("Sincronização concluída.");
+        const result = await fetchApi<{ accounts: number; transactions: number }>(
+          `/pluggy/items/${pluggyItemId}/sync`,
+          { method: "POST" },
+        );
+        toast.success(
+          `Pronto! ${result.accounts} conta${result.accounts !== 1 ? "s" : ""}, ${result.transactions} transação${result.transactions !== 1 ? "ões" : ""}.`,
+          { id: toastId },
+        );
         invalidatePluggy(queryClient);
       } catch {
-        toast.error("Erro ao sincronizar.");
+        toast.error("Erro ao sincronizar.", { id: toastId });
       } finally {
         setSyncingId(null);
       }
@@ -512,8 +519,14 @@ function ContasBancariasInner() {
                 return (
                   <div
                     key={item.id}
-                    className="bg-surface border border-border rounded-2xl px-5 py-3 flex items-center justify-between"
+                    className="bg-surface border border-border rounded-2xl px-5 py-3 flex flex-col overflow-hidden"
                   >
+                    {isSyncing && (
+                      <div className="-mx-5 -mt-3 mb-3 h-1 bg-muted overflow-hidden">
+                        <div className="h-full w-1/3 bg-lima rounded-full animate-[indeterminate_1.5s_ease-in-out_infinite]" />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {item.connectorLogo ? (
                         <img
@@ -573,6 +586,7 @@ function ContasBancariasInner() {
                           <Trash2 size={16} className="text-danger" />
                         )}
                       </Button>
+                    </div>
                     </div>
                   </div>
                 );
