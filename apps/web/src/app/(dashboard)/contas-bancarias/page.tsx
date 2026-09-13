@@ -782,7 +782,7 @@ function AccountRow({
 
           {/* Transações expandidas */}
           {expanded && (
-            <div className="mt-2 space-y-0.5">
+            <div className="mt-2 max-h-80 overflow-y-auto space-y-0.5">
               {loadingTx && (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 size={16} className="animate-spin text-fg-muted" />
