@@ -274,6 +274,11 @@
 
 /* ===== Animations ===== */
 
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
